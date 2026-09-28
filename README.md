@@ -1,125 +1,151 @@
-# CFO Agent — GPU Marketplace
+# CFO Agent — GPU 지출을 충전식으로 감독하는 에스크로 금고
 
 > **Team 404 Found** · GWDC 2026 Korea Hackathon · FuriosaAI × Bricksum *Agent Finance Bonus Track*
-> 상태: 아이디어 확정 단계 (2026-09-28 킥오프). 구현 전.
+> 제출 과제: **Challenge B** (권장안, 팀 확정은 9/29 01:00 KST) · 상태: 설계 승인, 구현 전
+> 설계 문서: [`docs/designs/cfo-agent-escrow-topup.md`](docs/designs/cfo-agent-escrow-topup.md) · 금고 설명: [`docs/escrow-vault.md`](docs/escrow-vault.md)
 
-AI 에이전트가 GPU를 스스로 빌리는 시대에, **에이전트의 컴퓨트 지출을 승인·차단하고 그 근거를 누구나 검증할 수 있게 남기는 CFO Agent**.
+## 기능 선언 (한 문장)
 
-## 선언문 (README 제출용 초안)
+- **KO:** CFO Agent는 GPU를 빌리는 AI 에이전트의 지출을 작업 단위 에스크로로 충전하고 감독한다. 코드 규칙과 CFO(Qwen3-32B on Kiln)의 판단을 모두 통과한 지출만 테스트넷에서 정산하고, 모든 허락과 거절을 제3자가 기록만으로 다시 판정할 수 있게 남기는 통제·증빙 레이어다.
+- **EN:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so a third party can re-judge it from the records alone.
 
-- **KO:** CFO Agent는 AI 스타트업 연구 에이전트의 GPU 임대 지출을 통제하고 증빙하는 도구다. Kiln(Qwen3-32B)이 각 임대 요청을 심사하고, 창업자가 정한 규칙(수수료 포함 예산·허용 벤더·기한·STOP)을 통과한 요청만 테스트넷 USDC로 결제되며, 모든 승인·차단·결제는 제3자가 기록만으로 검증할 수 있게 남는다.
-- **EN:** CFO Agent is a spending-control and evidence tool for an AI startup's GPU-renting research agents: Qwen3-32B on Kiln reviews each rental, testnet USDC moves only when the founder's rules (fee-inclusive budget, vendor allowlist, deadline, STOP) also pass, and every approval, block and payment is recorded so a third party can verify it from the records alone.
+## 사용자와 문제
 
-## 문제
-
-- 연구 에이전트는 이미 API/MCP로 GPU를 직접 띄운다. RunPod 공식 MCP로 Pod 생성이 되고([RunPod](https://www.runpod.io/blog/manage-your-runpod-infrastructure-from-any-ai-assistant-introducing-the-runpod-mcp-server)), io.net Agent Cloud는 x402·USDC로 GPU 임대 결제를 받는다([io.net](https://io.net/docs/guides/clouds/agent-cloud)). 두 곳 모두 에이전트 단위 지출 통제는 없다.
-- 벤더마다 한도가 따로 있다(RunPod 기본 $80/h, Modal 월 예산). "어젯밤 에이전트들이 쓴 돈이 내가 허락한 범위였나"를 한 장부로 답할 수 없다.
-- 에이전트의 지출은 구매만이 아니다. Uber는 코딩 에이전트 토큰 비용으로 연간 AI 예산을 4개월 만에 소진했다([Fortune](https://fortune.com/2026/05/26/uber-coo-ai-spending-tokens-claude-code/)).
+- **사용자:** GPU를 빌려 쓸 만큼 고성능 연산이 필요한 조직(예: AI 스타트업)의 ML 리드나 창업자. 이들은 연구·평가 에이전트에게 GPU 예산을 맡긴다.
+- **문제:**
+  - 에이전트는 이미 API로 GPU를 직접 띄운다. RunPod 공식 MCP로 Pod를 만들 수 있고([RunPod](https://www.runpod.io/blog/manage-your-runpod-infrastructure-from-any-ai-assistant-introducing-the-runpod-mcp-server)), io.net Agent Cloud는 x402·USDC로 GPU 임대 결제를 받는다([io.net](https://io.net/docs/guides/clouds/agent-cloud)).
+  - 하지만 에이전트 단위로 "얼마까지, 어느 벤더에, 언제까지"를 강제하고, 그 허락을 나중에 검증할 방법이 없다.
+  - 결제 레일에는 누가 누구에게 냈는지만 남는다. 누가 어떤 조건으로 허락했는지는 남지 않는다.
+- **우리의 답:** 결제 한 건을 막는 데서 끝나지 않는다. **돈이 나가는 도중에** 충전할 가치가 있는지 심사한다. 규칙은 통과했지만 목적을 벗어난 충전은 CFO가 거절한다.
 
 ## 작동 흐름
 
 ```mermaid
 graph TD
-    U["ML 리드 / 창업자<br/>고성능 연산 조직<br/>예산·벤더·기한, STOP"]
-    W["작업 에이전트 (Qwen)<br/>학습·평가 작업"]
-    U --> P["CFO 규칙 (코드)<br/>수수료 포함 예산<br/>허용 벤더·기한·STOP"]
-    W -->|"① GPU 블록 요청"| C{"CFO Agent (Qwen)<br/>승인·계속·중단 + 사유"}
-    C -->|"승인"| G{"규칙 검사 (코드)"}
-    P --> G
-    G -->|"통과"| X["결제 실행기 (코드)<br/>테스트넷 USDC 선결제"]
-    G -->|"차단"| R["차단·중단 기록"]
-    C -->|"중단"| R
-    X --> V["GPU 벤더 A/B/C<br/>(mock)<br/>job_id 발급<br/>블록 끝에 종료"]
-    V -->|"② 진행 보고"| W
-    W -->|"③ 연장 요청 + 진행 상황"| C
-    X --> L["장부 + 증빙 체인<br/>tx 해시"]
-    R --> L
-    L --> D["대시보드<br/>수치=장부, 설명=Qwen"]
-    L --> VF["verify<br/>제3자 재판정"]
-
-    classDef approved fill:#d1f5d3,stroke:#2f9e44,stroke-width:2px,color:#1a1a1a;
-    classDef blocked fill:#ffd6d6,stroke:#e03131,stroke-width:2px,color:#1a1a1a;
-    classDef neutral fill:#e9ecef,stroke:#495057,stroke-width:2px,color:#1a1a1a;
-    classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
-    class X,V approved;
-    class R blocked;
-    class U,W,P,L,D,VF neutral;
-    class C,G decision;
+    F["창업자: fund(예산, 기한)<br/>허용 벤더 · 상한 · 명세 서명"] --> V[("에스크로 금고<br/>Base Sepolia")]
+    W["작업 에이전트 (Qwen F1)<br/>GPU 요청 · 충전 요청"] --> R["체인 읽기<br/>예산·약정·정지·기한·허용 목록"]
+    R --> G{"코드 게이트<br/>규칙 10개"}
+    G -->|"통과"| C{"CFO Agent (Qwen F2)<br/>목적 부합·근거·범위 확대<br/>거절만 가능"}
+    G -->|"거절"| D["Denied 기록"]
+    C -->|"비거절"| T["open / topUp"]
+    C -->|"거절"| D
+    T --> V
+    V -->|"규칙 위반"| D
+    V -->|"settle (실사용분)"| P["벤더 A/B/C<br/>Akash 실가격 · 실행은 mock"]
+    X["mock 실행기<br/>체크포인트마다 정산 · 잔액 40% 미만이면 충전 요청"] --> W
+    P --> X
+    V --> L["장부 + 해시 연결 기록"]
+    D --> L
+    L --> A["감사자 CLI<br/>기록 + 공개 RPC만으로 PASS/FAIL"]
+    L --> UI["대시보드 · 영수증 (Qwen F3 설명)"]
 ```
 
-- **블록 단위 대화 루프:** GPU는 시간 블록 단위로 빌린다. 블록이 끝날 때마다 작업 에이전트가 진행 상황(mock 벤더가 만든 학습 로그)을 보고하고 연장을 요청하면, CFO Agent가 계속할지 멈출지 판단한다. 대화는 블록 경계에서만 한다.
-- **결제 금액:** 블록마다 `시간당 단가 × 블록 시간 × (1 + 수수료)`를 선결제한다. 시간 단위 과금은 만들지 않는다.
-- **벤더:** 실제 마켓 연동 없이 테스트넷 주소를 가진 mock 벤더 2~3곳과 가격표 JSON 하나로 구성한다.
-- **데모 시나리오:** 정상 작업(연장 → 결제 tx 여러 건), 정체된 작업(Qwen이 중단), 폭주한 작업(수수료 포함 예산 초과 연장을 코드가 차단), 창업자 STOP.
-- 편집 가능한 원본: `diagrams/gpu-marketplace-cfo-agent.excalidraw` (excalidraw.com에서 열기)
+1. 창업자가 예산과 기한을 넣고(`fund`), 허용 벤더와 호출당 상한을 정하고, 작업 명세(목적·허용 GPU·작업 상한·기한)에 서명한다.
+2. 작업 에이전트가 GPU를 요청한다. 코드 게이트가 규칙을 먼저 판정하고, 통과한 요청만 CFO Qwen이 목적에 비추어 판단한다. 둘 다 통과해야 `open`으로 hold를 잡는다.
+3. GPU 작업은 끊기지 않고 진행된다. 체크포인트마다 실사용분을 `settle`한다.
+4. 잔액이 hold의 40% 밑으로 떨어지면 에이전트가 진행 상황과 근거를 붙여 **충전을 요청**한다. 같은 심사를 거쳐 `topUp`한다.
+5. STOP, 기한 경과, 규칙 위반은 돈을 움직이지 않고 `Denied`로 기록된다. 끝나면 `close`하고, 남은 예산은 `refund`로 돌려받는다.
+6. 누구든 감사자 CLI로 기록과 체인만 보고 "허락된 범위 안이었나"를 다시 판정할 수 있다.
 
-## AI와 코드의 역할
+**사용 가능한 결과물:** 통제된 GPU 지출, 작업별 영수증, 제3자가 검증할 수 있는 기록 묶음.
 
-| 담당 | 하는 일 |
-|---|---|
-| **Qwen3-32B (Kiln)** | 작업 목표를 GPU 블록 요청으로 변환, 진행 보고와 연장 요청, CFO Agent의 승인·계속·중단 판단과 사유, 차단 사유·영수증·대시보드 요약 문장 |
-| **코드** | 가격·수수료 계산, 정책 검사, 장부의 모든 수치, 결제, 해시 체인, 검증 도구 |
+## AI · 코드 · 컨트랙트의 역할
 
-## 차별점
-
-1. **블록 단위 감독 루프:** 결제가 끝이 아니라, GPU를 쓰는 동안 블록마다 "계속할 가치가 있나"를 판단해 멈춘다. 조사한 B 팀 중 진행 중인 지출을 감독하는 곳은 없다.
-2. **"생각도 지출이다":** GPU 임대비와 Kiln 추론비(`usage.cost`, CFO Agent 자신의 비용 포함)를 한 예산·한 장부로 묶는다. 추론 1회 비용은 약 $0.00014(다른 팀 실측)라 절감 서사가 아니라 **통제자 자신도 같은 한도 안에서 감사받는다(루프 폭주 방지)**는 서사로 쓴다. Control Memory는 추론 호출 횟수 상한만 두고 비용을 지출 예산에 합치지는 않는다.
-3. **우리 서버 없이 재판정:** 기록 묶음과 공개 RPC만으로 정책 판정을 다시 계산한다. 정상이면 통과, 한 바이트라도 조작하면 실패한다.
-4. **효율:** 명백한 건은 코드가 LLM 호출 없이 판정한다. "모든 단계를 LLM이 보는 방식" 대비 토큰 절감을 실측한다.
-5. **FOCUS 장부:** 리드의 IBM FinOps 경험(국내 클라우드 요금 데이터의 FOCUS 변환)을 살려 여러 벤더 비용을 한 형식으로 기록한다.
-
-## 과제 요구사항 대응
-
-| 요구사항 | 증거물 |
-|---|---|
-| 사용자·문제·AI/코드 분리 | 이 README, 역할 표 |
-| Kiln 실호출 + 결정에 반영 | Qwen 응답이 승인/거절로 이어지는 로그 |
-| 흐름별 토큰 | `call_kiln(flow)` 래퍼가 남기는 JSONL → 흐름별 표 |
-| 에너지 추정 | 출력 토큰 × 1.63 J (가정·범위 명시, 아래 참고) |
-| 테스트넷 tx | 결제·결정 기록 tx 해시 ↔ 로그 항목 매칭 |
-| 범위 밖 차단 2회 이상 | 수수료 포함 예산 초과, 허용 안 된 벤더, 기한 경과, STOP |
-| 조건 변경 재실행 2회 (A) | 예산 축소, 벤더 허용 취소 |
-| 제3자 검증 | `verify` 실행: 정상 PASS, 조작 FAIL |
-
-**에너지 가정:** Furiosa 공개 벤치마크(2026-04-02)에서 RNGD 서버 3 kW ÷ (46명 × 40 tok/s) ≈ **1.63 J/출력 토큰**을 쓴다. 같은 조건의 RTX Pro 6000은 4.02 J이고, 불확실성 범위는 0.48~11.9 J다. 정격 전력 기준이고 PUE는 제외한다. Kiln의 실제 서빙 구성은 공개되지 않았다. ([출처](https://furiosa.ai/blog/rngd-rtx-pro-6000-real-world-efficiency-benchmark-qwen3))
-
-## 결정 사항과 미결정 사항
-
-| 항목 | 상태 |
-|---|---|
-| 트랙 | ✅ FuriosaAI × Bricksum |
-| 컨셉 | ✅ GPU Marketplace 버전 |
-| CFO Agent 두뇌 | ✅ Qwen3-32B (Kiln) |
-| 차단 사유·대시보드 문장 | ✅ Qwen이 작성 |
-| 제출 과제 | ⏳ 분석 결과 **B 권장**(가중 점수 B 76 : A 63, 격차는 뚜렷하지만 크지 않음). 팀원은 A 선호. 팀 합의 필요 |
-| 승인 방식 | ✅ CFO Agent(Qwen)가 블록마다 작업 에이전트와 대화하며 승인·계속·중단 판단 |
-| 코드 규칙 검사 병행 | ⏳ **Qwen 승인 AND 코드 규칙 통과** 권장. Qwen 단독 승인이면 A·B 모두 요건 미충족으로 판정됨 |
-| 대시보드 수치 출처 | ⏳ 수치는 코드 장부, Qwen은 설명문만 권장 |
-| 페르소나 | ✅ GPU를 빌릴 만큼 고성능 연산이 필요한 조직 (예: AI 스타트업) |
-| 벤더 결제 방식 | ✅ mock 벤더 + 코드 결제 실행기 (테스트넷 USDC 선결제) |
-| 체인 | ⏳ Base Sepolia 권장 |
-| 온체인 강제 (컨트랙트) | ⏳ Solidity 가능자 여부에 따라 결정 |
-
-## 주의 사항
-
-- **Kiln:** 모델 ID는 `qwen3-32b`다. 다른 팀 실행 기록에서 도구 호출 성공이 확인됐다(`finish_reason: tool_calls`, 760토큰, $0.00014). 도구 호출은 `auto`만 되고, `response_format`을 쓰면 빈 응답이 온다. 이메일 인증과 계정 승인 전에는 키를 만들 수 없다. 한도는 조직당 분당 60회, 동시 8개다.
-- **모델 공지:** 과제 원문은 `gpt-oss-120b`지만 공식 Q&A에서 Qwen3-32B로 바뀌었다. 운영진 공지를 캡처해 둘 것.
-- **발표 문구:** "실제 GPU 마켓(io.net, Akash)은 메인넷에서 온체인 결제를 한다. 우리는 그 앞단의 권한과 증빙을 테스트넷에서 재현했다." "실제 GPU 마켓에 연동했다"고 말하지 않는다.
-- **비밀키:** Kiln 키(`sk-bk-`)와 테스트넷 개인키는 커밋 금지. `.env.example`만 둔다.
-
-## 같은 트랙 공개 레포 (2026-09-28 기준)
-
-| 팀 | 과제 | 요약 |
+| 담당 | 하는 일 | 하지 않는 일 |
 |---|---|---|
-| [KillSwitch Wallet](https://github.com/rectinajh/killswitch-wallet) | B | 컨트랙트가 예산·허용 목록·기한·동결을 온체인 강제 |
-| [Control Memory](https://github.com/him55710-sudo/Furiosa-x-bricksum) | B | API 크레딧 구매 위임. 서명 견적 판매자 시뮬레이터 3곳, 독립 검증기, 추론 호출 상한 (설계 단계, Kiln 실호출 성공) |
-| [waytoweb4-agent](https://github.com/leafjava/waytoweb4-Agent) | A | 카피트레이딩 위임. 흐름별 토큰·에너지, 증거 검증기 |
-| [PolicyGuard](https://github.com/heheboi1972/hackathon-seoul-2026) | A | 쇼핑 구매 에이전트 (문서만) |
+| **Qwen3-32B (Kiln)** | F1 요청 작성(벤더·GPU·금액·근거), F2 CFO 심사(목적 부합, 근거 타당성, 범위 확대 여부 판단과 사유 작성), F3 영수증 설명 | 금액 결정, 서명, 규칙 완화. **거절만 할 수 있다** |
+| **코드 (백엔드)** | 체인 읽기, 게이트 규칙 10개, 금액·수수료 계산, 서명·전송, 장부와 해시 체인, fail-closed 처리 | 목적 판단 |
+| **컨트랙트 (금고)** | 허용 벤더·예산(수수료 포함)·호출당 상한·기한·STOP의 **최종 강제**, 위반 시 `Denied` 기록 | 판단 |
 
-컴퓨트·GPU 조달을 다루는 팀은 찾지 못했다. 트랙 전체의 일부만 조사한 결과다. Top 3를 A·B 합산으로 뽑는지 과제별로 뽑는지는 공식 Q&A 채널에서 확인이 필요하다.
+## 경계와 강제 위치
 
-## 레포 구성
+> **경계:** 창업자 금고에서 나가는 돈은 네 조건을 모두 만족해야 한다. ① 허용된 벤더에게, ② 수수료를 포함해 남은 예산 안에서, ③ 호출당 상한(`maxHold`) 이하로, ④ 기한 전이고 STOP이 아닐 때. 그리고 코드 게이트와 CFO 판단을 모두 통과해야 한다.
 
-- `diagrams/`: 아키텍처 다이어그램. `gpu-marketplace-cfo-agent.*`가 현재 버전, `cfo-agent-architecture.*`는 초기 Multi-API 버전
-- `md/`: 트랙 설명 노트
-- `pdf/`: 공식 참가 안내서
+| 층 | 위치 | 막는 것 | 우회되면 |
+|---|---|---|---|
+| 1. 코드 게이트 | `backend/gate` `check()` *(구현 예정)* | 규칙 10개 (아래 표) | 2·3층이 남음 |
+| 2. CFO Qwen | `backend/agents` F2 *(구현 예정)* | 목적 이탈, 근거 부족, 범위 확대 | 1·3층이 남음 |
+| 3. 금고 컨트랙트 | `contracts/AgentBudgetVault.sol` `_agentChecks` 계열 *(구현 예정)* | 벤더·예산·상한·기한·STOP | **최종선.** 탈취된 키도 여기서 막힘 |
+
+**범위 밖 실행 (데모에서 보여줄 4가지):** 수수료를 더하면 예산 초과, 허용 안 된 벤더, 기한 경과, STOP. 각각 게이트 기록과 체인의 `Denied` 이벤트로 남는다. 멈춤은 조용히 넘어가지 않고 기록된다.
+
+**게이트 규칙:**
+- 체인에서 확인하는 것: `VENDOR_NOT_ALLOWED`, `OVER_BUDGET_WITH_FEE`, `OVER_MAX_HOLD`, `PAST_DEADLINE`, `PAUSED`
+- 서명된 명세로 확인하는 것: `GPU_TYPE_NOT_ALLOWED`, `OVER_JOB_CAP`
+- 시장 데이터로 확인하는 것: `NO_CAPACITY` (Akash 가용 수량)
+- 실행 로그로 확인하는 것: `LOSS_PLATEAU`, `NAN_DETECTED`
+- Qwen 결과: `QWEN_DENIED`, `QWEN_UNAVAILABLE`, `QWEN_UNPARSEABLE`. Qwen이 실패하면 거절로 처리한다(fail-closed).
+
+## 체인에서 읽고, 쓰고, 정산하는 것
+
+| 구분 | 대상 |
+|---|---|
+| **읽기** | 요청 직전 `eth_call`: `budget`, `committed`, `paused`, `deadline`, `vendorAllowed`, `maxHold`, `jobs[id]`. 읽은 값과 블록 번호를 기록에 넣고, 기록의 해시가 tx에 고정된다 |
+| **쓰기** | `open`/`topUp`(hold 예약), `recordDecision`/`Denied`(거절 기록), `setPaused`(STOP), `setVendor`, `setMaxHold` |
+| **정산** | `settle`(벤더에게 실사용분 지급 + 수수료 3%), 추론비 작업 정산(INFERENCE, 수수료 없음), `refund`(미약정 잔액 반환) |
+
+**tx와 기록 매칭:** 창업자와 백엔드가 보낸 모든 tx는 기록 파일 하나와 1:1로 대응한다. 표는 구현 후 Basescan 링크로 채운다.
+
+| # | 함수 | tx 해시 | 기록 파일 | 결과 |
+|---|---|---|---|---|
+| — | *(데모 실행 후 채움)* | | | |
+
+## Kiln 사용과 효율
+
+| 흐름 | 언제 | 입력 → 출력 |
+|---|---|---|
+| F1 `work_request` | 작업 시작, 충전 트리거 | 명세 + 진행 로그 → 요청 JSON |
+| F2 `cfo_review` | 게이트 통과 후에만 | 명세 + 요청 → `{verdict, reason}` |
+| F3 `receipt_explain` | 작업 종료 | 작업 기록 → 영수증 설명 |
+
+- **실호출 증거:** 원문 응답, `usage`, generation id를 JSONL로 남긴다. 흐름별 호출 수, 토큰, 비용, 에너지 표는 스크립트로 자동 생성한다.
+- **불필요한 추론 줄이기:**
+  - 숫자로 판단할 수 있는 건 코드가 판단한다.
+  - 게이트가 먼저 거절하면 F2를 호출하지 않는다. 그렇게 줄인 호출 수를 센다.
+  - `/no_think`를 기본으로 켠다. 켰을 때와 껐을 때를 비교한다.
+- **에너지 추정:** `E = Σ 출력 토큰 × 1.63 J`
+  - 근거: [Furiosa 블로그 2026-04-02](https://furiosa.ai/blog/rngd-rtx-pro-6000-real-world-efficiency-benchmark-qwen3). RNGD 8장 서버 3 kW ÷ (46명 × 40 tok/s). 같은 조건에서 RTX Pro 6000은 4.02 J이다.
+  - 가정: 정격 전력, 전부하, PUE 제외, prefill(입력) 토큰 제외.
+  - 참고 상한: 배칭 없이 RNGD 4장(각 180W)을 쓴다고 보면 720W ÷ 60.6 tok/s ≈ 11.9 J이다.
+- **모델:** 과제 문서에는 `gpt-oss-120b`로 적혀 있다. 하지만 공식 Q&A에서 **Qwen3-32B로 변경**되었다(공지 캡처는 `docs/`에 추가 예정).
+
+## 벤더와 가격
+
+- 벤더 A/B/C는 팀이 만든 테스트넷 주소다. 각 주소에 **Akash 실제 H100 제공자 한 곳**의 가격을 붙인다(예: $2.04 / $2.56 / $3.16 per GPU-hour).
+- 가격 출처는 [Akash Console API](https://console-api.akash.network/v1/gpu-prices)다. 최근 31일 온체인 입찰을 기반으로 한 추정치이며, 스냅샷을 fallback으로 둔다.
+- **GPU 실행은 시뮬레이션이다.** 데모는 60배속 시계로 돌린다. 실제 GPU 마켓과 연동하지 않았다.
+
+## 제3자 재판정 (감사자 CLI)
+
+기록 묶음, 금고 주소, 공개 RPC만 있으면 다음을 검사한다.
+- 기록 해시 체인이 이어지는가
+- 명세 서명자가 금고의 `founder`인가
+- 모든 hold와 충전 앞에 게이트 통과 기록과 CFO 비거절 기록이 있는가
+- 게이트 규칙을 다시 계산하면 같은 판정이 나오는가
+- 지급 벤더가 허용 목록에 있었는가
+- 예산과 수수료가 맞는가
+- 기한이 지나거나 STOP된 뒤에 지출이 없었는가
+- `Denied` 기록이 모두 남아 있는가
+
+정상 묶음이면 **PASS**, 기록을 1바이트라도 변조하면 **FAIL**이 나온다. 재현 명령은 구현 후 추가한다.
+
+## 알려진 한계
+
+- 정산 금액은 우리 장부가 신고한 값이다. 체인은 실제 GPU 사용량을 검증하지 않는다.
+- Qwen의 판단 기록은 백엔드가 스스로 증명한 값이다(Kiln 서명 없음). 결정적 규칙은 감사자가 다시 계산한다.
+- 에이전트 키를 탈취당하면, 남은 예산 안에서 허용 벤더에게 호출당 `maxHold`씩 보낼 수 있다. 이런 시도는 모두 기록된다.
+- gas(ETH)는 USDC 예산 한도 밖이다.
+- 벤더 가격은 추정치이고, 실행은 mock이다.
+
+## 현재 상태와 레포 구성
+
+- **완료:** 설계 승인(spec review 3회), 금고 컨트랙트 초안 작성(감사 받지 않음, 레포 미포함).
+- **다음:** Kiln 키 확인, Base Sepolia 배포, 금고 수정, 게이트·장부, 실행기, 감사자 CLI, 대시보드.
+- `docs/designs/`: 승인된 설계 문서
+- `docs/escrow-vault.md`: 에스크로 금고를 쉽게 풀어 쓴 설명
+- `diagrams/`: 이전 단계 다이어그램(블록 방식과 초기 Multi-API 버전). 현재 흐름은 위의 mermaid 다이어그램이 기준이다.
+- `md/`, `pdf/`: 트랙 노트, 공식 참가 안내서
+
+## 비밀 정보
+
+Kiln 키(`sk-bk-`)와 테스트넷 개인키는 커밋하지 않는다. `.env.example`만 둔다.
