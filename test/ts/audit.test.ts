@@ -270,6 +270,28 @@ describe('auditor goldens', { skip: !HAVE && 'golden fixtures missing (npm run e
     assert.ok(codes(r).includes('SPEC_REUSE'));
   });
 
+  test('I7 crash before send: a recorded deny whose tx was never sent -> TX_NEVER_SENT WARN, PASS', async () => {
+    const { b, c, vault } = await golden('injection');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.decision === 'DENY')!;
+    const t = clone(b);
+    t.ledger = t.ledger.filter((l) => !(l.rec?.toLowerCase() === deny.nameHash.toLowerCase() && (l.status === 'sent' || l.status === 'mined')));
+    const tc = clone(c);
+    tc.logs = tc.logs.filter((l) => !(l.topics[0] === SEL.Denied && l.topics[3]?.toLowerCase() === deny.nameHash.toLowerCase()));
+    const r = await judgeWithSig(t, tc, { expectedVault: vault });
+    assert.equal(r.verdict, 'PASS', JSON.stringify(r.failures, null, 1));
+    assert.ok(codes(r, 'WARN').includes('TX_NEVER_SENT'));
+  });
+
+  test('ledger says mined OK but no vault event carries the record -> TX_NOT_ON_CHAIN FAIL', async () => {
+    const { b, c, vault } = await golden('injection');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.decision === 'DENY')!;
+    const tc = clone(c);
+    tc.logs = tc.logs.filter((l) => !(l.topics[0] === SEL.Denied && l.topics[3]?.toLowerCase() === deny.nameHash.toLowerCase()));
+    const r = await judgeWithSig(b, tc, { expectedVault: vault });
+    assert.equal(r.verdict, 'FAIL');
+    assert.ok(codes(r).includes('TX_NOT_ON_CHAIN'));
+  });
+
   test('G14 stub LLM bundle with --submission -> FAIL; without the flag -> PASS', async () => {
     const { b, c, vault } = await golden('normal');
     const sub = await judgeWithSig(b, c, { expectedVault: vault, submission: true });

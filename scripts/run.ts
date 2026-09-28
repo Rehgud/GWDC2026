@@ -84,6 +84,18 @@ export async function runScenario(o: RunOpts): Promise<{ reason: SessionEndReaso
       gitSha: gitSha(),
       model: opt('KILN_MODEL', 'qwen3-32b'),
       llmCallCap: optInt('LLM_CALL_CAP', 60),
+      flags: {
+        KILN_HOST: (() => {
+          try {
+            return new URL(opt('KILN_URL', '')).host; // host only, never the key or path
+          } catch {
+            return '';
+          }
+        })(),
+        F1_TIMEOUT_MS: optInt('F1_TIMEOUT_MS', 10_000),
+        F2_TIMEOUT_MS: optInt('F2_TIMEOUT_MS', 10_000),
+        NO_THINK: opt('NO_THINK', '1') !== '0',
+      },
     },
     log: o.quiet ? undefined : (l) => console.log(l),
   });

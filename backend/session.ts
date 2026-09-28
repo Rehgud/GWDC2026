@@ -21,7 +21,7 @@ import { NO_JOB, type DenyCode } from './codes.ts';
 import { Committer, HaltError, type CommitOutcome, type Sender } from './commit.ts';
 import type { ChainCfg, Deployment } from './config.ts';
 import { JobExecutor, JobMeter, type ChainTickView, type TickAction } from './executor.ts';
-import { costToMicro, type LlmClient, type StubResponder } from './kiln.ts';
+import type { LlmClient, StubResponder } from './kiln.ts';
 import { f1FromRaw, verdictFromRaw } from './parse.ts';
 import { f1Messages, f2Messages, f3Messages, type VendorOption } from './prompts.ts';
 import {
@@ -44,6 +44,7 @@ import {
   gross,
   isAddress,
   isFeeExempt,
+  normGpu,
   realSeconds,
   sameAddress,
   specGross,
@@ -60,6 +61,8 @@ import { parseSpec, specJobCap, type WorkSpec } from './spec.ts';
 // ------------------------------------------------------------------------------ types
 export type SessionConfig = {
   runId: string;
+  /** extra run flags copied into run.json (Kiln host, timeouts, NO_THINK); never secrets */
+  flags?: Record<string, string | number | boolean>;
   clockMult: number;
   triggerTenths: bigint;
   deadlineMarginS: number;
@@ -221,7 +224,7 @@ export class Session {
       deploy_block: d.dep.deployBlock,
       git_sha: d.cfg.gitSha,
       scenario: d.scenario.name,
-      flags: { LLM_MODE: d.llm.mode, KILN_MODEL: d.cfg.model, CLOCK_MULT: d.cfg.clockMult, TOPUP_TRIGGER: Number(d.cfg.triggerTenths) / 10, DEADLINE_MARGIN_S: d.cfg.deadlineMarginS, LLM_CALL_CAP: d.cfg.llmCallCap, PRICE_SOURCE: d.prices.source },
+      flags: { LLM_MODE: d.llm.mode, KILN_MODEL: d.cfg.model, CLOCK_MULT: d.cfg.clockMult, TOPUP_TRIGGER: Number(d.cfg.triggerTenths) / 10, DEADLINE_MARGIN_S: d.cfg.deadlineMarginS, LLM_CALL_CAP: d.cfg.llmCallCap, PRICE_SOURCE: d.prices.source, ...(d.cfg.flags ?? {}) },
       roles: { founder: d.dep.founder, agent: d.dep.agent, fee_to: d.dep.feeTo, inference_payee: d.dep.inferencePayee, usdc: d.dep.usdc },
       rpc_hosts: d.chainCfg.rpcUrls.map((u) => {
         try {
@@ -480,7 +483,7 @@ export class Session {
       f2Messages({
         specText: this.specText,
         kind: p.kind,
-        request: { vendorLabel: this.labelOf(vendor!), gpu: req.gpu, amountNet: req.amountMicro, amountGross: g },
+        request: { vendorLabel: this.labelOf(vendor!), gpu: normGpu(req.gpu), amountNet: req.amountMicro, amountGross: g },
         summary: {
           specSpentGross: BigInt(gateInput.ledger.spec_gross),
           jobCapGross: specJobCap(this.spec),
@@ -894,8 +897,12 @@ export class Session {
     }
     await Promise.allSettled(this.tasks.map((t) => t.receipt ?? Promise.resolve()));
     // INFERENCE: settle accumulated Kiln cost (fee-exempt), then close — once, at session end
+    let uncovered = 0n;
     if (this.inferenceJob !== null && !this.inferenceClosed) {
-      const cost = this.d.llm.costMicro();
+      // never settle above the fixed hold (the contract would answer Denied(OVER_HOLD) and pay 0)
+      const known = this.d.llm.costMicro();
+      const cost = known > this.d.cfg.inferenceHold ? this.d.cfg.inferenceHold : known;
+      uncovered = known - cost;
       const infBy: 'agent' | 'founder' = blocked ? 'founder' : 'agent';
       if (cost > 0n) {
         const o = await this.commit({
@@ -928,14 +935,14 @@ export class Session {
         totals: {
           vendor_net: all.reduce((s, m) => s + m.settledNet, 0n).toString(),
           fees: all.reduce((s, m) => s + (m.paid - m.settledNet), 0n).toString(),
-          inference: this.d.llm.costMicro().toString(),
+          inference: (this.d.llm.costMicro() - uncovered).toString(),
           llm_calls: this.d.llm.callCount(),
+          inference_uncovered: uncovered.toString(),
+          inference_unknown_calls: this.d.llm.unknownCostCalls(),
         },
       },
     });
     const lastBlock = o.status === 'MINED' ? o.block.toString() : end.blockNumber;
-    const unknownCost = costToMicro([]).unknown;
-    void unknownCost;
     this.writeRunJson({ last_block: lastBlock, end_reason: reason, ended_at: new Date(this.now()).toISOString() });
     this.event('session', { ev: 'end', reason, refund, last_block: lastBlock });
     this.ui.stopState = this.ui.stopState === 'NONE' ? 'NONE' : 'HALTED';
@@ -958,7 +965,7 @@ export class Session {
       chain: s ? { budget: s.budget, committed: s.committed, paused: s.paused, deadline: s.deadline, blockTimestamp: s.blockTimestamp, maxHold: s.maxHold } : null,
       spec: { spec_id: this.spec.spec_id, purpose: this.spec.purpose, job_cap_usd: this.spec.job_cap_usd, allowed_gpu_types: this.spec.allowed_gpu_types },
       vendors: this.vendors.map((v) => ({ label: v.label, price: v.price.toString(), capacity: v.capOverride ?? v.capacity, host: v.host_uri })),
-      inference: { jobId: this.inferenceJob?.toString() ?? null, costMicro: this.d.llm.costMicro().toString(), calls: this.d.llm.callCount(), cap: this.d.cfg.llmCallCap },
+      inference: { jobId: this.inferenceJob?.toString() ?? null, costMicro: this.d.llm.costMicro().toString(), unknownCostCalls: this.d.llm.unknownCostCalls(), calls: this.d.llm.callCount(), cap: this.d.cfg.llmCallCap },
       jobs: this.tasks.map((t) => ({
         jobId: t.jobId.toString(),
         vendor: t.label,

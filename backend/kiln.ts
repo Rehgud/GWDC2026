@@ -138,21 +138,28 @@ function toUsage(u: unknown): Usage | null {
   };
 }
 
-/** seconds to wait from a 429/5xx response; null when absent */
-function resetSeconds(h: (k: string) => string | null, now: number): number | null {
-  const reset = h('x-ratelimit-reset') ?? h('x-ratelimit-reset-requests');
-  if (reset !== null) {
-    const n = Number(reset.replace(/s$/, ''));
-    if (Number.isFinite(n)) return n > 1e9 ? Math.max(0, n - now / 1000) : n; // epoch or delta
+/**
+ * Seconds from a reset / Retry-After value: plain seconds, an epoch, Go-style durations
+ * ("6m0s", "1m30s", "30000ms", "1.5s", "2h") or an HTTP date. null = unparseable.
+ */
+export function parseWaitSeconds(v: string, now: number): number | null {
+  const t = v.trim();
+  if (/^\d+(\.\d+)?$/.test(t)) {
+    const n = Number(t);
+    return n > 1e9 ? Math.max(0, n - now / 1000) : n; // epoch seconds or a delta
   }
-  const ra = h('retry-after');
-  if (ra !== null) {
-    const n = Number(ra);
-    if (Number.isFinite(n)) return n;
-    const t = Date.parse(ra);
-    if (!Number.isNaN(t)) return Math.max(0, (t - now) / 1000);
-  }
-  return null;
+  const m = /^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m(?!s))?(?:(\d+(?:\.\d+)?)s)?(?:(\d+(?:\.\d+)?)ms)?$/.exec(t);
+  if (t && m && (m[1] || m[2] || m[3] || m[4])) return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) + Number(m[4] ?? 0) / 1000;
+  const d = Date.parse(t);
+  return Number.isNaN(d) ? null : Math.max(0, (d - now) / 1000);
+}
+
+type WaitHint = { present: false } | { present: true; seconds: number | null };
+
+/** 429: x-ratelimit-reset(-requests) or Retry-After. 5xx: Retry-After only. */
+function waitHint(h: (k: string) => string | null, now: number, is429: boolean): WaitHint {
+  const v = (is429 ? (h('x-ratelimit-reset') ?? h('x-ratelimit-reset-requests')) : null) ?? h('retry-after');
+  return v === null ? { present: false } : { present: true, seconds: parseWaitSeconds(v, now) };
 }
 
 type AttemptOut = { attempt: LlmAttempt; raw: string | null; status: 'ok' | 'retry' | 'fail'; code: DenyCode | null; waitMs: number };
@@ -160,6 +167,8 @@ type AttemptOut = { attempt: LlmAttempt; raw: string | null; status: 'ok' | 'ret
 export class LlmClient {
   private readonly cfg: LlmConfig;
   private calls = 0;
+  private inflight = 0;
+  private unknownCost = 0;
   private costSum = 0n; // 1e-24 units
   private stubSeq = 0;
   private warned = false;
@@ -180,6 +189,10 @@ export class LlmClient {
   callCount(): number {
     return this.calls;
   }
+  /** attempts that reached Kiln (or timed out) without a reported cost: shown as "미상", never $0 */
+  unknownCostCalls(): number {
+    return this.unknownCost;
+  }
   /** known cost so far in micro-USD (ceil) */
   costMicro(): bigint {
     const d = 10n ** BigInt(COST_SCALE - 6);
@@ -196,17 +209,21 @@ export class LlmClient {
     return this.cfg.jitterMs ? this.cfg.jitterMs() : 1000 + Math.floor(Math.random() * 1000);
   }
 
-  /** D2 hard cap: refuse BEFORE the next call would reach 100% of the call or cost budget. */
-  private capCheck(): { blocked: boolean; warn: boolean } {
-    const next = this.calls + 1;
+  /**
+   * D2 hard cap: refuse BEFORE the next call would reach 100% of the call or cost budget.
+   * In-flight calls hold a reservation (max(average cost, $0.0005)) so concurrent calls cannot
+   * all pass the check before any cost is known.
+   */
+  private capCheck(extraSlots = 1): { blocked: boolean; warn: boolean } {
+    const next = this.calls + this.inflight + extraSlots;
     const cap = this.cfg.callCap;
     let blocked = next > cap;
     let warn = next > Math.floor(cap * 0.8);
     if (this.cfg.costCapMicro !== undefined) {
       const capUnits = this.cfg.costCapMicro * 10n ** BigInt(COST_SCALE - 6);
-      // leave headroom of 2x the average call cost so a single call cannot cross 100%
       const avg = this.calls > 0 ? this.costSum / BigInt(this.calls) : 0n;
-      if (this.costSum + 2n * avg >= capUnits) blocked = true;
+      const reserve = avg > MIN_RESERVE_UNITS ? avg : MIN_RESERVE_UNITS;
+      if (this.costSum + BigInt(this.inflight + extraSlots) * reserve >= capUnits) blocked = true;
       if (this.costSum * 10n > capUnits * 8n) warn = true;
     }
     return { blocked, warn };
@@ -221,6 +238,7 @@ export class LlmClient {
       http: a.http,
       latency_ms: a.latency_ms,
       gen_id: a.gen_id,
+      response_id: a.response_id ?? null,
       finish_reason: a.finish_reason,
       usage: a.usage,
       cost_known: a.cost_known,
@@ -236,9 +254,11 @@ export class LlmClient {
     const timeout = this.cfg.timeoutMs?.[flow] ?? (flow === 'F3' ? 15_000 : 10_000);
     const maxTokens = this.cfg.maxTokens?.[flow] ?? (flow === 'F3' ? 256 : 512);
     const t0 = this.now();
-    const base: LlmAttempt = { attempt: n, http: null, latency_ms: 0, gen_id: null, finish_reason: null, usage: null, cost_known: false, error: null };
+    const base: LlmAttempt = { attempt: n, http: null, latency_ms: 0, gen_id: null, response_id: null, finish_reason: null, usage: null, cost_known: false, error: null };
     const done = (a: Partial<LlmAttempt>, raw: string | null, status: AttemptOut['status'], code: DenyCode | null, waitMs = 0): AttemptOut => {
       const attempt = { ...base, ...a, latency_ms: Math.max(0, this.now() - t0) };
+      // billed or maybe billed, but no cost reported: count it (reported as "미상", never $0)
+      if (!attempt.cost_known && (attempt.http !== null || attempt.error === 'TIMEOUT')) this.unknownCost++;
       return { attempt, raw, status, code, waitMs };
     };
     this.calls++;
@@ -271,9 +291,17 @@ export class LlmClient {
         http = res.status;
         header = (k) => res.headers.get(k);
         genId = res.headers.get('x-neocloud-generation-id');
+        let text: string;
         try {
-          body = await res.json();
+          text = await res.text(); // the timeout also covers the body read
+        } catch (e) {
+          const nm = (e as Error)?.name;
+          return done({ http, gen_id: genId, error: nm === 'TimeoutError' || nm === 'AbortError' ? 'TIMEOUT' : 'NETWORK' }, null, 'fail', 'QWEN_UNAVAILABLE');
+        }
+        try {
+          body = JSON.parse(text);
         } catch {
+          if (http === 200) return done({ http, gen_id: genId, error: 'BAD_BODY' }, null, 'fail', 'QWEN_UNAVAILABLE');
           body = null;
         }
       }
@@ -284,11 +312,17 @@ export class LlmClient {
     }
 
     if (http === 429 || http >= 500) {
-      const wait = resetSeconds(header, this.now());
-      const errName = http === 429 ? 'HTTP_429' : 'HTTP_5XX';
+      const is429 = http === 429;
+      const hint = waitHint(header, this.now(), is429);
+      const errName = is429 ? 'HTTP_429' : 'HTTP_5XX';
       if (isRetry) return done({ http, gen_id: genId, error: errName }, null, 'fail', 'QWEN_UNAVAILABLE');
-      if (wait !== null && wait > 5) return done({ http, gen_id: genId, error: `${errName}_RESET_${Math.ceil(wait)}S` }, null, 'fail', 'QWEN_UNAVAILABLE');
-      const waitMs = Math.max(wait !== null ? Math.ceil(wait * 1000) : 0, this.jitter());
+      if (hint.present) {
+        // an unreadable hint is refused (fail-closed); a 429 may wait <= 5 s; a 5xx that asks us
+        // to come back later (Retry-After in the future) is refused
+        if (hint.seconds === null) return done({ http, gen_id: genId, error: `${errName}_RESET_UNPARSEABLE` }, null, 'fail', 'QWEN_UNAVAILABLE');
+        if (is429 ? hint.seconds > 5 : hint.seconds > 0) return done({ http, gen_id: genId, error: `${errName}_RESET_${Math.ceil(hint.seconds)}S` }, null, 'fail', 'QWEN_UNAVAILABLE');
+      }
+      const waitMs = Math.max(hint.present && hint.seconds !== null ? Math.ceil(hint.seconds * 1000) : 0, this.jitter());
       return done({ http, gen_id: genId, error: errName }, null, 'retry', null, waitMs);
     }
     if (http !== 200) return done({ http, gen_id: genId, error: `HTTP_${http}` }, null, 'fail', 'QWEN_UNAVAILABLE');
@@ -300,7 +334,8 @@ export class LlmClient {
     if (costU !== null) this.costSum += costU;
     const a: Partial<LlmAttempt> = {
       http,
-      gen_id: genId ?? (typeof b.id === 'string' ? b.id : null),
+      gen_id: genId, // X-Neocloud-Generation-Id only: the id Bricksum can verify
+      response_id: typeof b.id === 'string' ? b.id : null,
       finish_reason: choice?.finish_reason ?? null,
       usage,
       cost_known: costU !== null,
@@ -328,6 +363,7 @@ export class LlmClient {
       this.warned = true;
       this.cfg.onWarn?.(`LLM usage above 80% of the cap (${this.calls}/${this.cfg.callCap} calls, ${this.costMicro()} micro-USD)`);
     }
+    this.inflight++; // reservation, released when the call ends
     return this.sem.run(async () => {
       for (let n = 1; n <= 2; n++) {
         const out = await this.attempt(flow, msgs, n, n === 2);
@@ -346,8 +382,8 @@ export class LlmClient {
           ev.code = out.code;
           return ev;
         }
-        // retry: check the cap again before spending a second call
-        if (this.capCheck().blocked) {
+        // retry: check the cap again before spending a second call (this call's slot is reserved)
+        if (this.capCheck(0).blocked) {
           ev.code = 'LLM_CALL_CAP';
           return ev;
         }
@@ -355,16 +391,22 @@ export class LlmClient {
       }
       ev.code = 'QWEN_UNAVAILABLE';
       return ev;
+    }).finally(() => {
+      this.inflight--;
     });
   }
 }
+
+/** $0.0005 in 1e-24 USD units: the minimum per-call reservation against the INFERENCE hold */
+const MIN_RESERVE_UNITS = 5n * 10n ** 20n;
 
 /** Qwen3 soft switch: append /no_think to the last user message. */
 export function withNoThink(messages: Msg[]): Msg[] {
   const out = messages.map((m) => ({ ...m }));
   for (let i = out.length - 1; i >= 0; i--) {
     if (out[i]!.role === 'user') {
-      if (!out[i]!.content.includes('/no_think')) out[i]!.content = `${out[i]!.content}\n/no_think`;
+      // the switch must be the LAST token: untrusted text inside the message cannot pre-empt it
+      if (!out[i]!.content.trimEnd().endsWith('/no_think')) out[i]!.content = `${out[i]!.content}\n/no_think`;
       break;
     }
   }

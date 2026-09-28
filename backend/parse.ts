@@ -13,10 +13,40 @@
 //       USD decimal with <= 6 decimals (string or JSON number), else QWEN_UNPARSEABLE.
 import { parseUsd } from './rules.ts';
 
-export type ParseFail = { ok: false; code: 'QWEN_UNPARSEABLE'; reason: 'TRUNCATED' | 'EMPTY' | 'UNCLOSED_THINK' | 'NOT_JSON' | 'NOT_OBJECT' | 'SCHEMA' };
+export type ParseFail = { ok: false; code: 'QWEN_UNPARSEABLE'; reason: 'TRUNCATED' | 'EMPTY' | 'UNCLOSED_THINK' | 'NOT_JSON' | 'NOT_OBJECT' | 'DUPLICATE_KEY' | 'SCHEMA' };
 export type ParseOk<T> = { ok: true; value: T };
 
 const THINK_BLOCK = /<think>[\s\S]*?<\/think>/g;
+
+/**
+ * True when any object in (already valid) JSON text repeats a key. JSON.parse silently keeps the
+ * last duplicate, so {"verdict":"deny","verdict":"approve"} would otherwise read as approve.
+ */
+export function hasDuplicateKeys(text: string): boolean {
+  const stack: ({ obj: true; keys: Set<string>; expectKey: boolean } | { obj: false })[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top && top.obj && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return true;
+        top.keys.add(key);
+        top.expectKey = false;
+      }
+      i = j;
+    } else if (ch === '{') stack.push({ obj: true, keys: new Set(), expectKey: true });
+    else if (ch === '[') stack.push({ obj: false });
+    else if (ch === '}' || ch === ']') stack.pop();
+    else if (ch === ',') {
+      const top = stack[stack.length - 1];
+      if (top && top.obj) top.expectKey = true;
+    }
+  }
+  return false;
+}
 const FENCE = /^```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\n?\s*```$/;
 
 /** Extract the single JSON object an answer must consist of. */
@@ -36,6 +66,7 @@ export function extractJson(raw: string | null | undefined, finishReason: string
     return { ok: false, code: 'QWEN_UNPARSEABLE', reason: 'NOT_JSON' };
   }
   if (!v || typeof v !== 'object' || Array.isArray(v)) return { ok: false, code: 'QWEN_UNPARSEABLE', reason: 'NOT_OBJECT' };
+  if (hasDuplicateKeys(s)) return { ok: false, code: 'QWEN_UNPARSEABLE', reason: 'DUPLICATE_KEY' };
   return { ok: true, value: v as Record<string, unknown> };
 }
 

@@ -151,7 +151,10 @@ export type LlmAttempt = {
   attempt: number;
   http: number | null;
   latency_ms: number;
+  /** X-Neocloud-Generation-Id header (the id Bricksum can verify); null when absent */
   gen_id: string | null;
+  /** the response body's own id (OpenAI-style), kept apart from gen_id */
+  response_id?: string | null;
   finish_reason: string | null;
   usage: Usage | null;
   cost_known: boolean;
@@ -324,7 +327,17 @@ export type Bodies = {
     reason: SessionEndReason;
     refund: Dec;
     snapshot: ChainSnapshot | null;
-    totals: { vendor_net: Dec; fees: Dec; inference: Dec; llm_calls: number };
+    totals: {
+      vendor_net: Dec;
+      fees: Dec;
+      /** INFERENCE settled: known Kiln cost, capped at the hold */
+      inference: Dec;
+      llm_calls: number;
+      /** known cost above the INFERENCE hold that could not be settled */
+      inference_uncovered?: Dec;
+      /** attempts with no reported cost ("미상") */
+      inference_unknown_calls?: number;
+    };
   };
 };
 

@@ -9,6 +9,24 @@
 import type { Msg } from './kiln.ts';
 import { formatUsd } from './rules.ts';
 
+/** Remove Qwen3 soft switches (/think, /no_think) from text we do not control. */
+export function stripSoftSwitches(s: string): string {
+  return s.replace(/\/(?:no_)?think\b/gi, '[switch removed]');
+}
+
+/**
+ * Untrusted text for the CFO prompt: no angle brackets (the fence cannot be closed from inside,
+ * whatever the spacing or nesting), no soft switches, one line, bounded length.
+ */
+export function untrusted(s: string, max: number): string {
+  return stripSoftSwitches(s)
+    .replace(/</g, '‹')
+    .replace(/>/g, '›')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
 export type VendorOption = { label: string; gpu: string; priceMicroPerHour: bigint; capacity: number };
 
 export type F1Context = {
@@ -42,7 +60,7 @@ export function f1Messages(c: F1Context): Msg[] {
     `VAULT: budget $${formatUsd(c.chain.budget)}, committed $${formatUsd(c.chain.committed)}, max hold per call $${formatUsd(c.chain.maxHold)}, ${c.chain.simHoursToDeadline.toFixed(2)} simulated GPU-hours left before the deadline${c.chain.paused ? ', PAUSED' : ''}. A request must fit before the deadline.`,
     `VENDORS:\n${vendors}`,
     cur,
-    `PROGRESS LOG (most recent last):\n${c.progressLog.slice(-12).join('\n') || '(none)'}`,
+    `PROGRESS LOG (most recent last):\n${c.progressLog.slice(-12).map(stripSoftSwitches).join('\n') || '(none)'}`,
   ].join('\n\n');
   return [
     { role: 'system', content: F1_SYSTEM },
@@ -79,7 +97,7 @@ Use lowercase "approve" or "deny".`;
 
 export function f2Messages(c: F2Context): Msg[] {
   const s = c.summary;
-  const rationale = c.rationale.replace(/<\/?untrusted_rationale>/gi, '').slice(0, 300);
+  const rationale = untrusted(c.rationale, 300);
   const user = [
     `SIGNED WORK SPEC (JSON):\n${c.specText}`,
     `REQUEST (${c.kind}): vendor ${c.request.vendorLabel}, ${c.request.gpu}, $${formatUsd(c.request.amountNet)} net ($${formatUsd(c.request.amountGross)} with fee).`,

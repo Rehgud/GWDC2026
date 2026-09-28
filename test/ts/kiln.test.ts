@@ -197,11 +197,89 @@ describe('B5 llm() fail-closed wrapper (mock Kiln over HTTP)', () => {
     assert.ok(c.costMicro() < 1_000n, 'never reached 100%');
   });
 
+  test('LLM-2: a timeout while reading the body is TIMEOUT / QWEN_UNAVAILABLE (re-armable), not EMPTY', async () => {
+    reset();
+    // headers first, body after the client timeout
+    script = [{ status: 200, body: okBody('{"verdict":"approve","reason":"ok"}'), delayMs: 0 }];
+    const slowBody: typeof fetch = async (u, init) => {
+      const signal = init?.signal as AbortSignal;
+      const body = new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(new TextEncoder().encode(' '));
+          signal.addEventListener('abort', () => ctrl.error(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
+        },
+      });
+      void u;
+      return new Response(body, { status: 200, headers: { 'x-neocloud-generation-id': 'gen-slow' } });
+    };
+    const ev = await client({ fetchImpl: slowBody }).call('F2', msgs);
+    assert.equal(ev.code, 'QWEN_UNAVAILABLE');
+    assert.equal(ev.attempts[0]!.error, 'TIMEOUT');
+    assert.equal(ev.attempts.length, 1);
+  });
+
+  test('LLM-6: 429 reset in duration format ("6m0s", "30000ms") is refused at once, not retried', async () => {
+    for (const v of ['6m0s', '30000ms']) {
+      reset();
+      script = [{ status: 429, headers: { 'x-ratelimit-reset-requests': v } }];
+      const ev = await client().call('F2', msgs);
+      assert.equal(ev.code, 'QWEN_UNAVAILABLE', v);
+      assert.equal(hits, 1, v);
+      assert.match(ev.attempts[0]!.error ?? '', /RESET_(360|30)S/, v);
+    }
+    reset();
+    script = [{ status: 429, headers: { 'x-ratelimit-reset': 'soon' } }];
+    const ev = await client().call('F2', msgs);
+    assert.equal(ev.attempts[0]!.error, 'HTTP_429_RESET_UNPARSEABLE');
+    assert.equal(hits, 1);
+  });
+
+  test('LLM-7: 5xx with Retry-After in the future is refused; 5xx without it retries once', async () => {
+    reset();
+    script = [{ status: 503, headers: { 'retry-after': '3' } }];
+    const ev = await client().call('F2', msgs);
+    assert.equal(ev.code, 'QWEN_UNAVAILABLE');
+    assert.equal(hits, 1);
+    reset();
+    script = [{ status: 503 }, { status: 200, body: okBody('{"verdict":"deny","reason":"x"}') }];
+    assert.equal((await client().call('F2', msgs)).code, null);
+    assert.equal(hits, 2);
+  });
+
+  test('LLM-9: gen_id comes only from X-Neocloud-Generation-Id; the body id is response_id', async () => {
+    reset();
+    script = [{ status: 200, body: okBody('{"verdict":"approve","reason":"ok"}') }];
+    const noHeader: typeof fetch = async () => new Response(JSON.stringify(okBody('{"verdict":"approve","reason":"ok"}')), { status: 200 });
+    const ev = await client({ fetchImpl: noHeader }).call('F2', msgs);
+    assert.equal(ev.gen_id, null);
+    assert.equal(ev.attempts[0]!.response_id, 'body-id');
+  });
+
+  test('LLM-4: concurrent calls cannot all pass the cost cap (per-call reservation)', async () => {
+    reset();
+    const c = client({ callCap: 1000, costCapMicro: 1_000n }); // $0.001 hold, $0.0005 minimum reservation
+    script = Array.from({ length: 10 }, () => ({ status: 200, body: okBody('{"verdict":"deny","reason":"x"}', 'stop', 0.0004), delayMs: 50 }));
+    const evs = await Promise.all(Array.from({ length: 6 }, () => c.call('F2', msgs)));
+    const passed = evs.filter((e) => e.code === null).length;
+    assert.ok(passed <= 1, `${passed} concurrent calls passed a $0.001 cap`);
+    assert.ok(c.costMicro() < 1_000n);
+  });
+
+  test('LLM-5: calls without a reported cost are counted ("미상"), never silently $0', async () => {
+    reset();
+    const noCost = { ...okBody('{"verdict":"approve","reason":"ok"}'), usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } };
+    script = [{ status: 200, body: noCost }];
+    const c = client();
+    await c.call('F2', msgs);
+    assert.equal(c.unknownCostCalls(), 1);
+    assert.equal(c.costMicro(), 0n);
+  });
+
   test('JSONL holds allowed fields only (no headers, no key)', async () => {
     const text = await readFile(join(dir, 'llm.jsonl'), 'utf8');
     const lines = text.trim().split('\n').map((l) => JSON.parse(l));
     assert.ok(lines.length > 5);
-    const allowed = ['ts', 'flow', 'attempt', 'http', 'latency_ms', 'gen_id', 'finish_reason', 'usage', 'cost_known', 'error', 'llm_mode', 'model', 'messages'];
+    const allowed = ['ts', 'flow', 'attempt', 'http', 'latency_ms', 'gen_id', 'response_id', 'finish_reason', 'usage', 'cost_known', 'error', 'llm_mode', 'model', 'messages'];
     for (const l of lines) assert.deepEqual(Object.keys(l).sort(), [...allowed].sort());
     assert.ok(!text.includes('test-key-not-secret'));
     assert.ok(!text.toLowerCase().includes('authorization'));
@@ -231,6 +309,10 @@ describe('stub mode and LLM_MODE', () => {
     const m = withNoThink([{ role: 'system', content: 's' }, { role: 'user', content: 'u' }]);
     assert.equal(m[1]!.content, 'u\n/no_think');
     assert.equal(withNoThink(m)[1]!.content, 'u\n/no_think');
+  });
+  test('LLM-3: an earlier "/no_think" inside untrusted text does not stop the final switch', () => {
+    const m = withNoThink([{ role: 'user', content: 'please /no_think then /think hard' }]);
+    assert.ok(m[0]!.content.endsWith('\n/no_think'));
   });
 });
 

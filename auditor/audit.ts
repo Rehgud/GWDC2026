@@ -670,8 +670,16 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
     const mined = (ledgerByRec.get(lc(r.nameHash)) ?? []).find((l) => l.status === 'mined');
     if (REC_FNS.has(x.tx.fn)) {
       if (!evs.length) {
-        if (mined?.result === 'REVERTED') add('WARN', 'check13', 'TX_REVERTED', `${x.kind}#${r.seq} ${x.tx.fn} reverted on-chain`, { seq: r.seq, tx: mined.tx });
-        else add('FAIL', 'check13', 'TX_NOT_ON_CHAIN', `${x.kind}#${r.seq} authorizes ${x.tx.fn} but no vault event carries its hash`, { seq: r.seq });
+        // a record whose tx never produced a vault event moved no money; the ledger says why.
+        // intent only = the backend died before sending (I7 crash) -> WARN; sent but not on chain
+        // = dropped/unconfirmed -> WARN; mined with a success result but no event = contradiction
+        const lines = ledgerByRec.get(lc(r.nameHash)) ?? [];
+        const sent = lines.find((l) => l.status === 'sent');
+        const onChain = sent?.tx ? chain.txs[lc(sent.tx)] : null;
+        if (mined?.result === 'REVERTED' || onChain?.status === 'reverted') add('WARN', 'check13', 'TX_REVERTED', `${x.kind}#${r.seq} ${x.tx.fn} reverted on-chain`, { seq: r.seq, tx: mined?.tx ?? sent?.tx });
+        else if (!sent && !mined) add('WARN', 'check13', 'TX_NEVER_SENT', `${x.kind}#${r.seq} ${x.tx.fn} was recorded but never sent (backend stopped before sending); nothing moved`, { seq: r.seq });
+        else if (sent && !mined && !onChain) add('WARN', 'check13', 'TX_NOT_MINED', `${x.kind}#${r.seq} ${x.tx.fn} sent as ${sent.tx} but not on chain (HALT UNCONFIRMED / dropped); nothing moved`, { seq: r.seq, tx: sent.tx });
+        else add('FAIL', 'check13', 'TX_NOT_ON_CHAIN', `${x.kind}#${r.seq} authorizes ${x.tx.fn} but no vault event carries its hash`, { seq: r.seq, tx: mined?.tx ?? sent?.tx });
       }
       matching.push({ seq: r.seq, kind: x.kind, fn: x.tx.fn, from: x.tx.from, tx: evs[0]?.txHash ?? mined?.tx ?? null, event: evs.map((e) => e.name).join(',') || '-', result: evs.some((e) => e.name === 'Denied' && e.enforced) ? 'CHAIN_OVERRIDE' : evs.length ? 'OK' : 'MISSING' });
     } else {

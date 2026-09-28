@@ -83,6 +83,7 @@ for (let id = 0n; id < n; id++) {
   if (j.closed) continue;
   const isInf = j.vendor.toLowerCase() === dep.inferencePayee.toLowerCase();
   const room = maxNet(j.held - j.paid, feeBps, isInf);
+  // INFERENCE: known Kiln cost, never above the hold (room); vendor jobs: ledger usage - settled
   const want = isInf ? llmCost : (usage.get(id.toString()) ?? 0n) - (settled.get(id.toString()) ?? 0n);
   const delta = want > room ? room : want;
   if (delta > 0n) {

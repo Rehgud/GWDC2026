@@ -31,6 +31,9 @@ describe('B4 F2 verdict parsing', () => {
     ['array', '[{"verdict":"approve","reason":"ok"}]', 'stop', 'QWEN_UNPARSEABLE:NOT_OBJECT'],
     ['approve inside think, deny in body -> deny', '<think>I will {"verdict":"approve"}</think>{"verdict":"deny","reason":"scope"}', 'stop', 'QWEN_DENIED'],
     ['verdict not a string', '{"verdict":true,"reason":"ok"}', 'stop', 'QWEN_UNPARSEABLE:SCHEMA'],
+    ['LLM-8 duplicate verdict keys (deny then approve) are ambiguous', '{"verdict":"deny","verdict":"approve","reason":"x"}', 'stop', 'QWEN_UNPARSEABLE:DUPLICATE_KEY'],
+    ['duplicate key via escape sequence', '{"verdict":"deny","verdic\\u0074":"approve","reason":"x"}', 'stop', 'QWEN_UNPARSEABLE:DUPLICATE_KEY'],
+    ['same key in different nested objects is fine', '{"verdict":"approve","reason":"ok","meta":{"reason":"n"}}', 'stop', 'approve'],
   ];
   for (const [name, raw, fr, want] of ROWS) {
     test(name, () => assert.equal(V(raw, fr), want));
