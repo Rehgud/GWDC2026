@@ -82,7 +82,17 @@ export async function deploy(o: DeployOpts = {}): Promise<{ dep: Deployment; pre
     if (t.status !== 0) throw new Error('forge test failed — deploy aborted');
   }
 
-  const auth: string[] = c.name === 'anvil' ? ['--private-key', opt('FOUNDER_PK', ANVIL_FOUNDER)] : ['--account', opt('FOUNDER_ACCOUNT', 'founder')];
+  // Deploy.s.sol uses vm.startBroadcast() with no argument, so the founder is forge's sender. With a
+  // keystore, forge does NOT infer it: without --sender the script runs as Foundry's DefaultSender
+  // and fails. --sender = the FOUNDER_PK address also makes forge refuse ("No associated wallet")
+  // when the keystore account and FOUNDER_PK differ (D1: one founder for deploy, spec and dashboard).
+  let auth: string[];
+  if (c.name === 'anvil') auth = ['--private-key', opt('FOUNDER_PK', ANVIL_FOUNDER)];
+  else {
+    const founderPk = opt('FOUNDER_PK', '');
+    if (!founderPk) throw new Error('FOUNDER_PK is required on base-sepolia: the same key as the forge keystore account (forge --sender, D1)');
+    auth = ['--account', opt('FOUNDER_ACCOUNT', 'founder'), '--sender', privateKeyToAccount(founderPk as Hex).address];
+  }
   const env = {
     ...process.env,
     AGENT_ADDR: agent,

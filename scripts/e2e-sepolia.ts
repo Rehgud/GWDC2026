@@ -1,8 +1,11 @@
 // e2e-sepolia.ts — E1: the recorded run = the submission bundle, on Base Sepolia with the REAL Kiln.
 //   npm run e2e:sepolia -- --scenario normal [--skip-deploy]
-// Interactive (forge keystore password prompts): run it in your own terminal, e.g. `! npm run e2e:sepolia`.
-// Needs .env: CHAIN=base-sepolia, RPC_URL(+_FALLBACK), AGENT_PK (npm run new-agent, funded),
-// FOUNDER_PK (same address as the keystore account, D1), LLM_MODE=kiln, KILN_URL, KILN_API_KEY.
+// Interactive: forge (deploy) and cast (spec signing) each prompt for the keystore password, so run
+// it in a real terminal, not through a non-TTY wrapper.
+// Needs .env: CHAIN=base-sepolia, RPC_URL (a Base Sepolia RPC, or empty for sepolia.base.org),
+// AGENT_PK (npm run new-agent, funded), FOUNDER_PK (the SAME key as the keystore account: deploy
+// passes its address as forge --sender, D1), LLM_MODE=kiln, KILN_URL (OpenAI-compatible base,
+// POST {KILN_URL}/chat/completions), KILN_API_KEY.
 // Steps: preflight gates -> deploy (new vault) -> sign-spec -> session (CLOCK_MULT=60) with the
 // dashboard on 127.0.0.1:$PORT -> audit with the PUBLIC RPC and --submission -> token/energy report.
 import { spawnSync } from 'node:child_process';
