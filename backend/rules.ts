@@ -346,9 +346,13 @@ function vendorOk(req: DecodedRequest, ch: DecodedChain): boolean {
 
 // ------------------------------------------------------------------------------ rules
 /**
- * Chain rules only, mirroring the contract's open/topUp checks exactly (PAST_DEADLINE here is
- * the contract's `blockTs >= vault.deadline`). Used for the INFERENCE open (D2). Returns every
+ * Chain rules only, mirroring the contract's open/topUp checks (PAST_DEADLINE here is the
+ * contract's `blockTs >= vault.deadline`). Used for the INFERENCE open (D2). Returns every
  * violated code in CHAIN_RULE_ORDER; the decision is codes[0].
+ * One deliberate gate-only extension: for a topUp, a request naming a vendor other than the
+ * job's vendor is VENDOR_NOT_ALLOWED here, while the contract's topUp(jobId, net, rec) carries
+ * no vendor and only checks vendorAllowed[job.vendor]. (So the D5 "send the same request with
+ * cast" replay must be open(<vendor>, net, rec), which the contract Denies.)
  */
 export function chainRules(input: ChainRuleInput): GateCode[] {
   if (!input || input.v !== 1) throw new GateInputError('ChainRuleInput.v must be 1');

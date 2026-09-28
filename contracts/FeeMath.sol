@@ -10,6 +10,8 @@ library FeeMath {
 
     function fee(uint256 net, uint256 feeBps, bool exempt) internal pure returns (uint256) {
         if (exempt) return 0;
+        // exact floor(net*bps/1e4) without overflow: a = 1e4*q + r  =>  q*bps + floor(r*bps/1e4)
+        // forge-lint: disable-next-line(divide-before-multiply)
         return (net / BPS) * feeBps + ((net % BPS) * feeBps) / BPS;
     }
 
