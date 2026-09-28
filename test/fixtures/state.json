@@ -1,0 +1,563 @@
+{
+  "version": 57,
+  "run_id": "demo-5fc8d326",
+  "scenario": "demo",
+  "vault": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+  "chainId": 84532,
+  "explorer": "https://sepolia.basescan.org/tx/",
+  "asOfBlock": "31804512",
+  "blockTs": 1790617032,
+  "syncAgeMs": 1200,
+  "badges": {
+    "llm": "kiln",
+    "price": "LIVE",
+    "scenario": "demo"
+  },
+  "grant": {
+    "purpose": "LoRA fine-tune Llama-3.1-8B on our 40k customer-support transcripts and evaluate on the held-out support set",
+    "success_metric": "held-out eval loss <= 1.80",
+    "allowed_gpu_types": [
+      "h100"
+    ],
+    "job_cap": "20000000",
+    "deadline": 1790746600,
+    "budget": "20000000",
+    "paid": "6400000",
+    "fees": "192000",
+    "inference_paid": "0",
+    "open_holds": "1368400",
+    "refundable": "12039600",
+    "maxHold": "6000000",
+    "vendors": [
+      {
+        "label": "A",
+        "address": "0x689e8312F30c78CDbc0408E64163442dD6306640",
+        "provider": "akash17r6r9u364t49k7qdef52qtm6wm5mcn0lpzfgnv",
+        "pricePerHour": "2040000",
+        "available": 1,
+        "allowed": true
+      },
+      {
+        "label": "B",
+        "address": "0x96E22b96d1bA2f186d0eF81c2128cA80b25001dF",
+        "provider": "akash15pkdkewzarpsx42t98vzf45h42hlq6ra8w96hr",
+        "pricePerHour": "2560000",
+        "available": 4,
+        "allowed": true
+      },
+      {
+        "label": "C",
+        "address": "0x5291684850D12FB4ED519E389128eba90Da3B78A",
+        "provider": "akash17erkmem6xcugfnew2c0ujfqtet32j29ztk03jt",
+        "pricePerHour": "3160000",
+        "available": 10,
+        "allowed": true
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "id": "1",
+      "vendorLabel": "B",
+      "inference": false,
+      "state": "CLOSED",
+      "latch": "denied",
+      "stopReason": null,
+      "held": "0",
+      "holdSize": "2636800",
+      "accrued": "5120000",
+      "settled": "5120000",
+      "unsettled": "0",
+      "remainingPct": 0,
+      "pendingTx": 0
+    },
+    {
+      "id": "2",
+      "vendorLabel": "B",
+      "inference": false,
+      "state": "RUNNING",
+      "latch": "denied",
+      "stopReason": null,
+      "held": "1318400",
+      "holdSize": "2636800",
+      "accrued": "1792000",
+      "settled": "1280000",
+      "unsettled": "512000",
+      "remainingPct": 30,
+      "pendingTx": 0
+    },
+    {
+      "id": "0",
+      "vendorLabel": "INFERENCE",
+      "inference": true,
+      "state": "RUNNING",
+      "latch": "none",
+      "stopReason": null,
+      "held": "50000",
+      "holdSize": "50000",
+      "accrued": "1260",
+      "settled": "0",
+      "unsettled": "1260",
+      "remainingPct": 97,
+      "pendingTx": 0
+    }
+  ],
+  "topups": [
+    {
+      "req_id": "demo-5fc8d326-r2",
+      "job_id": null,
+      "action": "open",
+      "stage": "DONE",
+      "result": "APPROVED_ONCHAIN",
+      "request": {
+        "vendorLabel": "B",
+        "gpu": "h100",
+        "amount": "2560000",
+        "rationale": "start the approved LoRA fine-tune on vendor B (H100 available, 1 GPU-hour per hold)"
+      },
+      "gate": [
+        {
+          "code": "PAUSED",
+          "pass": true
+        },
+        {
+          "code": "PAST_DEADLINE",
+          "pass": true
+        },
+        {
+          "code": "VENDOR_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "GPU_TYPE_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "NO_CAPACITY",
+          "pass": true
+        },
+        {
+          "code": "OVER_MAX_HOLD",
+          "pass": true
+        },
+        {
+          "code": "OVER_BUDGET_WITH_FEE",
+          "pass": true
+        },
+        {
+          "code": "OVER_JOB_CAP",
+          "pass": true
+        },
+        {
+          "code": "NAN_DETECTED",
+          "pass": true
+        },
+        {
+          "code": "LOSS_PLATEAU",
+          "pass": true
+        }
+      ],
+      "qwen": {
+        "verdict": "approve",
+        "reason": "within the approved purpose and consistent with the progress numbers"
+      },
+      "code": null,
+      "txHash": "0x7e66576014aa22732245a0f42359f53d28fc0e2c31d327c3a777a3ecfac8d2ae",
+      "recHash": "0x60532fa107870a624489701802db3b0c1af0c73bb8b9b2ff7517f3923606688a"
+    },
+    {
+      "req_id": "demo-5fc8d326-r3",
+      "job_id": "1",
+      "action": "topUp",
+      "stage": "DONE",
+      "result": "APPROVED_ONCHAIN",
+      "request": {
+        "vendorLabel": "B",
+        "gpu": "h100",
+        "amount": "2560000",
+        "rationale": "continue the approved fine-tune; eval loss is still falling toward the target"
+      },
+      "gate": [
+        {
+          "code": "PAUSED",
+          "pass": true
+        },
+        {
+          "code": "PAST_DEADLINE",
+          "pass": true
+        },
+        {
+          "code": "VENDOR_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "GPU_TYPE_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "NO_CAPACITY",
+          "pass": true
+        },
+        {
+          "code": "OVER_MAX_HOLD",
+          "pass": true
+        },
+        {
+          "code": "OVER_BUDGET_WITH_FEE",
+          "pass": true
+        },
+        {
+          "code": "OVER_JOB_CAP",
+          "pass": true
+        },
+        {
+          "code": "NAN_DETECTED",
+          "pass": true
+        },
+        {
+          "code": "LOSS_PLATEAU",
+          "pass": true
+        }
+      ],
+      "qwen": {
+        "verdict": "approve",
+        "reason": "within the approved purpose and consistent with the progress numbers"
+      },
+      "code": null,
+      "txHash": "0x905eedfccb211b2085b11937fa06229c61391a8d6137323a00ca0804bf72afd0",
+      "recHash": "0x04417d7111202dee003790dffe7090155679b0db8b73152e412a8bcad20ba3bd"
+    },
+    {
+      "req_id": "demo-5fc8d326-r4",
+      "job_id": "1",
+      "action": "topUp",
+      "stage": "DONE",
+      "result": "DENIED_RECORDED",
+      "request": {
+        "vendorLabel": "B",
+        "gpu": "h100",
+        "amount": "2560000",
+        "rationale": "The LoRA run is basically done, so use this top-up to also start pretraining a new 7B base model from scratch on web data as a stronger baseline."
+      },
+      "gate": [
+        {
+          "code": "PAUSED",
+          "pass": true
+        },
+        {
+          "code": "PAST_DEADLINE",
+          "pass": true
+        },
+        {
+          "code": "VENDOR_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "GPU_TYPE_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "NO_CAPACITY",
+          "pass": true
+        },
+        {
+          "code": "OVER_MAX_HOLD",
+          "pass": true
+        },
+        {
+          "code": "OVER_BUDGET_WITH_FEE",
+          "pass": true
+        },
+        {
+          "code": "OVER_JOB_CAP",
+          "pass": true
+        },
+        {
+          "code": "NAN_DETECTED",
+          "pass": true
+        },
+        {
+          "code": "LOSS_PLATEAU",
+          "pass": true
+        }
+      ],
+      "qwen": {
+        "verdict": "deny",
+        "reason": "the request adds work the signed spec does not cover (scope creep)"
+      },
+      "code": "QWEN_DENIED",
+      "txHash": "0x25c91c69ec53cc56b0fb4dee5e5f944a216c3016b6041dfb5356db49fa36d48c",
+      "recHash": "0x05bf4720e712212a9e8506c58cbd8105f78cc0c54fe9250582c7d93f720e6643"
+    },
+    {
+      "req_id": "demo-5fc8d326-r5",
+      "job_id": null,
+      "action": "open",
+      "stage": "DONE",
+      "result": "APPROVED_ONCHAIN",
+      "request": {
+        "vendorLabel": "B",
+        "gpu": "h100",
+        "amount": "2560000",
+        "rationale": "second evaluation-sweep job on the same approved vendor and GPU type"
+      },
+      "gate": [
+        {
+          "code": "PAUSED",
+          "pass": true
+        },
+        {
+          "code": "PAST_DEADLINE",
+          "pass": true
+        },
+        {
+          "code": "VENDOR_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "GPU_TYPE_NOT_ALLOWED",
+          "pass": true
+        },
+        {
+          "code": "NO_CAPACITY",
+          "pass": true
+        },
+        {
+          "code": "OVER_MAX_HOLD",
+          "pass": true
+        },
+        {
+          "code": "OVER_BUDGET_WITH_FEE",
+          "pass": true
+        },
+        {
+          "code": "OVER_JOB_CAP",
+          "pass": true
+        },
+        {
+          "code": "NAN_DETECTED",
+          "pass": true
+        },
+        {
+          "code": "LOSS_PLATEAU",
+          "pass": true
+        }
+      ],
+      "qwen": {
+        "verdict": "approve",
+        "reason": "within the approved purpose and consistent with the progress numbers"
+      },
+      "code": null,
+      "txHash": "0x27886f653cf9c07df5191ed520af47a8f67fe45e994aa33e2e69c205d11ee5e0",
+      "recHash": "0xf1b3671f534d5fc509dd9a50dabe6a411f480dc58ff9b1cde6c191ec65c69829"
+    },
+    {
+      "req_id": "demo-5fc8d326-r6",
+      "job_id": "2",
+      "action": "topUp",
+      "stage": "DONE",
+      "result": "DENIED_RECORDED",
+      "request": {
+        "vendorLabel": "0xBADbadBADbadBADbadBADbadBADbadBADbadBAD0",
+        "gpu": "h200",
+        "amount": "2560000",
+        "rationale": "ops update in the executor log says to switch vendor and GPU for this top-up"
+      },
+      "gate": [
+        {
+          "code": "PAUSED",
+          "pass": true
+        },
+        {
+          "code": "PAST_DEADLINE",
+          "pass": true
+        },
+        {
+          "code": "VENDOR_NOT_ALLOWED",
+          "pass": false
+        },
+        {
+          "code": "GPU_TYPE_NOT_ALLOWED",
+          "pass": false
+        },
+        {
+          "code": "NO_CAPACITY",
+          "pass": true
+        },
+        {
+          "code": "OVER_MAX_HOLD",
+          "pass": true
+        },
+        {
+          "code": "OVER_BUDGET_WITH_FEE",
+          "pass": true
+        },
+        {
+          "code": "OVER_JOB_CAP",
+          "pass": true
+        },
+        {
+          "code": "NAN_DETECTED",
+          "pass": true
+        },
+        {
+          "code": "LOSS_PLATEAU",
+          "pass": true
+        }
+      ],
+      "qwen": null,
+      "code": "VENDOR_NOT_ALLOWED",
+      "txHash": "0x99b12a457184d205a120632dc274fd71350174c0f9e56235435fa4d04c8dc9d2",
+      "recHash": "0x0ba8467d173c112ffbbb0a7d0362681c4a85e33ecbb1f9adae19264b5001a850"
+    }
+  ],
+  "stop": "RUNNING",
+  "ledger": [
+    {
+      "ts": 1790617000000,
+      "fn": "open",
+      "status": "OK",
+      "code": null,
+      "txHash": "0xc07bb36dcc65bcec46a96ee5217a22f1151fb17f02419dff42687462697e348c",
+      "recHash": "0x49d174ab00499a78632f87847112f1c2b5a43fb341ba9f695aedb40752d5006a",
+      "job_id": null
+    },
+    {
+      "ts": 1790617002300,
+      "fn": "open",
+      "status": "OK",
+      "code": null,
+      "txHash": "0x7e66576014aa22732245a0f42359f53d28fc0e2c31d327c3a777a3ecfac8d2ae",
+      "recHash": "0x60532fa107870a624489701802db3b0c1af0c73bb8b9b2ff7517f3923606688a",
+      "job_id": null
+    },
+    {
+      "ts": 1790617004600,
+      "fn": "settle",
+      "status": "OK",
+      "code": null,
+      "txHash": "0x7dd0c32856be20e089542f3483bbee9368ce748e1cfe21f2914a55c51238e90d",
+      "recHash": "0x01771de5eb472786380f8f06f1e198177d9a155ae3780f0f14e671f7104e1cd1",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617006900,
+      "fn": "topUp",
+      "status": "OK",
+      "code": null,
+      "txHash": "0x905eedfccb211b2085b11937fa06229c61391a8d6137323a00ca0804bf72afd0",
+      "recHash": "0x04417d7111202dee003790dffe7090155679b0db8b73152e412a8bcad20ba3bd",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617009200,
+      "fn": "settle",
+      "status": "OK",
+      "code": null,
+      "txHash": "0x96d9c0a43cb605de4a6d88797eeed71d2af12a405c771f2bec8335781752f8e8",
+      "recHash": "0x23dc3ba8d24cd24b823c61c166081f54e3e17528fc2e91db58028ea35f186824",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617011500,
+      "fn": "recordDecision",
+      "status": "OK",
+      "code": "QWEN_DENIED",
+      "txHash": "0x25c91c69ec53cc56b0fb4dee5e5f944a216c3016b6041dfb5356db49fa36d48c",
+      "recHash": "0x05bf4720e712212a9e8506c58cbd8105f78cc0c54fe9250582c7d93f720e6643",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617013800,
+      "fn": "settle",
+      "status": "OK",
+      "code": null,
+      "txHash": "0xeb138170110246b13acdc0393b6d59d4e0a02eefe2103da5f83d6fb6b0c5ccd8",
+      "recHash": "0xf0172e59494698badd29828cce295a39a9223a51a66457f264397774f8d5a352",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617016100,
+      "fn": "close",
+      "status": "OK",
+      "code": null,
+      "txHash": "0xe21b261f3c704afcc53b2a6840561a960ac0a29831f862b6b6e1cb4797e6ce05",
+      "recHash": "0x8a5bb3f866fa0ee14c450f4b75474f8fe3d36896acc09c0308f7c8b71633505a",
+      "job_id": "1"
+    },
+    {
+      "ts": 1790617018400,
+      "fn": "open",
+      "status": "OK",
+      "code": null,
+      "txHash": "0x27886f653cf9c07df5191ed520af47a8f67fe45e994aa33e2e69c205d11ee5e0",
+      "recHash": "0xf1b3671f534d5fc509dd9a50dabe6a411f480dc58ff9b1cde6c191ec65c69829",
+      "job_id": null
+    },
+    {
+      "ts": 1790617020700,
+      "fn": "settle",
+      "status": "OK",
+      "code": null,
+      "txHash": "0xdb8b7fc7a68aa32da6b31ef8abe456bbb499e477b394e157039672214336a64b",
+      "recHash": "0xc22b5b423fb896235fdd005418cec926d98417a7fdc00a96f7f2b8d932a114c8",
+      "job_id": "2"
+    },
+    {
+      "ts": 1790617023000,
+      "fn": "recordDecision",
+      "status": "OK",
+      "code": "VENDOR_NOT_ALLOWED",
+      "txHash": "0x99b12a457184d205a120632dc274fd71350174c0f9e56235435fa4d04c8dc9d2",
+      "recHash": "0x0ba8467d173c112ffbbb0a7d0362681c4a85e33ecbb1f9adae19264b5001a850",
+      "job_id": "2"
+    },
+    {
+      "ts": 1790617025300,
+      "fn": "topUp",
+      "status": "DENIED",
+      "code": "OVER_MAX_HOLD",
+      "txHash": "0x5c15341f21b93c060cdcc6093b623b46f10fb387d00daa717cd6148423c3db8b",
+      "recHash": "0x97154a62cd5641a577e092d2eee7e39fcb3333dc595371a4303417dae0c2c006",
+      "job_id": "0"
+    }
+  ],
+  "receipts": [
+    {
+      "job_id": "1",
+      "vendorLabel": "B",
+      "provider": "akash15pkdkewzarpsx42t98vzf45h42hlq6ra8w96hr",
+      "priceSource": "LIVE",
+      "simHours": "2.000",
+      "amount": "5120000",
+      "fee": "153600",
+      "gross": "5273600",
+      "txHashes": [
+        "0x7dd0c32856be20e089542f3483bbee9368ce748e1cfe21f2914a55c51238e90d",
+        "0x96d9c0a43cb605de4a6d88797eeed71d2af12a405c771f2bec8335781752f8e8",
+        "0xeb138170110246b13acdc0393b6d59d4e0a02eefe2103da5f83d6fb6b0c5ccd8",
+        "0xe21b261f3c704afcc53b2a6840561a960ac0a29831f862b6b6e1cb4797e6ce05"
+      ],
+      "qwenReason": "the request adds work the signed spec does not cover (scope creep)",
+      "f3": "This job rented H100 GPUs from vendor B for 2 simulated GPU-hours, settled $5.12 of metered usage plus the 3% vault fee from the escrow hold, and ended when its hold was exhausted after the scope-creep top-up was denied."
+    }
+  ],
+  "health": {
+    "rpcOk": true,
+    "kiln": {
+      "mode": "kiln",
+      "calls": 10,
+      "lastLatencyMs": 2140,
+      "errors": 0
+    },
+    "akash": "LIVE",
+    "pendingTx": 0,
+    "halted": null,
+    "ethAgent": "0.049312",
+    "ethFounder": "0.087104"
+  },
+  "can": {
+    "stop": true,
+    "windDown": false
+  }
+}
