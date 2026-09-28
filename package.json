@@ -1,0 +1,15 @@
+{
+  "name": "cfo-agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "test": "node --test",
+    "abi": "node scripts/gen-abi.ts"
+  },
+  "dependencies": {
+    "viem": "^2.56.9"
+  }
+}

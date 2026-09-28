@@ -3,3 +3,4 @@ src = "contracts"
 test = "test"
 libs = ["lib"]
 solc = "0.8.30"
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]

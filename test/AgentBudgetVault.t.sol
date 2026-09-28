@@ -375,6 +375,17 @@ contract AgentBudgetVaultTest is Test {
         assertEq(vault.budget(), BUDGET + 1e6);
     }
 
+    // ---- C12: fee cases shared with rules.ts (test/fixtures/fee-cases.json) ----
+    struct FeeCase { bool exempt; uint256 gross; uint256 net; } // alphabetical: vm.parseJson field order
+
+    function test_feeCases_matchTs() public view {
+        FeeCase[] memory cs = abi.decode(vm.parseJson(vm.readFile("test/fixtures/fee-cases.json")), (FeeCase[]));
+        assertGt(cs.length, 5);
+        for (uint256 i; i < cs.length; i++) {
+            assertEq(vault.gross(cs[i].exempt ? INF : A, cs[i].net), cs[i].gross);
+        }
+    }
+
     // ---- C11: money invariants under random open/settle/close ----
     function testFuzz_invariants(uint256 o1, uint256 o2, uint256 s1, uint256 s2, bool closeFirst) public {
         o1 = bound(o1, 1, MAX_HOLD);

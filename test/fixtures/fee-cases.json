@@ -1,0 +1,14 @@
+[
+  { "exempt": false, "gross": 0, "net": 0 },
+  { "exempt": false, "gross": 1, "net": 1 },
+  { "exempt": false, "gross": 33, "net": 33 },
+  { "exempt": false, "gross": 35, "net": 34 },
+  { "exempt": false, "gross": 103, "net": 100 },
+  { "exempt": false, "gross": 1030000, "net": 1000000 },
+  { "exempt": false, "gross": 1460000, "net": 1417476 },
+  { "exempt": false, "gross": 2636800, "net": 2560000 },
+  { "exempt": false, "gross": 6180000, "net": 6000000 },
+  { "exempt": false, "gross": 1030000000000, "net": 1000000000000 },
+  { "exempt": true, "gross": 34, "net": 34 },
+  { "exempt": true, "gross": 50000, "net": 50000 }
+]

@@ -1075,10 +1075,11 @@ make deploy
   - Files: `.gitignore`, `.gitattributes`, `.npmrc`, `scripts/check-secrets.sh`
   - Verify: `git check-ignore .env` 성공, `scripts/check-secrets.sh` 통과
   - Done 2026-09-29: `.prettierignore`·락파일은 npm 도입(T2) 때 추가. 훅 설치: `ln -sf ../../scripts/check-secrets.sh .git/hooks/pre-commit`
-- [ ] **T2 (P1, human: ~3h / CC: ~30min)** — backend — 인터페이스 3파일 고정(ABI와 codes.ts, record.ts, rules.ts)
+- [x] **T2 (P1, human: ~3h / CC: ~30min)** — backend — 인터페이스 3파일 고정(ABI와 codes.ts, record.ts, rules.ts)
   - Surfaced by: Section 5/9 — S5-1, S5-2, S9-4, R3-12, R3-19
   - Files: to be determined
   - Verify: rules.ts 표 기반 단위 테스트(경계값 포함) 통과
+  - Done 2026-09-29: `src/codes.ts`, `src/rules.ts`(gross/maxNet/check/gateInputFromJson), `src/record.ts`(serialize/RecordChain/verifyChain), `src/abi.ts`(`npm run abi`로 생성). `npm test` 43개 + forge C12 교차 테스트. 런타임은 Node 26 기본 TS 실행, 의존성은 viem 하나
 - [x] **T3 (P1, human: ~6h / CC: ~45min)** — contracts — 금고 수정(Denied 모델, 검사 순서, bytes32 코드, recordDecision, maxHold, INFERENCE 면제, close/refund rec, D3 가드) + Foundry 테스트
   - Surfaced by: Section 1/2/6/10 — S1-4, S1-5, S2-10, S6-5, S6-6, S10-2, D3
   - Files: `contracts/AgentBudgetVault.sol`, `contracts/MockUSDC.sol`, `test/*.t.sol`
