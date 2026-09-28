@@ -250,7 +250,7 @@ npm run audit -- runs/<vault> --rpc https://sepolia.base.org --vault 0x... --sub
 | Kiln (T7) | 완료(모의 서버 테스트). **실제 Kiln 호출은 BLOCKED**(KILN_URL·KILN_API_KEY 필요). `npm run smoke:kiln`, `eval:f2`, `nothink` 준비됨 |
 | Akash (T8) | 완료. LIVE 조회 확인, 스냅샷 fallback 테스트 |
 | 감사자 (T9) | 완료. 골든 G1~G16 + 기록 시점 조작 탐지 |
-| 대시보드 (T10) | 기준선 완료(HTML 1파일, 1초 폴링, 서버 가드 테스트). 정산·close 버튼은 열린 job이 모두 STOPPED/HOLD_EXHAUSTED이고 대기 tx 0일 때만 활성(서버도 409). 미정산 사용량이 남은 close는 `UNPAID_USAGE`로 표시 |
+| 대시보드 (T10) | 기준선 완료(HTML 1파일, 1초 폴링, 서버 가드 테스트). 정산·close 버튼은 열린 job이 모두 STOPPED/HOLD_EXHAUSTED이고 대기 tx 0일 때만 활성(서버도 409). 미정산 사용량이 남은 close는 `UNPAID_USAGE`로 표시. anvil·60배속 `normal` 세션을 헤드리스 Edge로 띄워 실시간 갱신(게이트 칩, F2 카드, TX 장부, RUNNING 중 정산 버튼 비활성)을 눈으로 확인했고, 그 번들도 감사 PASS |
 | 시나리오 (T11) | 12개 로컬 E2E 전부 감사 PASS (stub LLM). 세션 경합 테스트: 60초 watchdog `TOPUP_TIMEOUT`, 충전 중 wind-down(SESSION_END가 마지막), 흐름 안 HALT → 비정상 종료, 전송 오류 재조회 |
 | 지표 (T12) | 스크립트 완료. 실제 토큰·에너지 표와 `/no_think` 비교는 실제 Kiln 실행 후 |
 | Base Sepolia E2E (T14) | **BLOCKED** — 위 키가 주어지면 `make deploy` → `make sign-spec` → `make run` → `make audit` |
