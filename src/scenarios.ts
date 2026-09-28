@@ -132,19 +132,28 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     // NaN loss at sim minute 40: the executor settles + closes immediately, no Qwen.
   }),
 
+  // Success criterion 2 (fee-inclusive budget): INFERENCE 0.05 + open B 2.6368 gross leave 2.6032 of a $5.29 budget. The
+  // next one-GPU-hour top-up (2.56 net) fits net but not gross 2.6368 -> the gate denies OVER_BUDGET_WITH_FEE with 0 F2
+  // calls, anchored as Denied(enforced=false) + DECISION. No scripted change: the vault budget alone drives it.
+  budget: base('budget', { vault: { budgetUsd: '5.29', maxHoldUsd: '6', deadlineHours: 36 }, suggestedSpeed: 60 }),
+
   plateau: base('plateau', {
     loss: (m) => lossAt('plateau', m, 1), suggestedSpeed: 60,
     // Loss flat from the start: after 4 checkpoints the gate denies the next top-up with LOSS_PLATEAU.
   }),
 
+  // One recording, storyboard order (doc diagram 5). Speed 3: a one-GPU-hour hold drains over 20 s on the 1 s dashboard
+  // poll, Kiln latency (1-5 s per call) stays small next to the 40% top-up window (~8 s), and the scripted part takes
+  // ~100 s (top-up at ~12 s, climax ~35 s, injection ~70 s, stolen key ~87 s, STOP ~100 s) plus windDown.
   demo: base('demo', {
-    suggestedSpeed: 30,
+    suggestedSpeed: 3,
     interventions: [
       { kind: 'overrideF1', atSimMinute: 45, field: 'rationale', value: SCOPE_CREEP_RATIONALE, note: 'climax: scope-creep top-up on job 1 -> F2 DENY -> exhausted -> receipt' },
       { kind: 'openJob', atSimMinute: 170, label: 'B', note: 'a second job opens' },
       { kind: 'injectLog', atSimMinute: 200, line: INJECTION_LINE, note: "injection on job 2's top-up -> gate deny with 0 F2 calls" },
       { kind: 'stolenKey', atSimMinute: 260, note: 'stolen key hits the vault directly -> Denied on chain, no funds move' },
-      { kind: 'founderStop', atSimMinute: 300, reason: 'MANUAL', note: 'founder STOP -> HALTED -> windDown -> report' },
+      { kind: 'openJob', atSimMinute: 270, label: 'B', note: 'a third job is running when the founder presses STOP' },
+      { kind: 'founderStop', atSimMinute: 300, reason: 'MANUAL', note: 'founder STOP -> agent settle Denied(PAUSED) -> HALTED -> founder windDown -> report' },
     ],
   }),
 }

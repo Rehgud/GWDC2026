@@ -46,7 +46,9 @@ export async function stolenKeyAttack(o: { dep: Deployment; chain: ChainName; rp
   const after = { vault: await bal(o.dep.vault), bad: await bal(BAD_VENDOR), vendorA: await bal(o.dep.vendors.A) }
   const moved = before.vault !== after.vault || after.bad !== before.bad
   log(`  balances moved: ${moved ? 'YES (BUG)' : 'no'} (vault ${before.vault} -> ${after.vault}, attacker payee ${before.bad} -> ${after.bad})`)
-  return { results, moved, before, after }
+  // Criterion 3(iii) needs BOTH: no funds moved AND every attempt answered on chain by Denied (a revert is no evidence).
+  const ok = !moved && results.every((x) => x.code !== null)
+  return { results, moved, ok, before, after }
 }
 
 if (import.meta.main) {
@@ -57,5 +59,5 @@ if (import.meta.main) {
   const dep: Deployment = JSON.parse(readFileSync(join('deployments', `${CHAINS[chain].id}-${a.vault}.json`), 'utf8'))
   console.log(`stolen-key attack on vault ${dep.vault} (${chain})`)
   const r = await stolenKeyAttack({ dep, chain, rpcUrls: [rpc] })
-  process.exit(r.moved ? 1 : 0)
+  process.exit(r.ok ? 0 : 1)
 }

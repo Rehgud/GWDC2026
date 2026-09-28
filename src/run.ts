@@ -9,7 +9,8 @@ import type { Hex } from 'viem'
 import { AKASH_URL } from './akash.ts'
 import { CHAINS } from './chainread.ts'
 import { ANVIL_FOUNDER_PK, loadAgentKey } from './deploy.ts'
-import { costToMicro, llmMode, llmStats } from './kiln.ts'
+import { costToMicro, llmMode } from './kiln.ts'
+import { readChain, type Decision } from './record.ts'
 import { scenario, type ScenarioDef } from './scenarios.ts'
 import { Session, type SessionOpts } from './session.ts'
 import type { ChainName, Deployment } from './types.ts'
@@ -72,19 +73,42 @@ async function main() {
   }
 
   const session = createSession({ deployment: dep, chain, rpcUrls: [rpc], scenario: sc, speed, deadlineMarginS: margin })
-  await session.run()
+  const t0 = Date.now()
+  let failed: unknown = null
+  try { await session.run() } catch (e) { failed = e } // still print what the bundle holds, then exit 1
+  console.log(`\n=== summary: ${sc.name} on ${chain}, speed ${speed}, ${Math.round((Date.now() - t0) / 1000)} s ===`)
+  console.log(summarize(session.dir, session.state()).join('\n'))
+  console.log(`audit        node src/audit.ts ${session.dir}${chain === 'anvil' ? ` --rpc ${rpc}` : ''}`)
+  if (failed) throw failed
+}
 
-  const denied = new Set<string>()
-  for (const l of session.ledger) if (l.status === 'DENIED' && l.code) denied.add(l.code)
-  for (const t of session.topups) if (t.code) denied.add(t.code)
-  const cost = costToMicro((session as unknown as { kilnCosts: (number | null)[] }).kilnCosts ?? [])
-  console.log('\n=== summary ===')
-  console.log(`bundle       ${session.dir}`)
-  console.log(`report       ${join(session.dir, 'report.md')}`)
-  console.log(`tx (commits) ${session.ledger.length}  (OK ${session.ledger.filter((l) => l.status === 'OK').length}, DENIED ${session.ledger.filter((l) => l.status === 'DENIED').length})`)
-  console.log(`Denied codes ${[...denied].join(', ') || 'none'}`)
-  console.log(`Kiln calls   ${llmStats.calls}  cost ${(Number(cost.micro) / 1e6).toFixed(6)} USD${cost.unknown ? ` (+${cost.unknown} unknown)` : ''}`)
-  console.log(`halted       ${session.committer.haltReason ?? 'no'}`)
+/** What the bundle proves, from the files an auditor reads (records/, events.jsonl, kiln.jsonl) plus the final dashboard state. */
+export function summarize(dir: string, st: ReturnType<Session['state']>): string[] {
+  const count = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())].map(([k, n]) => (n > 1 ? `${k} x${n}` : k)).join(', ') || 'none'
+  const jsonl = (f: string): any[] => { try { return readFileSync(join(dir, f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) } catch { return [] } }
+  const recs = readChain(join(dir, 'records'))
+  const ds = recs.filter((r) => r.rec.type === 'DECISION').map((r) => r.rec.body as unknown as Decision).filter((d) => d.action !== 'inference')
+  const denied = (f: (d: Decision) => boolean) => count(ds.filter((d) => !d.verdict.approve && f(d)).map((d) => (d.verdict as { code: string }).code))
+  const events = jsonl('events.jsonl')
+  const mined = events.filter((e) => e.src === 'commit' && e.ev === 'mined')
+  const enforced = mined.filter((e) => (e.events ?? []).some((x: any) => x.name === 'Denied' && x.args?.enforced)).map((e) => `${e.fn}:${e.code}`)
+  const stolen = events.filter((e) => e.src === 'scenario' && e.ev === 'stolen_key').map((e) => `${e.fn}:${e.code ?? e.error ?? 'no Denied'}`)
+  const cost = costToMicro(jsonl('kiln.jsonl').map((l) => l.usage?.cost ?? null))
+  const usd = (m: string | bigint) => `$${(Number(m) / 1e6).toFixed(6)}`
+  const g = st.grant
+  return [
+    `bundle       ${dir}`,
+    `report       ${join(dir, 'report.md')}`,
+    `records      ${recs.length} (${count(recs.map((r) => r.rec.type))})`,
+    `txs          ${mined.length} backend txs mined (${count(mined.map((e) => e.status))})`,
+    `decisions    ${ds.length}: approved ${ds.filter((d) => d.verdict.approve).length}; gate-denied, 0 F2 calls: ${denied((d) => d.gate.codes.length > 0)}; ` +
+      `F2 denied: ${denied((d) => d.f2.length > 0)}; other: ${denied((d) => !d.gate.codes.length && !d.f2.length)}`,
+    `chain Denied ${count(enforced)} (the contract refused a backend tx)`,
+    `stolen key   ${stolen.length ? stolen.join(', ') : 'not run'}`,
+    `money        budget ${usd(g.budget)} = vendors ${usd(g.paid)} + fees ${usd(g.fees)} + inference ${usd(g.inference_paid)} + open holds ${usd(g.open_holds)} + refundable ${usd(g.refundable)}`,
+    `Kiln         ${st.health.kiln.calls} attempts (${st.health.kiln.mode}), ${st.health.kiln.errors} errors, cost ${usd(cost.micro)}${cost.unknown ? ` (+${cost.unknown} unknown)` : ''}`,
+    `stop         ${st.stop}; committer halted: ${st.health.halted ?? 'no'}`,
+  ]
 }
 
 if (import.meta.main) {

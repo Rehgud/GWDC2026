@@ -6,23 +6,23 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { getAddress, keccak256, parseUnits, type Hex } from 'viem'
+import { formatEther, getAddress, keccak256, parseUnits, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { vaultAbi } from './abi.ts'
 import { Committer, makeWallet, type Intent as TxIntent } from './chain.ts'
-import { CHAINS, makePublicClient, snapshot, ReadFailed } from './chainread.ts'
-import { toBytes32, TRANSIENT, type Code } from './codes.ts'
+import { CHAINS, decodeVaultLogs, makePublicClient, snapshot } from './chainread.ts'
+import { fromBytes32, toBytes32, TRANSIENT, type Code } from './codes.ts'
 import { deploy, preflight, ANVIL_FOUNDER_PK, type DeployOpts } from './deploy.ts'
 import {
   newJob, next, tick, planWindDown,
   type Job, type JobEvent, type Action, type Intent as ExecIntent,
 } from './executor.ts'
-import { llm, costToMicro, llmStats, type LlmCtx, type LlmReq, type LlmResult, type Stub } from './kiln.ts'
+import { llm, costToMicro, type LlmCtx, type LlmReq, type LlmResult, type Stub } from './kiln.ts'
 import { parseF1, parseVerdict } from './parse.ts'
 import { f1Messages, f2Messages, f3Messages, F1_TOOL, F2_TOOL, usd } from './prompts.ts'
 import { loadPrices } from './akash.ts'
-import { check, gross, maxNet, type GateInput } from './rules.ts'
-import { RecordChain, serialize, type Decision, type Override, type KilnCall } from './record.ts'
+import { check, gross, type GateInput } from './rules.ts'
+import { RecordChain, serialize, type CheckpointBody, type Decision, type Override, type KilnCall } from './record.ts'
 import { makeSpec, signSpec, parseSpecForGate, type Spec } from './spec.ts'
 import { report } from './report.ts'
 import type {
@@ -36,6 +36,7 @@ const INFERENCE_HOLD = 50_000n // $0.05 fixed (D2)
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Hex
 const CODE_ORDER: Code[] = ['PAUSED', 'PAST_DEADLINE', 'VENDOR_NOT_ALLOWED', 'GPU_TYPE_NOT_ALLOWED', 'NO_CAPACITY', 'OVER_MAX_HOLD', 'OVER_BUDGET_WITH_FEE', 'OVER_JOB_CAP', 'NAN_DETECTED', 'LOSS_PLATEAU']
 const ACTION_ORDER: Record<Action['type'], number> = { CHECKPOINT_SETTLE: 0, REQUEST_TOPUP: 1, TOPUP_TIMEOUT: 1, STOPPED: 2 }
+const STOP_ORDER: StopStage[] = ['RUNNING', 'SENDING', 'PAUSED_ON_CHAIN', 'HALTING', 'HALTED']
 
 export type SessionOpts = {
   chain: ChainName
@@ -55,7 +56,8 @@ export type SessionOpts = {
   hardCapMs?: number
 }
 
-type Slot = { label: string; job: Job; f3Done: boolean; closing: boolean; demoSettled: boolean }
+/** topupRealAt: wall-clock start of the in-flight top-up flow (TOPUP_TIMEOUT is real time, see loopStep). */
+type Slot = { label: string; job: Job; f3Done: boolean; closing: boolean; topupRealAt: number | null }
 type Topup = StateView['topups'][number]
 const dec = (x: bigint) => x.toString()
 
@@ -102,7 +104,14 @@ export class Session {
   private marketOverrides: Partial<Record<string, { pricePerHour?: bigint; available?: number }>> = {}
   private firedSteps = new Set<number>()
   private kilnCosts: (number | null)[] = []
+  private kilnLastMs: number | null = null
+  private kilnErrors = 0
+  /** Per job id, from decoded Settled events (CHAIN): the budget bar and receipts split net / fee exactly as paid. */
+  private settledChain = new Map<string, { net: bigint; fee: bigint }>()
+  private jobTxs = new Map<string, Hex[]>()
+  private eth = { agent: '?', founder: '?', at: 0 }
   private deadlineDemoDone = false
+  private rpcOk = false
   private realT0 = 0
   private virtT0 = 0
 
@@ -138,15 +147,27 @@ export class Session {
     this.o.onEvent?.(line)
   }
 
+  /** inflight holds a twin that never rejects: loop()/windDown wait on it, and a failed flow is logged instead of
+   *  becoming an unhandled rejection that kills the process with holds still locked. */
   private track<T>(p: Promise<T>): Promise<T> {
-    this.inflight.add(p as unknown as Promise<unknown>)
-    p.finally(() => this.inflight.delete(p as unknown as Promise<unknown>))
+    const q: Promise<unknown> = p.then(() => {}, (e) => this.logEvent('executor', 'flow_error', { err: (e as Error)?.message ?? String(e) }))
+      .finally(() => this.inflight.delete(q))
+    this.inflight.add(q)
     return p
   }
 
   private async callLlm(req: LlmReq): Promise<LlmResult> {
-    const r = await this.track(llm(req, this.llmCtx))
-    for (const c of r.calls) this.kilnCosts.push(c.usage?.cost ?? null)
+    // Fail closed: a wrapper throw (bad config, sink write) is an unavailable Qwen -> deny, never a crash mid-session.
+    const r = await this.track(llm(req, this.llmCtx).catch((e): LlmResult => {
+      this.logEvent('kiln', 'llm_error', { flow: req.flow, err: (e as Error)?.message ?? String(e) }, req.req_id, req.job_id)
+      this.kilnErrors++
+      return { calls: [], content: null, toolArgs: null, toolName: null, finishReason: null, error: 'NETWORK' }
+    }))
+    for (const c of r.calls) {
+      this.kilnCosts.push(c.usage?.cost ?? null)
+      this.kilnLastMs = c.latency_ms
+      if (c.http !== 200) this.kilnErrors++
+    }
     return r
   }
 
@@ -190,8 +211,6 @@ export class Session {
     // deploy address is deterministic and collides across fresh chains): fail loudly instead of concatenating sessions.
     if (this.records.seq !== 0) throw new Error(`bundle ${this.dir} already has ${this.records.seq} records; deploy a fresh vault or clear the bundle`)
     this.started = true
-    this.realT0 = Date.now()
-    this.virtT0 = Date.now()
     this.prices = (await loadPrices({ fetch: this.o.priceFetch, timeoutMs: this.o.priceTimeoutMs })).book
     const now = Math.floor(Date.now() / 1000)
     this.spec = this.scenario.spec({ vault: this.dep.vault, chainId: this.dep.chainId, now })
@@ -212,6 +231,10 @@ export class Session {
     this.bump()
     await this.openInference()
     await this.openVendor(this.scenario.firstVendor ?? 'B', false)
+    // The scenario clock starts when the first job starts, not before the opening F1/F2: live Kiln latency there
+    // (seconds = hours of sim time at speed 60) would otherwise fire every early intervention, or endAtSimMinute,
+    // before the job has run a single tick.
+    this.realT0 = this.virtT0 = Date.now()
   }
 
   private flags(): Record<string, string> {
@@ -227,20 +250,38 @@ export class Session {
       vault: this.dep.vault, usdc: this.dep.usdc, founder: this.dep.founder, agent: this.dep.agent,
       feeTo: this.dep.feeTo, inferencePayee: this.dep.inferencePayee, vendors: this.dep.vendors,
       deployBlock: this.dep.deployBlock, lastBlock, rpc: this.o.publicRpc, gitSha: gitSha(), flags: this.flags(),
+      setupTxs: this.dep.setupTxs, // fund / setVendor / setMaxHold carry no rec: matched 1:1 by tx hash (criterion 1)
     }
     writeFileSync(join(this.dir, 'run.json'), JSON.stringify(run, null, 2) + '\n')
   }
 
-  private async freshSnapshot(extraVendors: Hex[] = []): Promise<ChainSnapshot | null> {
-    const vendors = [...Object.values(this.dep.vendors), this.dep.inferencePayee, ...extraVendors] as Hex[]
+  /** One full read per block (doc: the watcher reads once per block N). While the head is still the snapshot's block the
+   *  state is the same, so it is reused with a new readAt: ~13 eth_calls per block instead of per loop step (40 req/s at
+   *  speed 3, ~700 at speed 60: enough for a public or free-tier RPC to rate-limit a recording into READ_FAILED). */
+  private async freshSnapshot(): Promise<ChainSnapshot | null> {
+    const vendors = [...Object.values(this.dep.vendors), this.dep.inferencePayee] as Hex[]
     try {
-      const s = await snapshot(this.client, this.dep.vault, { vendors })
+      const last = this.lastSnapshot
+      const s = last && this.rpcOk && (await this.client.getBlockNumber({ cacheTime: 0 })) === last.block
+        ? { ...last, readAt: Date.now() }
+        : await snapshot(this.client, this.dep.vault, { vendors })
       this.lastSnapshot = s
+      this.rpcOk = true
+      this.refreshEth()
       return s
-    } catch (e) {
-      if (e instanceof ReadFailed) { this.logEvent('watcher', 'read_failed', { err: e.name }); return null }
-      throw e
+    } catch (e) { // snapshot() already retried once (ReadFailed); a failed head read is the same READ_FAILED
+      this.rpcOk = false
+      this.logEvent('watcher', 'read_failed', { err: (e as Error)?.name ?? 'Error' })
+      return null
     }
+  }
+
+  /** Gas balances for the dashboard health line, at most every 10 s, off the loop's critical path. */
+  private refreshEth() {
+    if (Date.now() - this.eth.at < 10_000) return
+    this.eth.at = Date.now()
+    void Promise.all([this.client.getBalance({ address: this.dep.agent }), this.client.getBalance({ address: this.dep.founder })])
+      .then(([a, f]) => { this.eth = { agent: formatEther(a), founder: formatEther(f), at: this.eth.at } }, () => {})
   }
 
   private async openInference() {
@@ -250,7 +291,7 @@ export class Session {
     const gi = this.gateInput('inference', snap, { vendor: this.dep.inferencePayee, gpu: '', amount: INFERENCE_HOLD }, [])
     const codes = check(gi)
     if (codes.length) throw new Error(`inference open denied by gate: ${codes[0]}`)
-    const slot: Slot = { label: 'INFERENCE', job: newJob(this.dep.inferencePayee, 1n, true), f3Done: true, closing: false, demoSettled: false }
+    const slot: Slot = { label: 'INFERENCE', job: newJob(this.dep.inferencePayee, 1n, true), f3Done: true, closing: false, topupRealAt: null }
     const body: Decision = {
       action: 'inference', req_id, job_id: null, spec_id: this.spec.spec_id,
       request: { vendorLabel: 'INFERENCE', vendor: this.dep.inferencePayee, gpu: '', amount: dec(INFERENCE_HOLD), rationale: 'session inference hold (D2)' },
@@ -265,17 +306,28 @@ export class Session {
   }
 
   // ---- the decide pipeline (doc diagram 3) ----
-  private async decide(action: 'open' | 'topUp', slot: Slot | null, epoch: number, opts: { extraLog?: string[]; targetLabel?: string } = {}): Promise<{ result: TopupResult; jobId?: bigint; gross?: bigint; code?: Code }> {
+  private async decide(action: 'open' | 'topUp', slot: Slot | null, epoch: number, opts: { extraLog?: string[]; targetLabel?: string } = {}): Promise<{ result: TopupResult; jobId?: bigint; gross?: bigint; code?: Code; label?: string }> {
     const req_id = this.newReqId()
     const job_id = slot?.job.id?.toString() ?? null
     const view: Topup = { req_id, job_id, action, stage: 'F1', result: null, request: null, gate: CODE_ORDER.map((c) => ({ code: c, pass: true })), qwen: null, code: null, txHash: null, recHash: null }
     this.topups.push(view)
     this.bump()
-    const overrides: Override[] = [...this.pendingOverrides]
-    this.pendingOverrides = []
+    let overrides: Override[] = []
+    /** The card's terminal state. A card a TOPUP_TIMEOUT already closed (recordTimeout) keeps that result. A CANCELLED
+     *  flow (epoch changed: STOP, timeout, NaN, END) sent nothing and wrote no record: stage DONE, code CANCELLED. */
+    const at = (stage: Topup['stage']) => { if (view.stage !== 'DONE') { view.stage = stage; this.bump() } }
+    const done = (result: TopupResult | null, out: Outcome, code: string | null = null) => {
+      if (view.stage === 'DONE') return
+      const cancelled = out.status === 'CANCELLED'
+      Object.assign(view, {
+        stage: 'DONE', result: cancelled ? null : result, code: cancelled ? 'CANCELLED' : code,
+        txHash: (out as { txHash?: Hex }).txHash ?? null, recHash: cancelled ? null : (out as { recHash?: Hex }).recHash ?? null,
+      })
+      this.bump()
+    }
 
     const finishDeny = async (code: Code, f1: KilnCall[], f2: KilnCall[], reqR: Decision['request'] | null, gi: GateInput | null, reason: string): Promise<{ result: TopupResult; code: Code }> => {
-      view.stage = 'CHAIN'
+      at('CHAIN')
       const result: TopupResult = code === 'QWEN_UNAVAILABLE' || code === 'QWEN_UNPARSEABLE' ? 'QWEN_NOT_A_JUDGEMENT' : 'DENIED_RECORDED'
       const body: Decision = {
         action, req_id, job_id, spec_id: this.spec.spec_id,
@@ -288,26 +340,29 @@ export class Session {
         req_id, job_id, record: { type: 'DECISION', body: body as unknown as Record<string, unknown> },
         stillValid: () => !this.stopping && (slot === null || slot.job.epoch === epoch),
       })
-      view.code = code
-      view.result = out.status === 'CANCELLED' ? null : result
-      view.recHash = out.status === 'CANCELLED' ? null : (out as { recHash?: Hex }).recHash ?? null
-      view.txHash = (out as { txHash?: Hex }).txHash ?? null
-      this.bump()
+      done(out.status === 'OK' ? result : 'TX_ERROR', out, code) // the deny is only DENIED_RECORDED once its anchor landed
       return { result, code }
     }
 
-    const snap = await this.freshSnapshot([ZERO_ADDR])
+    const snap = await this.freshSnapshot()
     if (!snap) return finishDeny('READ_FAILED', [], [], null, null, 'chain read failed')
 
     // F1
+    // Scripted inputs are taken when the request STARTS, together with their Overrides: an intervention that fires
+    // while this F1 is in flight belongs to the next request, and a poisoned line reaches exactly one F1 (the one whose
+    // DECISION records it), never every later prompt through the log tail.
     const logTail = [...this.execLog.slice(-5), ...this.injectedLines, ...(opts.extraLog ?? [])]
+    const f1Overrides = this.f1Overrides
+    overrides = this.pendingOverrides
     this.injectedLines = []
+    this.f1Overrides = []
+    this.pendingOverrides = []
     const f1res = await this.callLlm({ flow: 'F1', tools: [F1_TOOL], messages: f1Messages({ action, specRaw: this.specBytes.toString('utf8'), progress: this.progress(slot, action, opts.targetLabel), prices: this.prices, logTail }), req_id, job_id })
     const f1 = f1res.calls as KilnCall[]
     const parsed = parseF1(f1res)
     if (!parsed.ok) return finishDeny(parsed.code, f1, [], null, null, parsed.reason)
     let { vendorLabel, gpu, amount, rationale } = parsed.fields
-    for (const ov of this.f1Overrides) {
+    for (const ov of f1Overrides) {
       const cur: Record<string, unknown> = { vendorLabel, gpu, amount, rationale }
       const from = cur[ov.field]
       if (ov.field === 'vendorLabel') vendorLabel = String(ov.value)
@@ -316,12 +371,12 @@ export class Session {
       else if (ov.field === 'amount') amount = BigInt(ov.value as string)
       overrides.push({ field: `f1.${ov.field}`, from: typeof from === 'bigint' ? from.toString() : from, to: typeof ov.value === 'bigint' ? ov.value.toString() : ov.value, by: `scenario:${this.scenario.name}` })
     }
-    this.f1Overrides = []
-    const vendor = this.resolveVendor(vendorLabel)
+    // A topUp can only pay the job's own vendor: any other label (even an allowlisted one) resolves to no vendor, so the
+    // gate answers VENDOR_NOT_ALLOWED and no DECISION ever names a vendor its tx does not pay.
+    const vendor = action === 'topUp' && slot && vendorLabel !== slot.label ? ZERO_ADDR : this.resolveVendor(vendorLabel)
     const reqR: Decision['request'] = { vendorLabel, vendor, gpu, amount: dec(amount), rationale }
     view.request = { vendorLabel, gpu, amount: dec(amount), rationale }
-    view.stage = 'GATE'
-    this.bump()
+    at('GATE')
 
     // gate
     const gi = this.gateInput(action, snap, { vendor, gpu, amount }, slot?.job.losses ?? [])
@@ -330,8 +385,7 @@ export class Session {
     if (codes.length) return finishDeny(codes[0], f1, [], reqR, gi, `gate: ${codes.join('+')}`) // NO F2 = the saving
 
     // F2
-    view.stage = 'F2'
-    this.bump()
+    at('F2')
     const f2res = await this.callLlm({ flow: 'F2', tools: [F2_TOOL], messages: f2Messages({ specRaw: this.specBytes.toString('utf8'), summary: this.summary(snap, { vendorLabel, amount }, gi), request: { action, vendorLabel, gpu, amount }, rationale }), req_id, job_id })
     const f2 = f2res.calls as KilnCall[]
     const verdict = parseVerdict(f2res)
@@ -339,8 +393,7 @@ export class Session {
     if (!verdict.approve) return finishDeny(verdict.code, f1, f2, reqR, gi, verdict.reason)
 
     // approve -> commit
-    view.stage = 'CHAIN'
-    this.bump()
+    at('CHAIN')
     const body: Decision = {
       action, req_id, job_id, spec_id: this.spec.spec_id, request: reqR,
       gate: { input: giJson(gi), codes: [] }, f1, f2, verdict: { approve: true }, reason: verdict.reason,
@@ -352,21 +405,18 @@ export class Session {
         ? { signer: 'agent', fn: 'open', args: [vendor, amount], expect: ['HoldOpened'], req_id, job_id, record: { type: 'DECISION', body: body as unknown as Record<string, unknown> }, stillValid }
         : { signer: 'agent', fn: 'topUp', args: [slot!.job.id!, amount], expect: ['ToppedUp'], req_id, job_id, record: { type: 'DECISION', body: body as unknown as Record<string, unknown> }, stillValid },
     )
-    view.recHash = (out as { recHash?: Hex }).recHash ?? null
-    view.txHash = (out as { txHash?: Hex }).txHash ?? null
-
-    if (out.status === 'CANCELLED') { view.result = null; this.bump(); return { result: 'DENIED_RECORDED', code: 'TOPUP_TIMEOUT' } }
+    if (out.status === 'CANCELLED') { done(null, out); return { result: 'DENIED_RECORDED', code: 'TOPUP_TIMEOUT' } }
     if (out.status === 'OK') {
-      view.result = 'APPROVED_ONCHAIN'; this.bump()
+      done('APPROVED_ONCHAIN', out)
       const g = (out.events.find((e) => e.name === (action === 'open' ? 'HoldOpened' : 'ToppedUp'))?.args.gross as bigint) ?? gross(amount, false)
-      return { result: 'APPROVED_ONCHAIN', jobId: out.jobId, gross: g }
+      return { result: 'APPROVED_ONCHAIN', jobId: out.jobId, gross: g, label: vendorLabel }
     }
     if (out.status === 'DENIED') {
-      this.records.append('CHAIN_DENIED', { req_id, job_id, approval: view.recHash!, code: out.code, txHash: out.txHash })
-      view.result = 'APPROVED_BUT_DENIED_ONCHAIN'; view.code = out.code; this.bump()
+      this.records.append('CHAIN_DENIED', { req_id, job_id, approval: out.recHash, code: out.code, txHash: out.txHash })
+      done('APPROVED_BUT_DENIED_ONCHAIN', out, out.code)
       return { result: 'APPROVED_BUT_DENIED_ONCHAIN', code: out.code as Code }
     }
-    view.result = 'TX_ERROR'; this.bump()
+    done('TX_ERROR', out, out.status === 'HALT' ? out.reason : out.status)
     return { result: 'TX_ERROR' }
   }
 
@@ -411,19 +461,22 @@ export class Session {
 
   // ---- opening a vendor job with the D2 one re-propose ----
   private async openVendor(label: string, isMigration: boolean): Promise<Slot | null> {
+    if (this.stopping) return null // every open would be CANCELLED anyway; skip the F1 calls
     const r = await this.decide('open', null, 0, { targetLabel: label, extraLog: isMigration ? ['[exec] migrating: previous vendor capacity is 0'] : [] })
-    if (r.result === 'APPROVED_ONCHAIN' && r.jobId !== undefined) return this.newSlot(label, r.jobId, r.gross!)
+    // The slot takes the APPROVED label (F1 may name another vendor than targeted): its address and price are what the chain job pays.
+    if (r.result === 'APPROVED_ONCHAIN' && r.jobId !== undefined) return this.newSlot(r.label!, r.jobId, r.gross!)
+    if (this.stopping) return null // the first open was CANCELLED by a STOP / windDown: no re-propose
     const alt = label === 'A' ? 'B' : 'A'
     this.logEvent('scenario', 'reopen', { previous: label, next: alt })
     const r2 = await this.decide('open', null, 0, { targetLabel: alt, extraLog: [`[exec] vendor ${label} was refused (${r.code}); propose a different vendor`] })
-    if (r2.result === 'APPROVED_ONCHAIN' && r2.jobId !== undefined) return this.newSlot(alt, r2.jobId, r2.gross!)
+    if (r2.result === 'APPROVED_ONCHAIN' && r2.jobId !== undefined) return this.newSlot(r2.label!, r2.jobId, r2.gross!)
     this.logEvent('scenario', 'open_failed_twice', {})
     await this.windDown()
     return null
   }
 
   private newSlot(label: string, jobId: bigint, g: bigint): Slot {
-    const slot: Slot = { label, job: newJob(this.resolveVendor(label), this.market(label).pricePerHour || 1n, false), f3Done: false, closing: false, demoSettled: false }
+    const slot: Slot = { label, job: newJob(this.resolveVendor(label), this.market(label).pricePerHour || 1n, false), f3Done: false, closing: false, topupRealAt: null }
     this.applyEvent(slot, { type: 'HoldOpened', jobId, gross: g })
     this.applyEvent(slot, { type: 'Start' })
     this.slots.push(slot)
@@ -445,6 +498,14 @@ export class Session {
       txHash: (out as { txHash?: Hex }).txHash ?? null, recHash: (out as { recHash?: Hex }).recHash ?? null, job_id: i.job_id,
     })
     if (this.ledger.length > 50) this.ledger = this.ledger.slice(-50)
+    const txHash = (out as { txHash?: Hex }).txHash
+    const jid = i.job_id ?? (out.status === 'OK' && out.jobId !== undefined ? out.jobId.toString() : null)
+    if (txHash && jid !== null) this.jobTxs.set(jid, [...(this.jobTxs.get(jid) ?? []), txHash])
+    if (out.status === 'OK') for (const e of out.events) {
+      if (e.name !== 'Settled') continue
+      const k = String(e.args.jobId), p = this.settledChain.get(k) ?? { net: 0n, fee: 0n }
+      this.settledChain.set(k, { net: p.net + (e.args.amount as bigint), fee: p.fee + (e.args.fee as bigint) })
+    }
     this.bump()
     return out
   }
@@ -452,17 +513,20 @@ export class Session {
   // ---- executor loop ----
   private async loopStep() {
     const now = this.virtNow()
-    const snap = await this.freshSnapshot()
-    if (snap) snap.readAt = now
+    const read = await this.freshSnapshot()
+    // tick() judges staleness on the virtual clock; lastSnapshot keeps the real readAt for the dashboard's sync age.
+    const snap = read && { ...read, readAt: now }
     await this.runSteps()
     // Deadline demo (DEADLINE_MARGIN_S 0): once wall-clock passes the deadline, an agent settle is Denied(PAST_DEADLINE)
     // on chain. We gate on Date.now (not the possibly-stale blockTs) so the settle's own block carries ts >= deadline.
-    if (this.deadlineMarginS === 0n && !this.deadlineDemoDone && this.inference && Date.now() / 1000 >= this.dep.deadline) {
-      this.deadlineDemoDone = true
+    if (this.deadlineMarginS === 0n && !this.deadlineDemoDone && this.inference && !this.stopping && Date.now() / 1000 >= this.dep.deadline) {
       await this.deadlineDemo()
     }
     for (const slot of this.slots) {
       if (slot.job.state === 'CLOSED' || slot.job.state === 'STOPPED') continue
+      // TOPUP_TIMEOUT is a real-time budget (60 s for F1 + F2 + tx, D4) but tick() runs on the virtual clock, where 60 s
+      // is 1 real second at speed 60: rebase the in-flight flow's start so tick() measures its real elapsed time.
+      if (slot.job.latch === 'inflight' && slot.job.topupAtMs !== null && slot.topupRealAt !== null) slot.job = { ...slot.job, topupAtMs: now - (Date.now() - slot.topupRealAt) }
       const { job, actions } = tick(slot.job, { nowMs: now, snapshot: snap, lossAtSimMinute: (m) => this.scenario.loss(m), deadlineMarginS: this.deadlineMarginS })
       slot.job = job
       this.logCheckpointLoss(slot)
@@ -484,8 +548,8 @@ export class Session {
   }
 
   private async handleAction(slot: Slot, a: Action) {
-    if (a.type === 'CHECKPOINT_SETTLE') void this.track(this.settle(slot, a.amount, slot.job.state === 'HOLD_EXHAUSTED' ? 'exhausted' : slot.job.stopReason ? 'stop' : 'periodic'))
-    else if (a.type === 'REQUEST_TOPUP') void this.track(this.runTopup(slot, a.epoch))
+    if (a.type === 'CHECKPOINT_SETTLE') void this.track(this.settle(slot, a.amount, slot.job.state === 'HOLD_EXHAUSTED' ? 'exhausted' : slot.job.stopReason ? 'stop' : 'periodic', { reserved: true }))
+    else if (a.type === 'REQUEST_TOPUP') { slot.topupRealAt = Date.now(); void this.track(this.runTopup(slot, a.epoch)) }
     else if (a.type === 'TOPUP_TIMEOUT') await this.recordTimeout(slot)
     else if (a.type === 'STOPPED') await this.onStopped(slot, a.reason)
   }
@@ -498,16 +562,29 @@ export class Session {
       gate: { input: null, codes: [] }, f1: [], f2: [], verdict: { approve: false, code: 'TOPUP_TIMEOUT' }, reason: 'top-up flow exceeded 60s',
       tx: { fn: 'recordDecision', args: [slot.job.id!.toString(), 'TOPUP_TIMEOUT'] }, overrides: [],
     }
-    await this.send({ signer: 'agent', fn: 'recordDecision', args: [slot.job.id!, toBytes32('TOPUP_TIMEOUT')], expect: ['Denied'], req_id, job_id: body.job_id, record: { type: 'DECISION', body: body as unknown as Record<string, unknown> } })
+    const out = await this.send({ signer: 'agent', fn: 'recordDecision', args: [slot.job.id!, toBytes32('TOPUP_TIMEOUT')], expect: ['Denied'], req_id, job_id: body.job_id, record: { type: 'DECISION', body: body as unknown as Record<string, unknown> } })
+    // The timed-out flow's card ends here (its own late answer is CANCELLED and must not overwrite this).
+    const card = this.topups.findLast((t) => t.job_id === body.job_id && t.action === 'topUp' && t.stage !== 'DONE')
+    if (card) Object.assign(card, { stage: 'DONE', result: out.status === 'OK' ? 'DENIED_RECORDED' : 'TX_ERROR', code: 'TOPUP_TIMEOUT', txHash: (out as { txHash?: Hex }).txHash ?? null, recHash: (out as { recHash?: Hex }).recHash ?? null })
   }
 
-  private async settle(slot: Slot, amount: bigint, reason: 'periodic' | 'topup' | 'stop' | 'exhausted'): Promise<void> {
-    const body = {
-      job_id: slot.job.id!.toString(), amount: dec(amount), signer: 'agent', reason,
-      accrued: dec(slot.job.accrued), settledNet: dec(slot.job.settledNet), runningMs: dec(slot.job.runningMs), loss: slot.job.losses.at(-1) ?? 'none',
+  /** Every vendor settle goes through here. A tick's CHECKPOINT_SETTLE is already counted in pendingNet (`reserved`);
+   *  any other caller reserves it now and is refused unless the amount is unsettled AND unreserved. So no span is ever
+   *  paid twice, and a Denied/HALT outcome is always a legal SettleFailed. Returns true when Settled. */
+  private async settle(slot: Slot, amount: bigint, reason: CheckpointBody['reason'], o: { reserved?: boolean; signer?: 'agent' | 'founder' } = {}): Promise<boolean> {
+    const j = slot.job
+    if (!o.reserved) {
+      if (amount <= 0n || amount > j.accrued - j.settledNet - j.pendingNet) return false
+      slot.job = { ...j, pendingNet: j.pendingNet + amount }
     }
-    const out = await this.send({ signer: 'agent', fn: 'settle', args: [slot.job.id!, amount], expect: ['Settled'], req_id: null, job_id: body.job_id, record: { type: 'CHECKPOINT', body } })
+    const signer = o.signer ?? 'agent'
+    const body: CheckpointBody = {
+      job_id: j.id!.toString(), amount: dec(amount), signer, reason,
+      accrued: dec(j.accrued), settledNet: dec(j.settledNet), runningMs: dec(j.runningMs), loss: j.losses.at(-1) ?? 'none',
+    }
+    const out = await this.send({ signer, fn: 'settle', args: [j.id!, amount], expect: ['Settled'], req_id: null, job_id: body.job_id, record: { type: 'CHECKPOINT', body } })
     this.applyEvent(slot, out.status === 'OK' ? { type: 'Settled', amount } : { type: 'SettleFailed', amount })
+    return out.status === 'OK'
   }
 
   private async runTopup(slot: Slot, epoch: number): Promise<void> {
@@ -520,7 +597,7 @@ export class Session {
     if (slot.closing || slot.job.state !== 'HOLD_EXHAUSTED') return
     slot.closing = true
     const unsettled = slot.job.accrued - slot.job.settledNet - slot.job.pendingNet
-    if (unsettled > 0n) await this.settle(slot, unsettled, 'exhausted')
+    if (unsettled > 0n && !(await this.settle(slot, unsettled, 'exhausted'))) { slot.closing = false; return } // never close over unpaid usage
     const out = await this.send({ signer: 'agent', fn: 'close', args: [slot.job.id!], expect: ['Closed'], req_id: null, job_id: slot.job.id!.toString(), record: { type: 'CLOSE', body: { job_id: slot.job.id!.toString(), signer: 'agent', reason: 'HOLD_EXHAUSTED', accrued: dec(slot.job.accrued), settledNet: dec(slot.job.settledNet) } } })
     if (out.status === 'OK') { this.applyEvent(slot, { type: 'Closed' }); await this.f3(slot) }
     else slot.closing = false
@@ -535,21 +612,28 @@ export class Session {
       }
       return
     }
-    if (this.stopStage === 'RUNNING' || this.stopStage === 'SENDING' || this.stopStage === 'PAUSED_ON_CHAIN') this.stopStage = 'HALTING'
-    if (reason === 'PAST_DEADLINE' && !slot.demoSettled) {
-      slot.demoSettled = true
-      const amt = slot.job.accrued - slot.job.settledNet - slot.job.pendingNet
-      if (amt > 0n) // an agent settle after the deadline is Denied(PAST_DEADLINE) on chain: the evidence for this scenario
-        await this.send({ signer: 'agent', fn: 'settle', args: [slot.job.id!, amt], expect: ['Settled'], req_id: null, job_id: slot.job.id!.toString(), record: { type: 'CHECKPOINT', body: { job_id: slot.job.id!.toString(), amount: dec(amt), signer: 'agent', reason: 'stop', accrued: dec(slot.job.accrued), settledNet: dec(slot.job.settledNet), runningMs: dec(slot.job.runningMs), loss: slot.job.losses.at(-1) ?? 'none' } } })
-    }
-    if (this.slots.every((s) => s.job.state === 'STOPPED' || s.job.state === 'CLOSED')) this.stopStage = 'HALTED'
+    this.advanceStop('HALTING')
+    // PAUSED: the agent still asks to be paid the usage it owes up to the stop. The paused contract answers
+    // Denied(PAUSED, enforced) with its CHECKPOINT record: success criterion 2's STOP evidence (doc diagram 4, order B).
+    // Through settle(), so a landed settle (vault unpaused by hand) is booked; windDown's founder settle pays the delta.
+    // PAST_DEADLINE: no agent settle. With the default margin the executor stops 15 s BEFORE the chain deadline, so it
+    // would simply land; windDown's founder settle pays the delta instead (executor.stop).
+    const due = slot.job.accrued - slot.job.settledNet - slot.job.pendingNet
+    if (reason === 'PAUSED' && due > 0n) await this.settle(slot, due, 'stop')
+    if (this.slots.every((s) => s.job.state === 'STOPPED' || s.job.state === 'CLOSED')) this.advanceStop('HALTED')
+  }
+
+  /** The STOP banner only moves forward: a slow setPaused receipt must not pull HALTED back to PAUSED_ON_CHAIN. */
+  private advanceStop(to: StopStage) {
+    if (STOP_ORDER.indexOf(to) > STOP_ORDER.indexOf(this.stopStage)) { this.stopStage = to; this.bump() }
   }
 
   private async f3(slot: Slot): Promise<void> {
     if (slot.f3Done) return
     slot.f3Done = true
-    const net = slot.job.settledNet
-    const fee = gross(net, false) - net
+    const id = slot.job.id!.toString()
+    // CHAIN numbers: the decoded Settled events of this job (the fee is floored per settle, so not gross(Σnet) - Σnet)
+    const { net, fee } = this.settledChain.get(id) ?? { net: 0n, fee: 0n }
     const price = this.market(slot.label).pricePerHour || 1n
     const jobSummary = {
       job_id: slot.job.id!.toString(), vendor: `${slot.label} (${usd(this.market(slot.label).pricePerHour)}/h)`, gpu: 'h100',
@@ -561,8 +645,9 @@ export class Session {
     const text = res.error ? `설명 생성 실패(${res.error})` : (res.content ?? res.toolArgs ?? '설명 생성 실패(EMPTY)').trim()
     this.records.append('RECEIPT', { job_id: slot.job.id!.toString(), f3, text })
     this.receipts.push({
-      job_id: slot.job.id!.toString(), vendorLabel: slot.label, provider: String((this.prices.vendors as Record<string, { provider?: string }>)[slot.label]?.provider ?? ''),
-      priceSource: this.prices.source, simHours: jobSummary.gpu_hours, amount: usd(net), fee: usd(fee), gross: usd(net + fee), txHashes: [], qwenReason: null, f3: text,
+      job_id: id, vendorLabel: slot.label, provider: String((this.prices.vendors as Record<string, { provider?: string }>)[slot.label]?.provider ?? ''),
+      priceSource: this.prices.source, simHours: jobSummary.gpu_hours, amount: dec(net), fee: dec(fee), gross: dec(net + fee),
+      txHashes: this.jobTxs.get(id) ?? [], qwenReason: this.topups.findLast((t) => t.job_id === id && t.qwen)?.qwen?.reason ?? null, f3: text,
     })
     this.bump()
   }
@@ -583,7 +668,6 @@ export class Session {
     this.logEvent('scenario', iv.kind, { at: iv.atSimMinute ?? null })
     if (iv.kind === 'injectLog') {
       this.injectedLines.push(iv.line)
-      this.execLog.push(iv.line)
       this.pendingOverrides.push({ field: 'executor_log', from: null, to: iv.line, by: `scenario:${this.scenario.name}` })
     } else if (iv.kind === 'overrideF1') {
       this.f1Overrides.push({ field: iv.field, value: iv.value }) // recorded as an Override by decide() when applied
@@ -604,21 +688,23 @@ export class Session {
 
   private async migrate(fromLabel: string, toLabel: string) {
     const slot = this.slots.find((s) => s.label === fromLabel && ['RUNNING', 'AWAITING_TOPUP', 'HOLD_EXHAUSTED'].includes(s.job.state))
-    if (!slot) return
+    if (!slot || this.stopping) return // after STOP / during windDown there is nothing to migrate to
     this.applyEvent(slot, { type: 'Stop', reason: 'MIGRATE' })
-    while (this.committer.pending > 0) await sleep(20)
-    await Promise.all([...this.inflight])
+    await this.drain()
     const unsettled = slot.job.accrued - slot.job.settledNet - slot.job.pendingNet
-    if (unsettled > 0n) await this.settle(slot, unsettled, 'stop')
+    if (unsettled > 0n && !(await this.settle(slot, unsettled, 'stop'))) return // windDown's founder settle + close picks it up
     const out = await this.send({ signer: 'agent', fn: 'close', args: [slot.job.id!], expect: ['Closed'], req_id: null, job_id: slot.job.id!.toString(), record: { type: 'CLOSE', body: { job_id: slot.job.id!.toString(), signer: 'agent', reason: 'MIGRATE', accrued: dec(slot.job.accrued), settledNet: dec(slot.job.settledNet) } } })
     if (out.status === 'OK') { this.applyEvent(slot, { type: 'Closed' }); await this.f3(slot) }
     await this.send({ signer: 'founder', fn: 'setVendor', args: [this.resolveVendor(fromLabel), false], expect: ['VendorSet'], req_id: null, job_id: null, record: null }) // plain founder tx, NO record
     await this.openVendor(toLabel, true)
   }
 
+  /** settle(INFERENCE, 0): after the deadline the contract answers Denied(PAST_DEADLINE), the evidence. If the chain clock
+   *  still lags the wall clock it lands and pays nothing (never a unit the usage didn't accrue); retried next step. */
   private async deadlineDemo() {
     const jid = this.inference!.jobId
-    const out = await this.send({ signer: 'agent', fn: 'settle', args: [jid, 1n], expect: ['Settled'], req_id: null, job_id: jid.toString(), record: { type: 'CHECKPOINT', body: { job_id: jid.toString(), amount: '1', signer: 'agent', reason: 'stop', accrued: '0', settledNet: '0', runningMs: '0', loss: 'none' } } })
+    const out = await this.send({ signer: 'agent', fn: 'settle', args: [jid, 0n], expect: ['Settled'], req_id: null, job_id: jid.toString(), record: { type: 'CHECKPOINT', body: { job_id: jid.toString(), amount: '0', signer: 'agent', reason: 'stop', accrued: '0', settledNet: '0', runningMs: '0', loss: 'none' } } })
+    this.deadlineDemoDone = out.status !== 'OK'
     this.logEvent('scenario', 'deadline_demo', { status: out.status, code: (out as { code?: string }).code ?? null })
   }
 
@@ -632,7 +718,8 @@ export class Session {
       try {
         const hash = await attacker.writeContract({ address: this.dep.vault, abi: vaultAbi, functionName: fn, args, account: attacker.account!, chain: CHAINS[this.o.chain] } as any)
         const r = await this.client.waitForTransactionReceipt({ hash })
-        this.logEvent('scenario', 'stolen_key', { fn, txHash: hash, status: r.status, denied: r.logs.length > 0 })
+        const denied = decodeVaultLogs(r, this.dep.vault).find((e) => e.name === 'Denied')
+        this.logEvent('scenario', 'stolen_key', { fn, txHash: hash, status: r.status, code: denied ? fromBytes32(denied.args.code as Hex) : null })
       } catch (e) {
         this.logEvent('scenario', 'stolen_key', { fn, error: (e as Error).name })
       }
@@ -642,13 +729,15 @@ export class Session {
   // ---- founder actions (dashboard) ----
   async action(req: ActionRequest): Promise<{ ok: true } | { ok: false; status: 409 | 400; reason: string }> {
     if (req.type === 'STOP') {
-      if (this.stopStage !== 'RUNNING') return { ok: false, status: 409, reason: 'STOP already pending' }
-      if (req.stateVersion !== this.version) return { ok: false, status: 409, reason: 'stale stateVersion' }
+      // No stateVersion check for STOP: the version bumps on every loop step, so a dashboard click would always be
+      // stale, and STOP only ever makes things safer. A second STOP, or one once windDown has begun, is refused:
+      // a pause landing between windDown's plan and its agent-signed txs would get them Denied mid-session-end.
+      if (this.stopStage !== 'RUNNING' || this.stopping) return { ok: false, status: 409, reason: 'STOP already pending or the session is winding down' }
       this.stopping = true
       this.stopStage = 'SENDING'
       this.bump()
       const out = await this.send({ signer: 'founder', fn: 'setPaused', args: [true], expect: ['PausedSet'], req_id: null, job_id: null, record: { type: 'STOP', body: { reason: req.reason, by: 'founder' } } })
-      if (out.status === 'OK') { this.stopStage = 'PAUSED_ON_CHAIN'; this.bump() }
+      if (out.status === 'OK') this.advanceStop('PAUSED_ON_CHAIN')
       return { ok: true }
     }
     if (!this.canWindDown()) return { ok: false, status: 400, reason: 'not all jobs stopped/exhausted or a tx is pending' }
@@ -670,48 +759,80 @@ export class Session {
     try { await this.windDownP } finally { this.windDownP = null }
   }
 
+  private async drain() {
+    while (this.committer.pending > 0) await sleep(20)
+    await Promise.all([...this.inflight])
+  }
+
+  private throwHalted(): never {
+    throw new Error(`windDown: committer HALTED (${this.committer.haltReason}); nothing can be sent from this process`)
+  }
+
   private async doWindDown(): Promise<void> {
+    if (this.committer.halted) this.throwHalted()
     this.stopping = true
-    while (this.committer.pending > 0) await sleep(20)
-    await Promise.all([...this.inflight])
+    await this.drain()
     for (const slot of this.slots) if (['OPEN', 'RUNNING', 'AWAITING_TOPUP', 'HOLD_EXHAUSTED'].includes(slot.job.state)) this.applyEvent(slot, { type: 'Stop', reason: 'END' })
-    while (this.committer.pending > 0) await sleep(20)
-    await Promise.all([...this.inflight])
+    await this.drain()
 
-    const s1 = await this.freshSnapshot()
-    if (!s1) throw new Error('windDown: READ_FAILED')
-    const vendorJobs = this.slots.map((s) => s.job)
-    for (const it of planWindDown({ jobs: vendorJobs, inference: null, snapshot: s1, deadlineMarginS: this.deadlineMarginS })) if (it.kind !== 'refund') await this.execWind(it)
+    await this.windJobs(false) // vendor jobs: settle(delta) + close
     for (const slot of this.slots) if (slot.job.state === 'CLOSED' && !slot.f3Done) await this.f3(slot)
-
-    const s2 = await this.freshSnapshot()
-    if (!s2) throw new Error('windDown: READ_FAILED (2)')
-    const infHold = this.inference ? s2.jobs[Number(this.inference.jobId)]?.held ?? 0n : 0n
-    const usageNet = costToMicro(this.kilnCosts).micro
-    const capped = usageNet < maxNet(infHold, true) ? usageNet : maxNet(infHold, true)
-    for (const it of planWindDown({ jobs: vendorJobs, inference: this.inference ? { jobId: this.inference.jobId, usageNet: capped } : null, snapshot: s2, deadlineMarginS: this.deadlineMarginS })) await this.execWind(it)
+    for (const it of await this.windJobs(true)) await this.execWind(it) // INFERENCE after every F3 (its usage includes them), then the refund
 
     const head = await this.client.getBlockNumber({ cacheTime: 0 })
     this.writeRunJson(Number(head))
     this.ended = true
-    this.stopStage = 'HALTED'
+    this.advanceStop('HALTED')
     try { writeFileSync(join(this.dir, 'report.md'), report(this.dir)) } catch (e) { this.logEvent('windDown', 'report_failed', { err: (e as Error).message }) }
     this.bump()
   }
 
-  private async execWind(it: ExecIntent): Promise<void> {
+  /** Plan on a fresh snapshot with the LIVE job objects and execute, until only the refund is left (returned). A settle or
+   *  close the contract Denied (a pause or the deadline landing after the plan) is re-planned, founder-signed, next pass;
+   *  a job whose settle failed is not closed that pass (no close over unpaid usage). The refund is only ever computed
+   *  after every job is closed on chain, so it never over-asks (OverBudget -> HALT with SESSION_END unanchored). */
+  private async windJobs(withInference: boolean): Promise<ExecIntent[]> {
+    for (let pass = 0; pass < 3; pass++) {
+      if (this.committer.halted) this.throwHalted()
+      const s = await this.freshSnapshot()
+      if (!s) throw new Error('windDown: READ_FAILED')
+      const inference = withInference && this.inference ? { jobId: this.inference.jobId, usageNet: this.inferenceUsage(s) } : null
+      const plan = planWindDown({ jobs: this.slots.map((x) => x.job), inference, snapshot: s, deadlineMarginS: this.deadlineMarginS })
+      const work = plan.filter((it) => it.kind !== 'refund')
+      if (!work.length) return plan
+      const failed = new Set<bigint>()
+      for (const it of work) {
+        if (it.kind === 'refund' || (it.kind === 'close' && failed.has(it.jobId))) continue
+        if (!(await this.execWind(it)) && it.kind === 'settle') failed.add(it.jobId)
+      }
+    }
+    throw new Error('windDown: a settle/close was still refused after 3 passes; nothing refunded (run windDown again)')
+  }
+
+  /** Kiln usage to reimburse, capped at what the fee-exempt INFERENCE hold ever held (paid + held). */
+  private inferenceUsage(s: ChainSnapshot): bigint {
+    const c = s.jobs[Number(this.inference!.jobId)]
+    const usage = costToMicro(this.kilnCosts).micro, cap = c ? c.paid + c.held : 0n
+    return usage < cap ? usage : cap
+  }
+
+  /** One windDown intent. Returns true when it landed. */
+  private async execWind(it: ExecIntent): Promise<boolean> {
     const slot = this.slots.find((s) => s.job.id === (it as { jobId?: bigint }).jobId)
     if (it.kind === 'settle') {
-      const body = { job_id: it.jobId.toString(), amount: dec(it.amount), signer: it.signer, reason: 'windDown', accrued: slot ? dec(slot.job.accrued) : '0', settledNet: slot ? dec(slot.job.settledNet) : '0', runningMs: slot ? dec(slot.job.runningMs) : '0', loss: 'none' }
-      const out = await this.send({ signer: it.signer, fn: 'settle', args: [it.jobId, it.amount], expect: ['Settled'], req_id: null, job_id: it.jobId.toString(), record: { type: 'CHECKPOINT', body } })
-      if (slot) this.applyEvent(slot, out.status === 'OK' ? { type: 'Settled', amount: it.amount } : { type: 'SettleFailed', amount: it.amount })
-    } else if (it.kind === 'close') {
+      if (slot) return this.settle(slot, it.amount, 'windDown', { signer: it.signer })
+      const body: CheckpointBody = { job_id: it.jobId.toString(), amount: dec(it.amount), signer: it.signer, reason: 'windDown', accrued: '0', settledNet: '0', runningMs: '0', loss: 'none' }
+      return (await this.send({ signer: it.signer, fn: 'settle', args: [it.jobId, it.amount], expect: ['Settled'], req_id: null, job_id: body.job_id, record: { type: 'CHECKPOINT', body } })).status === 'OK'
+    }
+    if (it.kind === 'close') {
       const out = await this.send({ signer: it.signer, fn: 'close', args: [it.jobId], expect: ['Closed'], req_id: null, job_id: it.jobId.toString(), record: { type: 'CLOSE', body: { job_id: it.jobId.toString(), signer: it.signer, reason: 'windDown', accrued: slot ? dec(slot.job.accrued) : '0', settledNet: slot ? dec(slot.job.settledNet) : '0' } } })
       if (out.status === 'OK' && slot && slot.job.state !== 'CLOSED') this.applyEvent(slot, { type: 'Closed' })
-    } else if (it.kind === 'refund') {
-      const cm = costToMicro(this.kilnCosts)
-      await this.send({ signer: 'founder', fn: 'refund', args: [it.amount], expect: ['Refunded'], req_id: null, job_id: null, record: { type: 'SESSION_END', body: { refund: dec(it.amount), inference_usage: dec(cm.micro), kiln_calls: llmStats.calls, kiln_cost_unknown: cm.unknown, jobs: this.slots.map((s) => s.job.id!.toString()) } } })
+      return out.status === 'OK'
     }
+    const cm = costToMicro(this.kilnCosts)
+    // kiln_calls counts THIS session's attempts (kilnCosts has one entry per attempt), not the process-wide llmStats.
+    const out = await this.send({ signer: 'founder', fn: 'refund', args: [it.amount], expect: ['Refunded'], req_id: null, job_id: null, record: { type: 'SESSION_END', body: { refund: dec(it.amount), inference_usage: dec(cm.micro), kiln_calls: this.kilnCosts.length, kiln_cost_unknown: cm.unknown, jobs: this.slots.map((s) => s.job.id!.toString()) } } })
+    return out.status === 'OK'
   }
 
   // ---- run to completion ----
@@ -723,9 +844,9 @@ export class Session {
 
   private async loop(): Promise<void> {
     const interval = Math.max(5, Math.round(1000 / this.speed))
-    const hardCapMs = this.o.hardCapMs ?? 150_000
+    const hardCapMs = this.hardCapMs
     const start = Date.now()
-    while (!this.ended && !this.committer.halted) {
+    while (!this.ended && !this.windDownP && !this.committer.halted) {
       await this.loopStep()
       if (this.isDone()) break
       if (Date.now() - start > hardCapMs) { this.logEvent('scenario', 'hardcap', {}); break }
@@ -734,8 +855,14 @@ export class Session {
     await Promise.all([...this.inflight])
   }
 
+  /** Default: the scenario's last scripted minute in real time (it scales with 1/speed) plus 2 minutes of slack. */
+  private get hardCapMs(): number {
+    const horizon = Math.max(this.scenario.endAtSimMinute ?? 0, ...this.scenario.interventions.map((i) => i.atSimMinute))
+    return this.o.hardCapMs ?? horizon * 1000 / this.speed + 120_000
+  }
+
   private isDone(): boolean {
-    if (this.deadlineMarginS === 0n && !this.deadlineDemoDone) return false // wait for the deadline-Denied demo
+    if (this.deadlineMarginS === 0n && !this.deadlineDemoDone && !this.stopping) return false // wait for the deadline-Denied demo
     const end = this.scenario.endAtSimMinute
     if (end !== undefined && this.simMinute() >= end) return true
     const allFired = this.firedSteps.size >= this.scenario.interventions.length
@@ -747,10 +874,17 @@ export class Session {
   // ---- StateView (dashboard) ----
   state(): StateView {
     const s = this.lastSnapshot
-    const paid = s ? s.jobs.reduce((a, j) => a + j.paid, 0n) : 0n
+    // The budget bar's five parts add up to the budget: vendor net + fees + inference (decoded Settled) + open holds +
+    // refundable (snapshot). committed = Σheld + Σpaid on chain.
+    let paidNet = 0n, fees = 0n, inferencePaid = 0n
+    for (const [id, p] of this.settledChain) {
+      if (id === this.inference?.jobId.toString()) inferencePaid += p.net + p.fee
+      else { paidNet += p.net; fees += p.fee }
+    }
     const openHolds = s ? s.jobs.reduce((a, j) => a + j.held, 0n) : 0n
     const budget = s?.budget ?? this.budgetMicro
     const committed = s?.committed ?? 0n
+    const specDl = this.spec?.deadline ?? 0
     return {
       version: this.version, run_id: this.runId, scenario: this.scenario.name, vault: this.dep.vault, chainId: this.dep.chainId,
       explorer: this.dep.chainId === 84532 ? 'https://sepolia.basescan.org/tx/' : null,
@@ -758,8 +892,9 @@ export class Session {
       badges: { llm: this.o.llm.mode, price: this.prices?.source ?? '?', scenario: this.scenario.name },
       grant: {
         purpose: this.spec?.purpose ?? '', success_metric: this.spec?.success_metric ?? '', allowed_gpu_types: this.spec?.allowed_gpu_types ?? [],
-        job_cap: this.spec ? dec(parseSpecForGate(this.specBytes).job_cap) : '0', deadline: this.spec?.deadline ?? 0,
-        budget: dec(budget), paid: dec(paid), fees: '0', inference_paid: dec(this.inference && s ? s.jobs[Number(this.inference.jobId)]?.paid ?? 0n : 0n),
+        // the binding deadline: min(signed spec, vault) (R3-13)
+        job_cap: this.spec ? dec(parseSpecForGate(this.specBytes).job_cap) : '0', deadline: s && Number(s.deadline) < specDl ? Number(s.deadline) : specDl,
+        budget: dec(budget), paid: dec(paidNet), fees: dec(fees), inference_paid: dec(inferencePaid),
         open_holds: dec(openHolds), refundable: dec(budget - committed), maxHold: dec(s?.maxHold ?? this.maxHoldMicro),
         vendors: (['A', 'B', 'C'] as VendorLabel[]).map((l) => {
           const v = (this.prices?.vendors as Record<string, { provider?: string }>)?.[l] ?? { provider: '' }
@@ -773,10 +908,10 @@ export class Session {
       ledger: this.ledger,
       receipts: this.receipts,
       health: {
-        rpcOk: s !== null, kiln: { mode: this.o.llm.mode, calls: llmStats.calls, lastLatencyMs: null, errors: 0 },
-        akash: this.prices?.source ?? '?', pendingTx: this.committer.pending, halted: this.committer.haltReason, ethAgent: '0', ethFounder: '0',
+        rpcOk: this.rpcOk, kiln: { mode: this.o.llm.mode, calls: this.kilnCosts.length, lastLatencyMs: this.kilnLastMs, errors: this.kilnErrors },
+        akash: this.prices?.source ?? '?', pendingTx: this.committer.pending, halted: this.committer.haltReason, ethAgent: this.eth.agent, ethFounder: this.eth.founder,
       },
-      can: { stop: this.stopStage === 'RUNNING', windDown: this.canWindDown() },
+      can: { stop: this.stopStage === 'RUNNING' && !this.stopping, windDown: this.canWindDown() },
     }
   }
 
