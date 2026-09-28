@@ -1,33 +1,26 @@
 graph TD
-    subgraph SG["스타트업 (5~15인)"]
-        A1["마케팅 에이전트"]
-        A2["개발 에이전트"]
-        A3["고객지원 에이전트"]
-    end
-
-    A1 -->|"GPU 임대 제안"| B{"CFO Agent (정책+가격비교)"}
-    A2 -->|"GPU 임대 제안"| B
-    A3 -->|"GPU 임대 제안"| B
-
-    B -->|"승인"| C1["GPU 벤더 A $2.5/hr"]
-    B -->|"승인"| C2["GPU 벤더 B $1.8/hr"]
-    B -->|"승인"| C3["GPU 벤더 C $3.2/hr"]
-    B -->|"차단"| D["차단 + 사유기록"]
-
-    C1 --> F["증빙 체인"]
-    C2 --> E["테스트넷 tx"]
-    C3 --> F
-    E --> F
-    D --> F
-
-    F --> G["창업자 대시보드"]
+    U["ML 리드 / 창업자<br/>고성능 연산 조직<br/>예산·벤더·기한, STOP"]
+    W["작업 에이전트 (Qwen)<br/>학습·평가 작업"]
+    U --> P["CFO 규칙 (코드)<br/>수수료 포함 예산<br/>허용 벤더·기한·STOP"]
+    W -->|"① GPU 블록 요청"| C{"CFO Agent (Qwen)<br/>승인·계속·중단 + 사유"}
+    C -->|"승인"| G{"규칙 검사 (코드)"}
+    P --> G
+    G -->|"통과"| X["결제 실행기 (코드)<br/>테스트넷 USDC 선결제"]
+    G -->|"차단"| R["차단·중단 기록"]
+    C -->|"중단"| R
+    X --> V["GPU 벤더 A/B/C<br/>(mock)<br/>job_id 발급<br/>블록 끝에 종료"]
+    V -->|"② 진행 보고"| W
+    W -->|"③ 연장 요청 + 진행 상황"| C
+    X --> L["장부 + 증빙 체인<br/>tx 해시"]
+    R --> L
+    L --> D["대시보드<br/>수치=장부, 설명=Qwen"]
+    L --> VF["verify<br/>제3자 재판정"]
 
     classDef approved fill:#d1f5d3,stroke:#2f9e44,stroke-width:2px,color:#1a1a1a;
     classDef blocked fill:#ffd6d6,stroke:#e03131,stroke-width:2px,color:#1a1a1a;
     classDef neutral fill:#e9ecef,stroke:#495057,stroke-width:2px,color:#1a1a1a;
     classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
-
-    class C1,C2,C3,E approved;
-    class D blocked;
-    class A1,A2,A3,F,G neutral;
-    class B decision;
+    class X,V approved;
+    class R blocked;
+    class U,W,P,L,D,VF neutral;
+    class C,G decision;

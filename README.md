@@ -20,27 +20,44 @@ AI 에이전트가 GPU를 스스로 빌리는 시대에, **에이전트의 컴�
 
 ```mermaid
 graph TD
-    U["창업자 / ML 리드<br/>예산·허용 벤더·기한 설정"] --> P["정책 (policy.json)"]
-    W["연구·평가 에이전트<br/>(Qwen3-32B via Kiln)"] -->|"GPU 임대 요청<br/>벤더·GPU·최대 시간"| C{"CFO Agent<br/>(Qwen3-32B via Kiln)<br/>승인 / 거절 + 사유"}
-    C --> G{"정책 검사 (코드)<br/>수수료 포함 예산·허용 벤더·기한·STOP"}
+    U["ML 리드 / 창업자<br/>고성능 연산 조직<br/>예산·벤더·기한, STOP"]
+    W["작업 에이전트 (Qwen)<br/>학습·평가 작업"]
+    U --> P["CFO 규칙 (코드)<br/>수수료 포함 예산<br/>허용 벤더·기한·STOP"]
+    W -->|"① GPU 블록 요청"| C{"CFO Agent (Qwen)<br/>승인·계속·중단 + 사유"}
+    C -->|"승인"| G{"규칙 검사 (코드)"}
     P --> G
-    G -->|"통과"| X["결제 실행기 (코드)"]
-    G -->|"차단"| R["차단 기록<br/>규칙 ID·요청값 vs 한도"]
-    X -->|"테스트넷 USDC 선결제"| V["GPU 벤더 A/B/C (mock)<br/>job_id 발급 → 최대 시간에 종료"]
-    X --> L["장부 + 증빙 체인<br/>(해시 연결, tx 해시)"]
+    G -->|"통과"| X["결제 실행기 (코드)<br/>테스트넷 USDC 선결제"]
+    G -->|"차단"| R["차단·중단 기록"]
+    C -->|"중단"| R
+    X --> V["GPU 벤더 A/B/C<br/>(mock)<br/>job_id 발급<br/>블록 끝에 종료"]
+    V -->|"② 진행 보고"| W
+    W -->|"③ 연장 요청 + 진행 상황"| C
+    X --> L["장부 + 증빙 체인<br/>tx 해시"]
     R --> L
-    L --> D["대시보드<br/>수치 = 장부 / 설명 = Qwen"]
-    L --> VF["verify: 제3자 재판정"]
+    L --> D["대시보드<br/>수치=장부, 설명=Qwen"]
+    L --> VF["verify<br/>제3자 재판정"]
+
+    classDef approved fill:#d1f5d3,stroke:#2f9e44,stroke-width:2px,color:#1a1a1a;
+    classDef blocked fill:#ffd6d6,stroke:#e03131,stroke-width:2px,color:#1a1a1a;
+    classDef neutral fill:#e9ecef,stroke:#495057,stroke-width:2px,color:#1a1a1a;
+    classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
+    class X,V approved;
+    class R blocked;
+    class U,W,P,L,D,VF neutral;
+    class C,G decision;
 ```
 
-- **결제 금액:** `시간당 단가 × 최대 시간 × (1 + 수수료)`를 한 번에 선결제한다. 시간 단위 과금은 만들지 않는다.
+- **블록 단위 대화 루프:** GPU는 시간 블록 단위로 빌린다. 블록이 끝날 때마다 작업 에이전트가 진행 상황(mock 벤더가 만든 학습 로그)을 보고하고 연장을 요청하면, CFO Agent가 계속할지 멈출지 판단한다. 대화는 블록 경계에서만 한다.
+- **결제 금액:** 블록마다 `시간당 단가 × 블록 시간 × (1 + 수수료)`를 선결제한다. 시간 단위 과금은 만들지 않는다.
 - **벤더:** 실제 마켓 연동 없이 테스트넷 주소를 가진 mock 벤더 2~3곳과 가격표 JSON 하나로 구성한다.
+- **데모 시나리오:** 정상 작업(연장 → 결제 tx 여러 건), 정체된 작업(Qwen이 중단), 폭주한 작업(수수료 포함 예산 초과 연장을 코드가 차단), 창업자 STOP.
+- 편집 가능한 원본: `diagrams/gpu-marketplace-cfo-agent.excalidraw` (excalidraw.com에서 열기)
 
 ## AI와 코드의 역할
 
 | 담당 | 하는 일 |
 |---|---|
-| **Qwen3-32B (Kiln)** | 연구 목표를 GPU 임대 요청으로 변환, CFO Agent의 승인/거절 판단과 사유, 차단 사유·영수증·대시보드 요약 문장 |
+| **Qwen3-32B (Kiln)** | 작업 목표를 GPU 블록 요청으로 변환, 진행 보고와 연장 요청, CFO Agent의 승인·계속·중단 판단과 사유, 차단 사유·영수증·대시보드 요약 문장 |
 | **코드** | 가격·수수료 계산, 정책 검사, 장부의 모든 수치, 결제, 해시 체인, 검증 도구 |
 
 ## 차별점
@@ -74,10 +91,11 @@ graph TD
 | CFO Agent 두뇌 | ✅ Qwen3-32B (Kiln) |
 | 차단 사유·대시보드 문장 | ✅ Qwen이 작성 |
 | 제출 과제 | ⏳ 팀 의향은 **A**. 검증에서는 B도 권장되어 확정 필요 |
-| 승인 구조 | ⏳ **Qwen 승인 AND 코드 정책 검사** 권장. Qwen 단독 승인이면 A·B 모두 요건 미충족으로 판정됨 |
+| 승인 방식 | ✅ CFO Agent(Qwen)가 블록마다 작업 에이전트와 대화하며 승인·계속·중단 판단 |
+| 코드 규칙 검사 병행 | ⏳ **Qwen 승인 AND 코드 규칙 통과** 권장. Qwen 단독 승인이면 A·B 모두 요건 미충족으로 판정됨 |
 | 대시보드 수치 출처 | ⏳ 수치는 코드 장부, Qwen은 설명문만 권장 |
-| 페르소나 | ⏳ AI 스타트업 연구 에이전트 권장. 기존 다이어그램은 마케팅/CS 에이전트 |
-| 벤더 결제 방식 | ⏳ mock 벤더 + 코드 결제 실행기 권장. 실제 GPU API 구매는 비추천 |
+| 페르소나 | ✅ GPU를 빌릴 만큼 고성능 연산이 필요한 조직 (예: AI 스타트업) |
+| 벤더 결제 방식 | ✅ mock 벤더 + 코드 결제 실행기 (테스트넷 USDC 선결제) |
 | 체인 | ⏳ Base Sepolia 권장 |
 | 온체인 강제 (컨트랙트) | ⏳ Solidity 가능자 여부에 따라 결정 |
 
@@ -100,6 +118,6 @@ graph TD
 
 ## 레포 구성
 
-- `diagrams/`: 아키텍처 다이어그램 (Multi-API 버전, GPU Marketplace 버전)
+- `diagrams/`: 아키텍처 다이어그램. `gpu-marketplace-cfo-agent.*`가 현재 버전, `cfo-agent-architecture.*`는 초기 Multi-API 버전
 - `md/`: 트랙 설명 노트
 - `pdf/`: 공식 참가 안내서
