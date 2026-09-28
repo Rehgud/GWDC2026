@@ -40,6 +40,8 @@ graph TD
     L --> UI["대시보드 · 영수증 (Qwen F3 설명)"]
 ```
 
+![CFO Agent 흐름](diagrams/cfo-agent-escrow-topup.png)
+
 1. 창업자가 예산과 기한을 넣고(`fund`), 허용 벤더와 호출당 상한을 정하고, 작업 명세(목적·허용 GPU·작업 상한·기한)에 서명한다.
 2. 작업 에이전트가 GPU를 요청한다. 코드 게이트가 규칙을 먼저 판정하고, 통과한 요청만 CFO Qwen이 목적에 비추어 판단한다. 둘 다 통과해야 `open`으로 hold를 잡는다.
 3. GPU 작업은 끊기지 않고 진행된다. 체크포인트마다 실사용분을 `settle`한다.
@@ -143,7 +145,8 @@ graph TD
 - **다음:** Kiln 키 확인, Base Sepolia 배포, 금고 수정, 게이트·장부, 실행기, 감사자 CLI, 대시보드.
 - `docs/designs/`: 승인된 설계 문서
 - `docs/escrow-vault.md`: 에스크로 금고를 쉽게 풀어 쓴 설명
-- `diagrams/`: 이전 단계 다이어그램(블록 방식과 초기 Multi-API 버전). 현재 흐름은 위의 mermaid 다이어그램이 기준이다.
+- `diagrams/cfo-agent-escrow-topup.*`: 현재 흐름 다이어그램(`.mmd` 원본, `.excalidraw` 편집용, `.svg`/`.png`)
+- `diagrams/gpu-marketplace-cfo-agent.*`, `diagrams/cfo-agent-architecture.*`: 이전 단계(블록 방식, 초기 Multi-API) 기록
 - `md/`, `pdf/`: 트랙 노트, 공식 참가 안내서
 
 ## 비밀 정보
