@@ -29,7 +29,9 @@
     "nothink": "tsx scripts/kiln-tools.ts nothink",
     "wind-down": "tsx scripts/wind-down.ts",
     "crash:test": "tsx scripts/crash-test.ts",
-    "health": "tsx scripts/health.ts"
+    "health": "tsx scripts/health.ts",
+    "new-agent": "tsx scripts/new-agent.ts",
+    "e2e:sepolia": "tsx scripts/e2e-sepolia.ts"
   },
   "dependencies": {
     "viem": "2.56.9"
