@@ -1086,42 +1086,51 @@ make deploy
   - Verify: `forge test` (본문 10종 + D3 2종 + 리뷰 추가 케이스)
   - Done 2026-09-29: `forge test` 25개 통과(퍼즈 불변식 포함). C12 교차 언어 JSON은 T2의 codes.ts와 함께 추가
   - 2026-09-29 검증 워크플로(리뷰 4 + 반박 검증 4) 반영: 거대한 maxHold에서 Panic 경로 제거(예산 검사 net 우선), Closed/Refunded/PausedSet의 rec를 indexed로, 생성자에서 agent 역할 겹침 거부. 테스트 37개 + 핸들러 불변식(128k 호출)으로 확대, 뮤턴트 28종 전부 검출
-- [ ] **T4 (P1, human: ~2h / CC: ~15min)** — deploy — `make deploy` + preflight + deployments json
+- [x] **T4 (P1, human: ~2h / CC: ~15min)** — deploy — `make deploy` + preflight + deployments json
   - Surfaced by: Section 9 — S9-1, S9-3, S9-4
   - Files: `Makefile`, `deployments/`
   - Verify: Base Sepolia에서 preflight assert 통과, fund tx 해시 확보
-- [ ] **T5 (P1, human: ~5h / CC: ~40min)** — backend — `commit()` 단일 쓰기 큐 + `classify()` + chain watcher snapshot
+  - Done 2026-09-29: `src/deploy.ts` deploy()+preflight(), anvil 검증. Base Sepolia는 founder 지갑(0x87e3…DB58) 충전 후 진행
+- [x] **T5 (P1, human: ~5h / CC: ~40min)** — backend — `commit()` 단일 쓰기 큐 + `classify()` + chain watcher snapshot
   - Surfaced by: Section 1/2/7/8 — S1-1, S1-3, S2-6, S2-9, S7-1, S8-1, S8-2, R3-8
   - Files: to be determined
   - Verify: receipt fixture로 classify 단위 테스트, 기록 해시 read-back 실패 시 HALT 테스트
-- [ ] **T6 (P1, human: ~5h / CC: ~40min)** — executor — 상태 머신 `next()` + 60배 시계 + 엣지 트리거 + tick마다 정지 확인 + AWAITING_TOPUP + `windDown`
+  - Done 2026-09-29: `src/chain.ts` Committer(기록→서명→전송→receipt, sticky HALT, REPLACED 감지, simulate 후 기록), `src/chainread.ts` 읽기 쪽
+- [x] **T6 (P1, human: ~5h / CC: ~40min)** — executor — 상태 머신 `next()` + 60배 시계 + 엣지 트리거 + tick마다 정지 확인 + AWAITING_TOPUP + `windDown`
   - Surfaced by: Section 4 — S4-1, S4-2, S4-7, S4-8, R3-3, R3-4, R3-5, R3-14
   - Files: to be determined
   - Verify: 시계 테스트(40% 트리거 1회 발화, pause/deadline 즉시 정지, windDown 재실행 안전)
-- [ ] **T7 (P1, human: ~4h / CC: ~30min)** — llm — kiln.ts(fetch) + parse.ts + F1/F2/F3 프롬프트 + fail-closed + D4 재시도 + `LLM_MODE`
+  - Done 2026-09-29: `src/executor.ts` next()/tick()/planWindDown(), 이중 지급 방지 pendingNet
+- [x] **T7 (P1, human: ~4h / CC: ~30min)** — llm — kiln.ts(fetch) + parse.ts + F1/F2/F3 프롬프트 + fail-closed + D4 재시도 + `LLM_MODE`
   - Surfaced by: Section 2/3 — S2-1, S2-3, S2-4, S3-3, S3-8, S8-5, D4
   - Files: to be determined
   - Verify: 파서 테스트(빈 응답, 잘못된 JSON, 거절, `<think>`, finish_reason=length, 객체 2개), stub 호출 시 `audit --submission` FAIL
-- [ ] **T8 (P1, human: ~1.5h / CC: ~15min)** — prices — Akash 조회·검증·스냅샷 fallback, 번들에 prices/ 포함
+  - Done 2026-09-29: `src/kiln.ts`, `src/parse.ts`, `src/prompts.ts`. 실측 eval-f2 10/10·10/10·5/5, eval-f1 10/10·5/5
+- [x] **T8 (P1, human: ~1.5h / CC: ~15min)** — prices — Akash 조회·검증·스냅샷 fallback, 번들에 prices/ 포함
   - Surfaced by: Section 2/7 — S2-5, S7-5, R3-10
   - Files: to be determined
   - Verify: 오프라인(스냅샷) 모드 테스트, `price_source` 기록 확인
-- [ ] **T9 (P1, human: ~5h / CC: ~40min)** — auditor (P1 담당) — 이벤트 재생(1,000블록 청크), 분류 규칙, 종료 코드 0/1/2
+  - Done 2026-09-29: `src/akash.ts` + `prices/akash-snapshot.json` (A $2.04 / B $2.56 / C $3.16)
+- [x] **T9 (P1, human: ~5h / CC: ~40min)** — auditor (P1 담당) — 이벤트 재생(1,000블록 청크), 분류 규칙, 종료 코드 0/1/2
   - Surfaced by: Section 5/6 — R3-7, R3-9, R3-10, S2-13, S6-3, D3
   - Files: to be determined
   - Verify: golden 번들 PASS, 기록 1바이트 변조 FAIL, 기록 없는 Denied는 WARN, import 경계 grep 테스트
-- [ ] **T10 (P1, human: ~4h / CC: ~30min)** — dashboard — HTML 1파일(GRANT/LIVE/EVIDENCE, 카드 종결 상태 5종, STOP 상태, 409 가드) + D1 founder 경로
+  - Done 2026-09-29: `src/audit.ts` 검사 1~8 + G1~G16, 리뷰에서 거짓 PASS 4건 수정
+- [x] **T10 (P1, human: ~4h / CC: ~30min)** — dashboard — HTML 1파일(GRANT/LIVE/EVIDENCE, 카드 종결 상태 5종, STOP 상태, 409 가드) + D1 founder 경로
   - Surfaced by: Section 11/4 — S11-1~S11-5, S4-6, S4-9, D1, D6
   - Files: to be determined
   - Verify: 수동 점검(STOP 더블클릭, 오래된 화면 409, 새로고침 중 pending 표시)
-- [ ] **T11 (P1, human: ~3h / CC: ~20min)** — scenarios — 정상, Qwen 범위 확대 거절, 로그 주입(D5), 탈취 키 cast → Denied, STOP, 기한(두 번째 금고), 벤더 이동
+  - Done 2026-09-29: `src/server.ts` + `public/index.html` (기본 / `?video=1` 영상 모드)
+- [x] **T11 (P1, human: ~3h / CC: ~20min)** — scenarios — 정상, Qwen 범위 확대 거절, 로그 주입(D5), 탈취 키 cast → Denied, STOP, 기한(두 번째 금고), 벤더 이동
   - Surfaced by: Section 4/8 — S4-10, S8-7, R3-17, R3-18, D5
   - Files: to be determined
   - Verify: 시나리오마다 예상한 기록과 이벤트가 나오고 감사자 PASS
-- [ ] **T12 (P1, human: ~2h / CC: ~15min)** — report — 흐름별 토큰·에너지 표 스크립트 + `/no_think` 오프라인 비교
+  - Done 2026-09-29: `src/session.ts`, `src/scenarios.ts`(10개), `src/run.ts`, `scripts/stolen-key.ts`, `scripts/wind-down.ts`. anvil 10개 시나리오 감사 PASS
+- [x] **T12 (P1, human: ~2h / CC: ~15min)** — report — 흐름별 토큰·에너지 표 스크립트 + `/no_think` 오프라인 비교
   - Surfaced by: Section 7 / 본문 성공기준 5
   - Files: to be determined
   - Verify: JSONL로 표 생성, 게이트 선거절 절감 건수 표시
+  - Done 2026-09-29: `src/report.ts` 6개 단위 표
   - 2026-09-29 결정: "flow"를 운영진에게 묻지 않고, 같은 Kiln JSONL로 **여러 단위의 표를 모두** 만든다. 디테일이 보여야 한다.
     1. 호출 종류별(F1 요청 / F2 CFO 심사 / F3 영수증): 호출 수, 입력·출력·reasoning 토큰, 비용, 에너지, 지연 p50/p95, 429·실패 수
     2. 결정 흐름별(충전 요청 1건 = F1 → 게이트 → F2 → tx): 요청마다 토큰·비용·에너지, 결과(승인 / 게이트 거절 / Qwen 거절 / 체인 Denied), recHash와 tx 해시
@@ -1129,10 +1138,11 @@ make deploy
     4. 세션별 합계와 온체인 INFERENCE 정산 금액 대조
     5. 결과별 집계와 절감: 게이트 선거절로 F2를 건너뛴 건수와 절약 토큰, `/no_think` 켬/끔 비교
     6. 에너지 범위: RNGD 1.63 J/토큰 기준, GPU(RTX Pro 6000) 4.02 J 비교, 상한 11.9 J
-- [ ] **T13 (P1, human: ~1.5h / CC: ~15min)** — docs — README 추가(데모용 지름길, 한계, 명령 5개, 권한×상태 표, D1 한계 문구)
+- [x] **T13 (P1, human: ~1.5h / CC: ~15min)** — docs — README 추가(데모용 지름길, 한계, 명령 5개, 권한×상태 표, D1 한계 문구)
   - Surfaced by: Section 10/3 — S10-1, S10-4, S3-15, S3-16, D1
   - Files: `README.md`
   - Verify: 명령 5개 복붙 실행 확인
+  - Done 2026-09-29: README 재작성 + `docs/demo-script.md`. Base Sepolia tx 표(§8)는 녹화 후 채움
 - [ ] **T14 (P1, human: ~3h)** — demo — Base Sepolia 리허설(촬영 1회마다 새 금고), 9/30 01:00까지 백업 영상, 최종 영상
   - Surfaced by: Section 9/11 — S9-1, S9-8, S11-8, D6
   - Files: `runs/`, 영상
