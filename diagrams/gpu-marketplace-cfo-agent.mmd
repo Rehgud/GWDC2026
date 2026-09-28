@@ -1,0 +1,33 @@
+graph TD
+    subgraph SG["스타트업 (5~15인)"]
+        A1["마케팅 에이전트"]
+        A2["개발 에이전트"]
+        A3["고객지원 에이전트"]
+    end
+
+    A1 -->|"GPU 임대 제안"| B{"CFO Agent (정책+가격비교)"}
+    A2 -->|"GPU 임대 제안"| B
+    A3 -->|"GPU 임대 제안"| B
+
+    B -->|"승인"| C1["GPU 벤더 A $2.5/hr"]
+    B -->|"승인"| C2["GPU 벤더 B $1.8/hr"]
+    B -->|"승인"| C3["GPU 벤더 C $3.2/hr"]
+    B -->|"차단"| D["차단 + 사유기록"]
+
+    C1 --> F["증빙 체인"]
+    C2 --> E["테스트넷 tx"]
+    C3 --> F
+    E --> F
+    D --> F
+
+    F --> G["창업자 대시보드"]
+
+    classDef approved fill:#d1f5d3,stroke:#2f9e44,stroke-width:2px,color:#1a1a1a;
+    classDef blocked fill:#ffd6d6,stroke:#e03131,stroke-width:2px,color:#1a1a1a;
+    classDef neutral fill:#e9ecef,stroke:#495057,stroke-width:2px,color:#1a1a1a;
+    classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
+
+    class C1,C2,C3,E approved;
+    class D blocked;
+    class A1,A2,A3,F,G neutral;
+    class B decision;
