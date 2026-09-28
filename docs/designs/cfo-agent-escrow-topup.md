@@ -88,7 +88,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 | INFERENCE | 팀의 Kiln 크레딧 상환 주소. 허용 목록에 포함 | 수취만 |
 | feeTo | 마켓 수수료 수취 주소 | 수취만 |
 
-- **agent 키를 탈취당하면:** 허용 벤더에게만, 호출당 `maxHold` 이하로, 남은 예산 안에서만 hold/충전/정산할 수 있다. 일시정지 중이거나 기한이 지났으면 그것도 안 된다.
+- **agent 키만 탈취당하면:** 돈은 허용 벤더(와 feeTo 수수료)에게만 갈 수 있다. `maxHold`는 open/topUp **한 번의 net 금액**만 제한한다. hold를 여러 번 열고 settle로 한 번에 정산할 수 있으므로, 최악의 경우 금고의 **미지급 잔액 전체**(budget − Σpaid, 열린 hold 포함)가 허용 벤더에게 나갈 수 있다. 일시정지 중이거나 기한이 지났으면 그것도 안 된다. 그래서 STOP이 실질적인 방어선이다. (2026-09-29 검증 SEC-1로 정정)
 - 허용 목록 밖으로 보내기, 예산 초과, `refund`, 허용 목록 변경은 불가능하다. 위반 시도는 모두 `Denied` 이벤트로 체인에 남는다.
 - 게이트 키 co-signature(EIP-712)는 stretch로 둔다.
 
@@ -247,7 +247,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 ### 알려진 한계 (README에 명시)
 - **정산 금액은 우리 장부가 신고한 값이다.** 체인은 실제 사용량을 검증하지 않는다. 벤더와 공모하면 hold 한도 안에서 샐 수 있다.
 - **Qwen 판단과 기록은 백엔드가 스스로 증명한 값이다.** Kiln 서명이 없다. 감사자가 결정적 규칙은 다시 계산하지만, Qwen 판정 자체의 진위는 확인하지 못한다.
-- **탈취된 agent 키**는 남은 예산 안에서 허용 벤더에게 호출당 `maxHold`씩 보낼 수 있다. 모든 시도는 체인에 남는다.
+- **탈취된 agent 키**는 허용 벤더에게 금고의 미지급 잔액 전체(budget − Σpaid, 열린 hold 포함)까지 보낼 수 있다. `maxHold`는 open/topUp 1회 상한일 뿐이다. 규칙 위반 시도는 `Denied`로 체인에 남고, STOP 이후에는 아무것도 나가지 않는다. 또 규칙 안에서 진행 중인 job을 close하거나 남은 예산을 쓸모없는 hold로 묶어 세션을 방해할 수 있다(SEC-2). 이때는 STOP 후 windDown한다.
 - **gas(ETH)는 USDC 예산 한도 밖이다.** 장부에만 기록한다.
 - **벤더 가격은 과거 bid 기반 추정치**이고 확정 견적이 아니다. `debug=true`는 문서에 없는 옵션이라 스냅샷 JSON을 fallback으로 둔다.
 - **INFERENCE 정산은 상환 회계다.** 실제 Kiln 과금은 오프체인 크레딧으로 이루어진다.
@@ -837,7 +837,7 @@ tick: remaining = held - gross(unsettled_net);  remaining*10 < holdSize*4 && lat
 make deploy
   forge test ──fail──▶ 중단
     │ pass
-  MockUSDC 배포 → mint(founder) → Vault 배포(agent, feeTo, feeBps=300, inferencePayee)
+  MockUSDC 배포 → mint(founder) → Vault 배포(usdc, agent, feeTo, inferencePayee; feeBps는 상수 300)
     → approve(vault, 정확한 금액) → fund(X, cfg.deadline) → setVendor(A,B,C,INFERENCE) → setMaxHold
     → deployments/84532-<vault>.json 기록 · current.json 갱신 · abi.ts 생성
   preflight: founder/agent 주소, 잔액, maxHold, 허용 목록, deadline, ETH 가스 잔액 assert ──fail──▶ 중단
@@ -985,7 +985,7 @@ make deploy
 **배포 순서 (`make deploy`, P3가 아니어도 실행 가능해야 함)**
 1. 주소 확정: founder(= deployer, keystore), **녹화 금고마다 새 agent 키**, feeTo, INFERENCE, A/B/C(hostUri 고정)
 2. `forge test`가 실패하면 중단
-3. MockUSDC → mint(founder, X) → Vault(usdc, agent, feeTo, 300, inferencePayee) → approve(vault, X) → fund(X, cfg.deadline) → setVendor ×4 → setMaxHold(6e6)
+3. MockUSDC → mint(founder, X) → Vault(usdc, agent, feeTo, inferencePayee) → approve(vault, X) → fund(X, cfg.deadline) → setVendor ×4 → setMaxHold(6e6)
 4. `deployments/84532-<vault>.json`에 {addrs, deployBlock, setupTxs, gitSha, label}을 남기고 `current.json`을 갱신, `abi.ts`를 생성한다
 5. `preflight` assert: 역할 주소 일치, feeBps==300, vendorAllowed 4개, maxHold, budget==X, committed==0, !paused, deadline > now+2h, 잔액(ETH는 예상 tx 200건분 이상), Kiln 200, RPC head 신선도. 실패하면 항목 이름을 찍고 exit 1
 6. 소스 검증은 20분 타임박스(D-demo-scope A)
@@ -1085,6 +1085,7 @@ make deploy
   - Files: `contracts/AgentBudgetVault.sol`, `contracts/MockUSDC.sol`, `test/*.t.sol`
   - Verify: `forge test` (본문 10종 + D3 2종 + 리뷰 추가 케이스)
   - Done 2026-09-29: `forge test` 25개 통과(퍼즈 불변식 포함). C12 교차 언어 JSON은 T2의 codes.ts와 함께 추가
+  - 2026-09-29 검증 워크플로(리뷰 4 + 반박 검증 4) 반영: 거대한 maxHold에서 Panic 경로 제거(예산 검사 net 우선), Closed/Refunded/PausedSet의 rec를 indexed로, 생성자에서 agent 역할 겹침 거부. 테스트 37개 + 핸들러 불변식(128k 호출)으로 확대, 뮤턴트 28종 전부 검출
 - [ ] **T4 (P1, human: ~2h / CC: ~15min)** — deploy — `make deploy` + preflight + deployments json
   - Surfaced by: Section 9 — S9-1, S9-3, S9-4
   - Files: `Makefile`, `deployments/`

@@ -1,5 +1,4 @@
-.env
-.env.*
+.env*
 !.env.example
 keys/
 node_modules/

@@ -117,7 +117,7 @@ contract AgentBudgetVaultTest is Test {
         _open(A, 6e6); // 6.18
         _open(A, 6e6); // 12.36
         _open(A, 6e6); // 18.54 -> 1.46 left
-        _openDenied(A, 1.42e6, "OVER_BUDGET_WITH_FEE"); // gross 1.4626 > 1.46
+        _openDenied(A, 1.417477e6, "OVER_BUDGET_WITH_FEE"); // gross 1,460,001 = left + 1
         _open(A, 1.417476e6); // gross 1.417476 + 42524 = 1.46 exactly
         assertEq(vault.committed(), BUDGET);
     }
@@ -267,6 +267,14 @@ contract AgentBudgetVaultTest is Test {
         emit AgentBudgetVault.Refunded(left, R);
         vault.refund(left, R);
         vm.stopPrank();
+        assertEq(vault.budget(), vault.committed());
+    }
+
+    function test_refund_partialReducesBudget() public {
+        vm.prank(founder);
+        vault.refund(1e6, R);
+        assertEq(vault.budget(), BUDGET - 1e6);
+        assertEq(usdc.balanceOf(address(vault)), BUDGET - 1e6);
     }
 
     // ---- 7. recordDecision NO_JOB, enforced=false; stranger reverts (C8) ----
@@ -373,6 +381,204 @@ contract AgentBudgetVaultTest is Test {
         vm.stopPrank();
         assertEq(vault.deadline(), 123);
         assertEq(vault.budget(), BUDGET + 1e6);
+    }
+
+    // ---- review follow-ups: permissions, event payloads, order pins, boundaries ----
+
+    function test_founderOnlySetters() public {
+        address[2] memory who = [agent, stranger];
+        for (uint256 i; i < 2; i++) {
+            vm.startPrank(who[i]);
+            vm.expectRevert(AgentBudgetVault.Unauthorized.selector);
+            vault.setPaused(true, 0);
+            vm.expectRevert(AgentBudgetVault.Unauthorized.selector);
+            vault.setMaxHold(1);
+            vm.expectRevert(AgentBudgetVault.Unauthorized.selector);
+            vault.fund(0, 1);
+            vm.expectRevert(AgentBudgetVault.Unauthorized.selector);
+            vault.refund(0, R);
+            vm.expectRevert(AgentBudgetVault.Unauthorized.selector);
+            vault.setVendor(stranger, true);
+            vm.stopPrank();
+        }
+    }
+
+    function test_constructorRejectsRoleOverlap() public {
+        address[4] memory bad = [founder, feeTo, INF, address(0)];
+        for (uint256 i; i < 4; i++) {
+            vm.prank(founder);
+            try new AgentBudgetVault(IERC20(address(usdc)), bad[i], feeTo, INF) {
+                revert("role overlap accepted");
+            } catch {}
+        }
+    }
+
+    function _onlyLog(bytes32 sel, uint256 nTopics) internal view returns (Vm.Log memory l) {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 1, "one log");
+        l = logs[0];
+        assertEq(l.topics[0], sel);
+        assertEq(l.topics.length, nTopics, "indexed count");
+    }
+
+    function test_eventPayloads_andIndexedRecs() public {
+        bytes32 r1 = keccak256("r1");
+        bytes32 r2 = keccak256("r2");
+        bytes32 r3 = keccak256("r3");
+        bytes32 r4 = keccak256("r4");
+        bytes32 r5 = keccak256("r5");
+        vm.recordLogs();
+        vm.prank(agent);
+        uint256 id = vault.open(A, 1e6, r1);
+        Vm.Log memory l = _onlyLog(AgentBudgetVault.HoldOpened.selector, 4);
+        assertEq(uint256(l.topics[1]), id);
+        assertEq(address(uint160(uint256(l.topics[2]))), A);
+        assertEq(l.topics[3], r1);
+        assertEq(abi.decode(l.data, (uint256)), 1.03e6);
+
+        vm.prank(agent);
+        vault.topUp(id, 2e6, r2);
+        l = _onlyLog(AgentBudgetVault.ToppedUp.selector, 3);
+        assertEq(uint256(l.topics[1]), id);
+        assertEq(l.topics[2], r2);
+        assertEq(abi.decode(l.data, (uint256)), 2.06e6);
+
+        vm.prank(agent);
+        vault.settle(id, 5e5, r3);
+        l = _onlyLog(AgentBudgetVault.Settled.selector, 4);
+        assertEq(address(uint160(uint256(l.topics[2]))), A);
+        assertEq(l.topics[3], r3);
+        (uint256 amt, uint256 fee) = abi.decode(l.data, (uint256, uint256));
+        assertEq(amt, 5e5);
+        assertEq(fee, 15000);
+
+        vm.prank(agent);
+        vault.close(id, r4);
+        l = _onlyLog(AgentBudgetVault.Closed.selector, 3);
+        assertEq(l.topics[2], r4);
+        assertEq(abi.decode(l.data, (uint256)), 3.09e6 - 5.15e5);
+
+        vm.prank(founder);
+        vault.refund(1e6, r5);
+        l = _onlyLog(AgentBudgetVault.Refunded.selector, 2);
+        assertEq(l.topics[1], r5);
+        assertEq(abi.decode(l.data, (uint256)), 1e6);
+    }
+
+    function test_setterEvents() public {
+        vm.startPrank(founder);
+        usdc.approve(address(vault), 1e6);
+        vm.expectEmit(address(vault));
+        emit AgentBudgetVault.Funded(1e6, BUDGET + 1e6, 999);
+        vault.fund(1e6, 999);
+        vm.expectEmit(address(vault));
+        emit AgentBudgetVault.VendorSet(A, false);
+        vault.setVendor(A, false);
+        vm.expectEmit(address(vault));
+        emit AgentBudgetVault.MaxHoldSet(7);
+        vault.setMaxHold(7);
+        vm.expectEmit(address(vault));
+        emit AgentBudgetVault.PausedSet(true, keccak256("stop"));
+        vault.setPaused(true, keccak256("stop"));
+        vm.stopPrank();
+        assertFalse(vault.vendorAllowed(A));
+        assertEq(vault.maxHold(), 7);
+        assertTrue(vault.paused());
+    }
+
+    function _topUpDenied(uint256 id, uint256 amt, bytes32 code) internal {
+        Snap memory s = _snap();
+        vm.recordLogs();
+        vm.prank(agent);
+        assertFalse(vault.topUp(id, amt, R));
+        _assertDenied(id, code, s);
+    }
+
+    function test_topUpDenied_paused_deadline_budget() public {
+        uint256 id = _open(A, 6e6);
+        _open(A, 6e6);
+        _open(A, 6e6); // 18.54 committed, 1.46 left
+        _topUpDenied(id, 1.417477e6, "OVER_BUDGET_WITH_FEE"); // left + 1
+        _topUpDenied(id, MAX_HOLD + 1, "OVER_MAX_HOLD"); // maxHold is checked before budget
+        vm.prank(founder);
+        vault.setPaused(true, 0);
+        _topUpDenied(id, 1, "PAUSED");
+        vm.prank(founder);
+        vault.setPaused(false, 0);
+        vm.warp(deadline);
+        _topUpDenied(id, 1, "PAST_DEADLINE");
+        vm.warp(deadline - 1);
+        vm.prank(agent);
+        assertTrue(vault.topUp(id, 1.417476e6, R)); // exact fit
+        assertEq(vault.committed(), BUDGET);
+    }
+
+    function test_agentSettle_atDeadline_denied() public {
+        uint256 id = _open(A, 1e6);
+        vm.warp(deadline);
+        Snap memory s = _snap();
+        vm.recordLogs();
+        vm.prank(agent);
+        assertFalse(vault.settle(id, 1, R));
+        _assertDenied(id, "PAST_DEADLINE", s);
+    }
+
+    function test_checkOrder_pins() public {
+        uint256 id = _open(A, 1e6);
+        _openDenied(stranger, MAX_HOLD + 1, "VENDOR_NOT_ALLOWED"); // vendor before maxHold
+
+        vm.prank(founder); // agent settle: live checks come before OVER_HOLD
+        vault.setVendor(A, false);
+        Snap memory s = _snap();
+        vm.recordLogs();
+        vm.prank(agent);
+        vault.settle(id, 5e6, R);
+        _assertDenied(id, "VENDOR_NOT_ALLOWED", s);
+
+        vm.prank(founder);
+        vault.setPaused(true, 0);
+        vm.recordLogs();
+        vm.prank(agent);
+        vault.settle(id, 5e6, R);
+        _assertDenied(id, "PAUSED", s);
+
+        vm.warp(deadline); // paused + past deadline: close reports PAUSED
+        vm.recordLogs();
+        vm.prank(agent);
+        vault.close(id, R);
+        _assertDenied(id, "PAUSED", s);
+
+        vm.prank(founder);
+        vault.setPaused(false, 0);
+        _openDenied(stranger, 1, "PAST_DEADLINE"); // deadline before vendor
+    }
+
+    function test_unknownId_equalToLength_isJobClosed() public {
+        _open(A, 1e6);
+        uint256 n = vault.jobCount();
+        vm.startPrank(agent);
+        vm.expectRevert(AgentBudgetVault.JobClosed.selector);
+        vault.topUp(n, 1, R);
+        vm.expectRevert(AgentBudgetVault.JobClosed.selector);
+        vault.settle(n, 1, R);
+        vm.expectRevert(AgentBudgetVault.JobClosed.selector);
+        vault.close(n, R);
+        vm.stopPrank();
+    }
+
+    function test_recordDecision_passesJobIdThrough() public {
+        vm.expectEmit(address(vault));
+        emit AgentBudgetVault.Denied(0, "QWEN_DENIED", R, false);
+        vm.prank(founder);
+        vault.recordDecision(0, "QWEN_DENIED", R);
+    }
+
+    function test_hugeMaxHold_isDeniedNotPanic() public {
+        uint256 id = _open(A, 1e6);
+        vm.prank(founder);
+        vault.setMaxHold(type(uint256).max);
+        _openDenied(A, type(uint256).max, "OVER_BUDGET_WITH_FEE");
+        _topUpDenied(id, type(uint256).max, "OVER_BUDGET_WITH_FEE");
     }
 
     // ---- C12: fee cases shared with rules.ts (test/fixtures/fee-cases.json) ----

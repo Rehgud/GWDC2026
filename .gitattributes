@@ -1,1 +1,2 @@
 runs/** -text
+*.sh text eol=lf

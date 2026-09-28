@@ -43,12 +43,12 @@ contract AgentBudgetVault {
     event Funded(uint256 amount, uint256 budget, uint64 deadline);
     event VendorSet(address indexed vendor, bool allowed);
     event MaxHoldSet(uint256 maxHold);
-    event PausedSet(bool paused, bytes32 reasonHash);
+    event PausedSet(bool paused, bytes32 indexed reasonHash);
     event HoldOpened(uint256 indexed jobId, address indexed vendor, uint256 gross, bytes32 indexed rec);
     event ToppedUp(uint256 indexed jobId, uint256 gross, bytes32 indexed rec);
     event Settled(uint256 indexed jobId, address indexed vendor, uint256 amount, uint256 fee, bytes32 indexed rec);
-    event Closed(uint256 indexed jobId, uint256 released, bytes32 rec);
-    event Refunded(uint256 amount, bytes32 rec);
+    event Closed(uint256 indexed jobId, uint256 released, bytes32 indexed rec);
+    event Refunded(uint256 amount, bytes32 indexed rec);
     /// enforced = true when a contract rule stopped the call, false when the backend recorded
     /// an off-chain (gate/Qwen) denial via recordDecision.
     event Denied(uint256 indexed jobId, bytes32 indexed code, bytes32 indexed rec, bool enforced);
@@ -57,7 +57,9 @@ contract AgentBudgetVault {
     error JobClosed();
     error OverBudget(uint256 amount, uint256 left);
 
+    /// The agent must be a distinct key: as founder it would bypass STOP, as a payee it could pay itself.
     constructor(IERC20 _usdc, address _agent, address _feeTo, address _inferencePayee) {
+        require(_agent != address(0) && _agent != msg.sender && _agent != _feeTo && _agent != _inferencePayee);
         (usdc, founder, agent, feeTo, inferencePayee) = (_usdc, msg.sender, _agent, _feeTo, _inferencePayee);
     }
 
@@ -176,7 +178,9 @@ contract AgentBudgetVault {
         c = _liveCode(vendor);
         if (c != 0) return c;
         if (amount > maxHold) return OVER_MAX_HOLD;
-        if (gross(vendor, amount) > budget - committed) return OVER_BUDGET_WITH_FEE;
+        uint256 left = budget - committed;
+        // net first, so a huge maxHold can't overflow the fee math
+        if (amount > left || gross(vendor, amount) > left) return OVER_BUDGET_WITH_FEE;
     }
 
     function _deny(uint256 id, bytes32 code, bytes32 rec) internal returns (bool) {
