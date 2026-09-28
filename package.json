@@ -7,9 +7,17 @@
   },
   "scripts": {
     "test": "node --test",
-    "abi": "node scripts/gen-abi.ts",
     "anvil": "anvil --block-time 1",
     "deploy": "node --env-file-if-exists=.env src/deploy.ts",
+    "session": "node --env-file-if-exists=.env src/run.ts",
+    "demo": "node --env-file-if-exists=.env src/run.ts --scenario demo",
+    "dashboard": "node --env-file-if-exists=.env src/server.ts",
+    "audit": "node src/audit.ts",
+    "report": "node src/report.ts",
+    "stolen-key": "node --env-file-if-exists=.env scripts/stolen-key.ts",
+    "smoke:kiln": "node --env-file=.env scripts/smoke-kiln.ts",
+    "eval:f2": "node --env-file=.env scripts/eval-f2.ts",
+    "abi": "node scripts/gen-abi.ts",
     "check-secrets": "sh scripts/check-secrets.sh"
   },
   "dependencies": {

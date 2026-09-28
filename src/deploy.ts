@@ -1,7 +1,8 @@
 // Deploy one vault (= one recording = one bundle) and preflight it.
 // CLI: node --env-file-if-exists=.env src/deploy.ts [--chain anvil|base-sepolia] [--rpc URL] [--budget 20] [--max-hold 6] [--deadline-hours 36] [--label name]
-// Sequence (doc ops checklist 3): MockUSDC -> mint(founder) -> Vault(usdc, agent, feeTo, inference) -> approve(exact) -> fund(budget, deadline)
-//   -> setVendor x4 -> setMaxHold -> ETH to agent. Run `forge test` before this (make deploy).
+// Sequence: MockUSDC -> mint(founder) -> Vault(usdc, agent, feeTo, inference) -> setVendor x4 -> setMaxHold -> ETH to agent
+//   -> approve(exact) -> fund(budget, deadline). fund goes last so a short demo deadline starts when the vault is ready, not
+//   ~11 blocks earlier (doc ops checklist 3 lists fund before setVendor; the order has no on-chain effect). Run `forge test` first.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -42,7 +43,7 @@ export type DeployOpts = {
   founderPk: Hex
   budget: bigint // micro-USDC
   maxHold: bigint // micro-USDC, net
-  deadline: number // unix seconds (fund overwrites it: always explicit)
+  deadline: number | (() => number) // unix seconds (fund overwrites it: always explicit); a function is called right before fund
   label: string
   outDir?: string // deployments/
   keysDir?: string // keys/ (gitignored)
@@ -81,12 +82,13 @@ export async function deploy(o: DeployOpts): Promise<Deployment> {
   writeFileSync(agentKeyPath(vault, keysDir), agentPk, { mode: 0o600 })
   chmodSync(agentKeyPath(vault, keysDir), 0o600)
 
-  await call(usdc, usdcAbi, 'approve', [vault, o.budget])
-  await call(vault, vaultAbi, 'fund', [o.budget, BigInt(o.deadline)])
   for (const v of [PAYEES.vendors.A, PAYEES.vendors.B, PAYEES.vendors.C, PAYEES.inferencePayee]) await call(vault, vaultAbi, 'setVendor', [v, true])
   await call(vault, vaultAbi, 'setMaxHold', [o.maxHold])
   const gas = o.chain === 'anvil' ? parseEther('1') : 3n * (await minEth(client))
   await wait(await w.sendTransaction({ to: agent, value: gas, account: w.account!, chain: CHAINS[o.chain] }), 'agent gas')
+  await call(usdc, usdcAbi, 'approve', [vault, o.budget])
+  const deadline = typeof o.deadline === 'function' ? o.deadline() : o.deadline
+  await call(vault, vaultAbi, 'fund', [o.budget, BigInt(deadline)])
 
   let gitSha = 'unknown'
   try { gitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch {}
@@ -103,7 +105,7 @@ export async function deploy(o: DeployOpts): Promise<Deployment> {
     vendors: PAYEES.vendors,
     budget: o.budget.toString(),
     maxHold: o.maxHold.toString(),
-    deadline: o.deadline,
+    deadline,
     deployBlock: Number(vr.blockNumber),
     setupTxs,
     gitSha,

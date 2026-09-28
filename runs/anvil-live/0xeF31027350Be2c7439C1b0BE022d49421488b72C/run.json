@@ -1,0 +1,41 @@
+{
+  "run_id": "demo-eF310273",
+  "scenario": "demo",
+  "chain": "anvil",
+  "chainId": 31337,
+  "vault": "0xeF31027350Be2c7439C1b0BE022d49421488b72C",
+  "usdc": "0x8F4ec854Dd12F1fe79500a1f53D0cbB30f9b6134",
+  "founder": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "agent": "0x69dC6A14a6EF79F55070fd6f42129BE0203e8c37",
+  "feeTo": "0x980f2F641AcEEb9eA7e3f2497182B5DE38121c8d",
+  "inferencePayee": "0xc849C3595f7CfEE4Bc35B6bE0C013e6111810F4E",
+  "vendors": {
+    "A": "0x689e8312F30c78CDbc0408E64163442dD6306640",
+    "B": "0x96E22b96d1bA2f186d0eF81c2128cA80b25001dF",
+    "C": "0x5291684850D12FB4ED519E389128eba90Da3B78A"
+  },
+  "deployBlock": 1256,
+  "lastBlock": 1381,
+  "rpc": "http://127.0.0.1:18545",
+  "gitSha": "4ac6fc26ee7900b3af0800a7527aef3cefbdc517",
+  "flags": {
+    "LLM_MODE": "kiln",
+    "SCENARIO": "demo",
+    "CLOCK": "3",
+    "DEADLINE_MARGIN_S": "15",
+    "LLM_CALL_CAP": "60"
+  },
+  "setupTxs": [
+    "0x807a90c9bf902212c97364bcab7aa6dda08b2204f8877be63f6101c3869936c5",
+    "0xc0a538ea368ce1f30c778a6a456dc963c7fceb34b0eda7a3904dd3c238d09d5e",
+    "0xdfd81512b81bd9f43de8d6f92559b19b69b8c5277055c36c2387d1d571c3db3d",
+    "0xa7e12a1a8f6f84271f91e0e4707520ee0d556390abd1f3e24279b5801cab564d",
+    "0xf6b790ed8f1824af86579afe51f00aa9406caeb7cb31c91907f674768283e4de",
+    "0x49b221a538b1a2867420e4a4a487869c674795c832e943c55d52c23b0041bd96",
+    "0x68a996f9fca931aba343967b1896cdae6eee93769dd13a216315463682cf1f1b",
+    "0x9923ea8c3490e11004fbb4f06ae3a29b9fd8664c1a7aaac8b087115615fc7ca7",
+    "0xf3ed1b5d49bb5ad03eea01cb0655d830a77a6b5464404bceaf93423508d9030a",
+    "0x984f575be7fb60a6dda1ca17d1f42c28da578126e5a48c1e6f5e49b76885d3ee",
+    "0x98fbc68acb02c185d13935854ce337b116a9c6b7102c1ca90565a4bf7a8e5a61"
+  ]
+}

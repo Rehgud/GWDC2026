@@ -61,6 +61,7 @@ h3 { font-size: 17px; margin: 14px 0 8px; }
 .stages li + li::before { content: "\2192"; margin-right: 6px; color: var(--ink-2); }
 .stages li.done { color: var(--ink-2); }
 .stages li.cur { color: var(--ink); border: 2px solid var(--crit); font-weight: 700; }
+.stages li.skip { text-decoration: line-through; }
 .msg { margin: 0; min-height: 1.45em; font-weight: 600; }
 .msg.bad { color: var(--crit); }
 
@@ -222,6 +223,7 @@ const RESULT = {
   QWEN_NOT_A_JUDGEMENT: ['grey', '— QWEN_NOT_A_JUDGEMENT', '판단 아님'],
   TX_ERROR: ['bad', '! TX_ERROR', 'tx 오류'],
 }
+const CANCELLED = ['grey', '— CANCELLED', '취소됨 (tx/기록 없음)'] // epoch changed before send: no tx, no record
 const SRC_TITLE = { CHAIN: '체인 이벤트/스냅샷', LEDGER: '백엔드 장부·기록', QWEN: 'LLM 출력 (신뢰하지 않음)' }
 
 let S = null          // last StateView
@@ -260,6 +262,7 @@ function money(v) { // micro-USDC decimal string -> "$2.56"; a string that alrea
 const micro = (v) => { const s = String(v ?? '0'); return s.includes('.') ? Number(s) * 1e6 : Number(s) || 0 }
 const short = (x) => (x && x.length > 14 ? x.slice(0, 6) + '…' + x.slice(-4) : x || '—')
 const clock = (ms) => new Date(ms).toTimeString().slice(0, 8)
+const eth = (v) => (/^\d+(\.\d+)?$/.test(String(v)) ? Number(v).toFixed(4) : String(v)) // "0.99977571999843004" -> "0.9998"
 function countdown(sec) {
   if (!(sec > 0)) return '기한 지남'
   const d = Math.floor(sec / 86400), hh = Math.floor(sec % 86400 / 3600), mm = Math.floor(sec % 3600 / 60), ss = Math.floor(sec % 60)
@@ -297,7 +300,7 @@ function renderHeader(s) {
   const k = s.health.kiln
   $('health').textContent = 'Kiln ' + k.mode + ' · ' + k.calls + ' calls · ' + (k.lastLatencyMs == null ? '—' : k.lastLatencyMs + ' ms') +
     ' · errors ' + k.errors + ' · Akash ' + s.health.akash + ' · RPC ' + (s.health.rpcOk ? 'OK' : 'FAIL') +
-    ' · ETH agent ' + s.health.ethAgent + ' / founder ' + s.health.ethFounder
+    ' · ETH agent ' + eth(s.health.ethAgent) + ' / founder ' + eth(s.health.ethFounder)
 }
 
 function renderBanners(s, errs = []) {
@@ -356,7 +359,7 @@ function renderGrant(s) {
   $('vendors').replaceChildren(h('table', null,
     h('thead', null, h('tr', null,
       h('th', { scope: 'col', class: 'w-3' }, '벤더'), h('th', { scope: 'col' }, 'Akash provider'),
-      h('th', { scope: 'col', class: 'w-5' }, '$/GPU-h ', src('LEDGER')), h('th', { scope: 'col', class: 'w-5' }, '가용 ', src('LEDGER')),
+      h('th', { scope: 'col', class: 'w-6' }, '$/GPU‑h ', src('LEDGER')), h('th', { scope: 'col', class: 'w-5' }, '가용 ', src('LEDGER')),
       h('th', { scope: 'col', class: 'w-6' }, '허용 ', src('CHAIN')))),
     h('tbody', null, rows)),
   h('p', { class: 'muted' }, '가격: Akash ' + s.badges.price + ' (세션 동안 고정) · maxHold ', h('span', { class: 'num' }, money(g.maxHold)), ' ', src('CHAIN')))
@@ -389,8 +392,8 @@ function renderJobs(s) {
 }
 
 function topupCard(t, purpose) {
-  const done = t.result != null
-  const r = RESULT[t.result] || ['info', '… 진행 중 (' + t.stage + ')', '']
+  const done = t.stage === 'DONE' || t.result != null // DONE is terminal even with result null (CANCELLED)
+  const r = RESULT[t.result] || (t.code === 'CANCELLED' ? CANCELLED : done ? ['grey', '— DONE', '종료'] : ['info', '… 진행 중 (' + t.stage + ')', ''])
   const gateRan = t.request != null && t.stage !== 'F1'
   const fails = gateRan ? (t.gate || []).filter((c) => !c.pass) : []
   const step = (id, title, source, body) => h('div', { class: 'step' + (!done && t.stage === id ? ' cur' : '') }, h('h4', null, title, ' ', src(source)), body)
@@ -411,7 +414,7 @@ function topupCard(t, purpose) {
     : fails.length ? h('b', null, 'F2 호출 0회 (게이트에서 차단)')
     : h('span', { class: 'muted' }, done ? '—' : t.stage === 'F2' ? 'Qwen 판정 대기…' : '대기')
   const chain = done
-    ? [t.code ? h('div', null, 'code ', h('b', { class: 'mono' }, t.code)) : h('div', null, r[2]),
+    ? [t.code && t.code !== 'CANCELLED' ? h('div', null, 'code ', h('b', { class: 'mono' }, t.code)) : h('div', null, r[2]),
        h('div', null, 'tx ', txLink(t.txHash)), h('div', null, 'rec ', h('span', { class: 'mono', title: t.recHash || '' }, short(t.recHash)), ' ', src('LEDGER'))]
     : h('span', { class: 'muted' }, t.stage === 'CHAIN' ? 'tx 전송·확정 대기…' : '대기')
 
@@ -441,7 +444,7 @@ function renderLedger(s) {
     const [kind, icon] = TX_KIND[l.status] || ['grey', '']
     return h('tr', { class: l.status === 'DENIED' ? 'denied' : null },
       h('td', { class: 'num' }, clock(l.ts)),
-      h('td', { class: 'mono' }, l.fn),
+      h('td', { class: 'mono' }, l.fn, l.signer === 'attacker' ? [' ', pill('bad', '탈취 키')] : null), // stolen agent key, outside the backend
       h('td', null, pill(kind, icon + l.status)),
       h('td', { class: 'mono' }, l.code || '—'),
       h('td', { class: 'num' }, l.job_id == null ? '—' : '#' + l.job_id),
@@ -486,10 +489,16 @@ function renderControls() {
     $('confirm-yes').disabled = !(confirmFor.type === 'STOP' ? canStop : canWind)
   }
   const cur = s ? STAGES.indexOf(s.stop) : -1
+  // A wind-down without a STOP also ends at HALTED: the STOP stages it never went through (no setPaused tx) are struck
+  // through, not ticked. ponytail: reads the 50-line ledger tail; after a STOP only its few wind-down txs follow setPaused.
+  const skipped = !!s && s.stop === 'HALTED' && !(s.ledger || []).some((l) => l.fn === 'setPaused')
   $('stop-stages').replaceChildren(
     h('li', { class: cur < 0 ? 'cur' : 'done', 'aria-current': cur < 0 ? 'step' : null }, (cur < 0 ? '● ' : '✓ ') + 'RUNNING'),
-    ...STAGES.map((st, i) => h('li', { class: i < cur ? 'done' : i === cur ? 'cur' : 'todo', 'aria-current': i === cur ? 'step' : null },
-      (i < cur ? '✓ ' : i === cur ? '● ' : '') + st)))
+    ...STAGES.map((st, i) => {
+      const skip = skipped && i < cur
+      return h('li', { class: skip ? 'skip' : i < cur ? 'done' : i === cur ? 'cur' : 'todo', 'aria-current': i === cur ? 'step' : null, title: skip ? 'STOP 없이 정산·환불로 종료' : null },
+        (skip ? '' : i < cur ? '✓ ' : i === cur ? '● ' : '') + st)
+    }))
 }
 
 function say(text, kind) {
@@ -504,6 +513,8 @@ function ask(a) {
 
 async function act(a) {
   if (!S || lock) return
+  // stateVersion is echoed for the server's shape check only: the session ignores it (STOP: a duplicate -> 409;
+  // WIND_DOWN: guarded by can.windDown), so a version that moved on since the click never blocks the kill switch.
   const body = a.type === 'STOP' ? { type: 'STOP', reason: a.reason, stateVersion: S.version } : { type: 'WIND_DOWN', stateVersion: S.version }
   lock = { version: S.version, accepted: false }
   say('전송 중…')

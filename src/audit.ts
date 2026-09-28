@@ -181,6 +181,19 @@ async function run(dir: string, o: AuditOpts, add: (l: Level, c: string, m: stri
       for (const r of recs) if (r.rec.type === 'DECISION' && (r.rec.body as any).spec_id !== spec.spec_id) add('FAIL', '2', `${r.file}: spec_id ${(r.rec.body as any).spec_id} != ${spec.spec_id}`)
     }
   }
+  // check 2: the price book is the anchored one. keccak(prices/akash.json) == SESSION_START.prices.snapshotHash, and the
+  // vendors the gate read (SESSION_START.prices, check 4) are the ones in that file.
+  if (ss?.rec.type === 'SESSION_START') {
+    const p = (ss.rec.body as any).prices
+    let bytes: Buffer | null = null
+    try { bytes = readFileSync(join(dir, 'prices', 'akash.json')) } catch { add('FAIL', '2', 'prices/akash.json missing') }
+    if (bytes && !eq(hashBytes(bytes), p?.snapshotHash)) add('FAIL', '2', `keccak(prices/akash.json) ${short(hashBytes(bytes))} != SESSION_START.prices.snapshotHash ${short(String(p?.snapshotHash))}`)
+    else if (bytes) {
+      let f: any = null
+      try { f = JSON.parse(bytes.toString('utf8')) } catch {}
+      if (f?.source !== p?.source || JSON.stringify(f?.vendors) !== JSON.stringify(p?.vendors)) add('FAIL', '2', 'prices/akash.json source/vendors != SESSION_START.prices')
+    }
+  }
   let specGate: ReturnType<typeof parseSpecForGate> | null = null
   try { if (specBytes) specGate = parseSpecForGate(specBytes) } catch (e) { add('FAIL', '2', `spec.json: ${(e as Error).message}`) }
 
@@ -224,7 +237,7 @@ async function run(dir: string, o: AuditOpts, add: (l: Level, c: string, m: stri
     let signer: Hex | null = null
     try { signer = await verifySpec(specBytes, sig) } catch (e) { add('FAIL', '2', `spec.sig does not verify: ${(e as Error).message}`) }
     if (signer && !eq(signer, founder)) add('FAIL', '2', `spec signed by ${signer}, vault.founder() is ${founder}`)
-    pass['2'] = `spec ${spec?.spec_id} for this vault/chain, signed by vault.founder() ${founder}`
+    pass['2'] = `spec ${spec?.spec_id} for this vault/chain, signed by vault.founder() ${founder}; prices/akash.json matches the anchored snapshotHash`
   }
 
   // ---------- replay ----------

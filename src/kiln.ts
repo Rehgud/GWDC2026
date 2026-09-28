@@ -1,5 +1,5 @@
-// Kiln (qwen3-32b) chat wrapper: fetch + AbortSignal, D4 retry policy, process-wide semaphore and call cap,
-// one JSONL line per attempt. Callers turn result.error into QWEN_UNAVAILABLE / LLM_CALL_CAP (fail-closed).
+// Kiln (qwen3-32b) chat wrapper: fetch + AbortSignal, D4 retry policy, process-wide semaphore, a per-ctx (per-session)
+// call cap, one JSONL line per attempt. Callers turn result.error into QWEN_UNAVAILABLE / LLM_CALL_CAP (fail-closed).
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { KilnCall } from './record.ts'
@@ -44,6 +44,7 @@ export type LlmCtx = {
   timeoutMs?: number // per attempt, default 10s (D4)
   jitterMs?: number // retry delay override for tests; default 1000-2000 random
   cap?: number // default LLM_CALL_CAP env or 60
+  counter?: { calls: number } // attempts counted against cap; the caller owns one per session (default: created on the ctx)
   apiKey?: string // default KILN_API_KEY
   baseUrl?: string // default KILN_BASE_URL
   warn?: (msg: string) => void
@@ -54,7 +55,7 @@ const SEM = 4
 const FIELDS = ['ts', 'flow', 'req_id', 'job_id', 'attempt', 'http', 'latency_ms', 'gen_id', 'usage', 'cost_known', 'finish_reason', 'llm_mode', 'raw'] as const
 export const JSONL_FIELDS: readonly string[] = FIELDS
 
-/** Process-wide counters. calls = attempts made (kiln and stub), for the cap and /health. */
+/** Process-wide totals. calls = attempts made (kiln and stub) by every ctx; the cap counts ctx.counter instead. */
 export const llmStats = { calls: 0, active: 0, stubN: 0 }
 
 /** LLM_MODE must be set explicitly (S8-5). */
@@ -199,11 +200,13 @@ export async function llm(req: LlmReq, ctx: LlmCtx): Promise<LlmResult> {
   if (!Number.isInteger(cap) || cap <= 0) throw new Error(`LLM_CALL_CAP must be a positive integer (got ${cap})`)
   if (ctx.mode === 'kiln' && !((ctx.apiKey ?? process.env.KILN_API_KEY) && (ctx.baseUrl ?? process.env.KILN_BASE_URL)))
     throw new Error('LLM_MODE=kiln needs KILN_API_KEY and KILN_BASE_URL (run node --env-file=.env)')
+  const used = (ctx.counter ??= { calls: 0 })
   const calls: Call[] = []
   let last: Attempt | null = null
   for (let attempt = 1; attempt <= 2; attempt++) {
-    if (llmStats.calls >= cap) return { calls, content: null, toolArgs: null, toolName: null, finishReason: null, error: 'CAP' }
-    if (++llmStats.calls === Math.ceil(cap * 0.8)) (ctx.warn ?? console.warn)(`kiln: ${llmStats.calls}/${cap} LLM calls used (80% of LLM_CALL_CAP)`)
+    if (used.calls >= cap) return { calls, content: null, toolArgs: null, toolName: null, finishReason: null, error: 'CAP' }
+    llmStats.calls++
+    if (++used.calls === Math.ceil(cap * 0.8)) (ctx.warn ?? console.warn)(`kiln: ${used.calls}/${cap} LLM calls used (80% of LLM_CALL_CAP)`)
     last = ctx.mode === 'stub' ? stubAttempt(req, ctx, attempt) : await httpAttempt(req, ctx, attempt)
     calls.push(last.call)
     writeLine(ctx, { ts: Date.now(), req_id: req.req_id, job_id: req.job_id, ...last.call })

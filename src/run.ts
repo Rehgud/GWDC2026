@@ -1,5 +1,5 @@
 // CLI + factory for the orchestrator. Deploys a fresh vault, runs one scenario to completion (windDown), prints a summary.
-// The dashboard server (src/server.ts, another agent) imports createSession() to get a Session before start().
+// The dashboard server (src/server.ts) imports bootSession() to get a Session before start(), exactly like this CLI.
 // Usage: LLM_MODE=kiln|stub node --env-file-if-exists=.env src/run.ts --scenario <name>
 //        [--chain anvil|base-sepolia] [--rpc URL] [--speed N] [--margin S] [--no-deploy --vault 0x..]
 import { readFileSync } from 'node:fs'
@@ -43,6 +43,40 @@ export function createSession(o: CreateOpts): Session {
   })
 }
 
+export type BootOpts = {
+  scenario: ScenarioDef
+  chain: ChainName
+  rpc: string
+  speed?: number
+  deadlineMarginS?: bigint
+  vault?: Hex // reuse deployments/<chainId>-<vault>.json instead of deploying (--no-deploy)
+  keysDir?: string
+  outDir?: string // deployments/
+  runsDir?: string
+  fetch?: typeof fetch // the Akash warm-up (tests pass a fast-failing one)
+  log?: (s: string) => void
+}
+
+/** What every entry point does before running: warm the Akash cache, deploy a fresh vault (or load --vault), createSession. */
+export async function bootSession(o: BootOpts): Promise<Session> {
+  const log = o.log ?? (() => {})
+  // Warm up the Akash Cloudflare cache (a cold miss can take ~16s) before loadPrices' 5s budget runs inside start().
+  // It runs while the vault deploys; start() comes after both.
+  const warm = (o.fetch ?? fetch)(AKASH_URL, { signal: AbortSignal.timeout(20_000) }).then((r) => r.text()).catch(() => {})
+  // A short (deadline demo) vault's clock starts at fund, deploy's last tx: a cold warm-up must not run after it.
+  if (o.scenario.vault.deadlineHours < 2) await warm
+  let dep: Deployment
+  if (o.vault) {
+    dep = JSON.parse(readFileSync(join(o.outDir ?? 'deployments', `${CHAINS[o.chain].id}-${o.vault}.json`), 'utf8'))
+  } else {
+    log(`deploying a fresh vault for scenario "${o.scenario.name}" on ${o.chain} (${o.rpc}) ...`)
+    dep = await Session.deployFor(o.scenario, { chain: o.chain, rpcUrls: [o.rpc], keysDir: o.keysDir, outDir: o.outDir, log: (s) => log(`  ${s}`) })
+    log(`  vault ${dep.vault}  agent ${dep.agent}  deployBlock ${dep.deployBlock}`)
+  }
+  await warm
+  return createSession({ deployment: dep, chain: o.chain, rpcUrls: [o.rpc], scenario: o.scenario, speed: o.speed, deadlineMarginS: o.deadlineMarginS, keysDir: o.keysDir, runsDir: o.runsDir })
+}
+
 async function main() {
   const { values: a } = parseArgs({
     options: {
@@ -59,20 +93,8 @@ async function main() {
   const speed = a.speed ? Number(a.speed) : sc.suggestedSpeed ?? 1
   const margin = a.margin !== undefined ? BigInt(a.margin) : sc.suggestedMarginS ?? 15n
 
-  // Warm up the Akash Cloudflare cache (a cold miss can take ~16s) before loadPrices' 5s budget runs inside start().
-  await fetch(AKASH_URL, { signal: AbortSignal.timeout(20_000) }).then((r) => r.text()).catch(() => {})
-
-  let dep: Deployment
-  if (a['no-deploy']) {
-    if (!a.vault) throw new Error('--no-deploy needs --vault 0x..')
-    dep = JSON.parse(readFileSync(join('deployments', `${CHAINS[chain].id}-${a.vault}.json`), 'utf8'))
-  } else {
-    console.log(`deploying a fresh vault for scenario "${sc.name}" on ${chain} (${rpc}) ...`)
-    dep = await Session.deployFor(sc, { chain, rpcUrls: [rpc], log: (s) => console.log(`  ${s}`) })
-    console.log(`  vault ${dep.vault}  agent ${dep.agent}  deployBlock ${dep.deployBlock}`)
-  }
-
-  const session = createSession({ deployment: dep, chain, rpcUrls: [rpc], scenario: sc, speed, deadlineMarginS: margin })
+  if (a['no-deploy'] && !a.vault) throw new Error('--no-deploy needs --vault 0x..')
+  const session = await bootSession({ scenario: sc, chain, rpc, speed, deadlineMarginS: margin, vault: a['no-deploy'] ? (a.vault as Hex) : undefined, log: console.log })
   const t0 = Date.now()
   let failed: unknown = null
   try { await session.run() } catch (e) { failed = e } // still print what the bundle holds, then exit 1

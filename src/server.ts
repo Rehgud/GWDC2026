@@ -145,14 +145,14 @@ async function main() {
   if (chain !== 'anvil' && chain !== 'base-sepolia') throw new Error(`--chain must be anvil or base-sepolia (got ${chain})`)
   if (a.speed !== undefined && !(Number(a.speed) > 0)) throw new Error(`--speed must be a positive number (got ${a.speed})`)
   // Loaded at runtime so this file (and its tests) work while the orchestrator is missing or changing.
-  let run: any, scn: any, ses: any, kiln: any
+  let run: any, scn: any, kiln: any
   try {
-    ;[run, scn, ses, kiln] = await Promise.all([import('./run.ts'), import('./scenarios.ts'), import('./session.ts'), import('./kiln.ts')])
+    ;[run, scn, kiln] = await Promise.all([import('./run.ts'), import('./scenarios.ts'), import('./kiln.ts')])
   } catch (e) {
-    throw new Error(`cannot load the orchestrator (src/run.ts, src/scenarios.ts, src/session.ts): ${(e as Error).message}`)
+    throw new Error(`cannot load the orchestrator (src/run.ts, src/scenarios.ts): ${(e as Error).message}`)
   }
-  if (typeof run.createSession !== 'function' || typeof scn.scenario !== 'function' || typeof ses.Session?.deployFor !== 'function')
-    throw new Error('orchestrator API mismatch: need createSession() in src/run.ts, scenario() in src/scenarios.ts, Session.deployFor() in src/session.ts')
+  if (typeof run.bootSession !== 'function' || typeof scn.scenario !== 'function')
+    throw new Error('orchestrator API mismatch: need bootSession() in src/run.ts, scenario() in src/scenarios.ts')
   kiln.llmMode?.() // LLM_MODE unset -> fail here, not after a (testnet) deploy
   const sc = scn.scenario(a.scenario)
   const rpc = a.rpc || process.env.RPC_URL || (chain === 'anvil' ? 'http://127.0.0.1:8545' : 'https://sepolia.base.org')
@@ -168,9 +168,8 @@ async function main() {
     },
   })
   console.log(`dashboard    ${url}`)
-  console.log(`deploying a fresh vault for scenario "${sc.name}" on ${chain} ...`)
-  const deployment = await ses.Session.deployFor(sc, { chain, rpcUrls: [rpc], log: (s: string) => console.log(`  ${s}`) })
-  const s: DashboardSession = run.createSession({ deployment, chain, rpcUrls: [rpc], scenario: sc, speed: a.speed ? Number(a.speed) : undefined })
+  // Same boot as src/run.ts (Akash warm-up + fresh vault + createSession), so a dashboard recording gets LIVE prices too.
+  const s: DashboardSession = await run.bootSession({ scenario: sc, chain, rpc, speed: a.speed ? Number(a.speed) : undefined, log: console.log })
   session = s
   const go = s.run ?? s.start
   try {

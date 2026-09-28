@@ -187,6 +187,12 @@ test('parseAction is strict and returns a fresh object', () => {
   assert.equal(parseAction(JSON.parse('{"type":"STOP","reason":"MANUAL","stateVersion":1,"__proto__":{"x":1}}')), null)
 })
 
+test('the dashboard CLI boots through run.ts bootSession (Akash warm-up + fresh vault + createSession), not a copy of it', () => {
+  const src = readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8')
+  assert.match(src, /await run\.bootSession\(\{ scenario: sc, chain, rpc,/)
+  assert.doesNotMatch(src, /deployFor|createSession\(|AKASH_URL|fetch\(/)
+})
+
 test('index.html: single inline script/style, no innerHTML/eval/external URLs, every $(id) exists', () => {
   assert.equal(HTML.match(/<script/g)?.length, 1)
   assert.equal(HTML.match(/<style/g)?.length, 1)
@@ -352,6 +358,36 @@ test('index.html renders the demo fixture (three zones, terminal states, links, 
   assert.deepEqual(env.posts.at(-1), { type: 'WIND_DOWN', stateVersion: 59 })
   assert.match($('action-msg').textContent, /409 · stale stateVersion/)
   assert.equal($('wind-btn').disabled, false)
+})
+
+test('index.html: a DONE card with result null is terminal (CANCELLED -> 취소됨); stolen-key ledger lines carry a 탈취 키 label', async () => {
+  const s = structuredClone(FIXTURE) as StateView
+  s.topups = [{ ...s.topups[1], req_id: 'demo-5fc8d326-r9', stage: 'DONE', result: null, qwen: null, code: 'CANCELLED', txHash: null, recHash: null }]
+  const env = boot(s)
+  await settle()
+  const { $ } = env
+  const card = $('topups').all((e) => e.tagName === 'ARTICLE')[0]
+  assert.match(card.textContent, /CANCELLED · 취소됨 \(tx\/기록 없음\)/)
+  assert.doesNotMatch(card.textContent, /진행 중|대기/)
+  assert.equal(card.all((e) => e.className === 'step cur').length, 0) // no step shown as still running
+  const led = $('ledger').all((e) => e.tagName === 'TR')
+  assert.match(led[0].textContent, /^\S+topUp 탈취 키✕ DENIEDOVER_MAX_HOLD/)
+  assert.equal(led.filter((r) => /탈취 키/.test(r.textContent)).length, 1) // only the attacker's line
+})
+
+test('index.html: a wind-down without a STOP strikes through the STOP stages it skipped; ETH shows 4 decimals', async () => {
+  const s = structuredClone(FIXTURE) as StateView
+  s.stop = 'HALTED' // plain windDown (no setPaused line): SENDING / PAUSED_ON_CHAIN / HALTING never happened
+  s.health.ethAgent = '0.99977571999843004'
+  const env = boot(s)
+  await settle()
+  const { $ } = env
+  const li = () => $('stop-stages').all((e) => e.tagName === 'LI').map((e) => [e.className, e.textContent])
+  assert.deepEqual(li(), [['done', '✓ RUNNING'], ['skip', 'SENDING'], ['skip', 'PAUSED_ON_CHAIN'], ['skip', 'HALTING'], ['cur', '● HALTED']])
+  assert.match($('health').textContent, /ETH agent 0\.9998 \/ founder 0\.0871/)
+  env.current = { ...s, version: s.version + 1, ledger: [...s.ledger, { ts: 1, fn: 'setPaused', status: 'OK', code: null, txHash: null, recHash: null, job_id: null, signer: 'founder' }] }
+  await tick(env)
+  assert.deepEqual(li().map(([c]) => c), ['done', 'done', 'done', 'done', 'cur'], 'after a real STOP every stage is ticked')
 })
 
 test('index.html shows STUB, STALE, HALTED and snapshot pricing', async () => {

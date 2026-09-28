@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":29,"prev":"0xec0d5368436c0274b8ee3f77c73753b45e05bd5049042bdef2cd7b0e5311fb45","type":"CLOSE","run_id":"demo-eF310273","t":1790627205749,"body":{"job_id":"3","signer":"founder","reason":"windDown","accrued":"1283328","settledNet":"1283328"}}

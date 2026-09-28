@@ -87,8 +87,10 @@ describe('auditor on anvil', { skip: ANVIL ? false : 'anvil binary not found ($H
     writeFileSync(join(dir, 'spec.json'), specBytes)
     writeFileSync(join(dir, 'spec.sig'), specSig)
     // bad: the anchored price snapshot says vendor A has no capacity (a DECISION below claims otherwise)
-    const prices = { source: 'SNAPSHOT:test', snapshotHash: keccak256(Buffer.from('prices')), gpu: 'h100', vendors: Object.fromEntries((['A', 'B', 'C'] as const).map((l) => [l, { provider: `p${l}`, hostUri: `https://${l}`, pricePerHour: '2500000', available: variant === 'bad' && l === 'A' ? 0 : 3 }])) }
-    writeFileSync(join(dir, 'prices', 'akash.json'), serialize(prices))
+    const book = { source: 'SNAPSHOT:test', fetchedAt: '2026-09-28T12:00:00Z', gpu: 'h100', vendors: Object.fromEntries((['A', 'B', 'C'] as const).map((l) => [l, { provider: `p${l}`, hostUri: `https://${l}`, pricePerHour: '2500000', available: variant === 'bad' && l === 'A' ? 0 : 3 }])) }
+    const priceBytes = serialize(book) // as akash.loadPrices: the file bytes whose keccak is snapshotHash
+    writeFileSync(join(dir, 'prices', 'akash.json'), priceBytes)
+    const prices = { source: book.source, snapshotHash: keccak256(priceBytes), gpu: book.gpu, vendors: book.vendors }
     records.append('SESSION_START', {
       vault: dep.vault, chainId: dep.chainId, deployBlock: dep.deployBlock, founder: dep.founder, agent: dep.agent, feeTo: dep.feeTo,
       inferencePayee: dep.inferencePayee, vendors: dep.vendors, spec_raw: specBytes.toString('utf8'), spec_sig: specSig, prices, scenario: variant, flags: { LLM_MODE: mode },
@@ -359,6 +361,18 @@ describe('auditor on anvil', { skip: ANVIL ? false : 'anvil binary not found ($H
     assert.equal(r.exitCode, 1)
     assert.ok(has(r, 'FAIL', '2', /spec_raw != spec.json/), show(r))
     assert.ok(has(r, 'FAIL', '2', /spec signed by 0x[0-9a-fA-F]{40}, vault.founder\(\)/), show(r))
+  })
+
+  test('a tampered or missing price snapshot (prices/akash.json) -> FAIL check 2', async () => {
+    assert.ok(has(goodRes, 'PASS', '2', /prices\/akash\.json matches the anchored snapshotHash/), show(goodRes))
+    const cheaper = await run(variant((d) => { const p = join(d, 'prices', 'akash.json'); writeFileSync(p, readFileSync(p, 'utf8').replace('"pricePerHour":"2500000"', '"pricePerHour":"1500000"')) }))
+    assert.equal(cheaper.exitCode, 1, show(cheaper))
+    assert.ok(has(cheaper, 'FAIL', '2', /keccak\(prices\/akash\.json\) 0x[0-9a-f]{8}\.\. != SESSION_START\.prices\.snapshotHash/), show(cheaper))
+    const gone = await run(variant((d) => unlinkSync(join(d, 'prices', 'akash.json'))))
+    assert.ok(has(gone, 'FAIL', '2', /prices\/akash\.json missing/), show(gone))
+    // the file still matches the hash, but SESSION_START.prices (what check 4 trusts) names other prices
+    const lied = await run(variant((d) => { const f = recFiles(d)[0]; writeFileSync(f, readFileSync(f, 'utf8').replace('"pricePerHour":"2500000"', '"pricePerHour":"1500000"')) }))
+    assert.ok(has(lied, 'FAIL', '2', /source\/vendors != SESSION_START\.prices/), show(lied))
   })
 
   test('G4 a deleted middle record -> FAIL check 1', async () => {

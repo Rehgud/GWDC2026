@@ -22,7 +22,8 @@ import { readChain, verifyChain, type Decision } from '../src/record.ts'
 import { scenario, sharedStub, type ScenarioDef } from '../src/scenarios.ts'
 import { Session } from '../src/session.ts'
 import type { Deployment, StateView, StopStage } from '../src/types.ts'
-import { summarize } from '../src/run.ts'
+import { bootSession, summarize } from '../src/run.ts'
+import { AKASH_URL } from '../src/akash.ts'
 import { stolenKeyAttack } from '../scripts/stolen-key.ts'
 
 const ANVIL = [join(homedir(), '.foundry/bin/anvil'), 'anvil'].find((p) => spawnSync(p, ['--version']).status === 0)
@@ -95,6 +96,7 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     assert.deepEqual(verifyChain(chain), [], `${name}: hash chain intact`)
     assert.equal(chain[0].rec.type, 'SESSION_START', `${name}: seq 0 is SESSION_START`)
     assert.equal(chain.at(-1)!.rec.type, 'SESSION_END', `${name}: last record is SESSION_END (refund anchors the tail)`)
+    assert.equal(chain.filter((r) => r.rec.type === 'SESSION_END').length, 1, `${name}: one SESSION_END, however often windDown ran`)
 
     // every commit line's recHash names an existing record file
     const recs = new Set(chain.map((r) => r.hash))
@@ -106,6 +108,9 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     }
     // anchored tail: the last on-chain rec == the last record's hash
     const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'))
+    const refundMined = events.filter((e) => e.src === 'commit' && e.ev === 'mined' && e.fn === 'refund')
+    assert.equal(refundMined.length, 1, `${name}: exactly one refund tx`)
+    assert.ok(run.lastBlock >= Number(refundMined[0].block), `${name}: run.json lastBlock ${run.lastBlock} >= the refund's block ${refundMined[0].block}`)
     const logs = await getLogsChunked(c, dep.vault, BigInt(dep.deployBlock), BigInt(run.lastBlock))
     const lastOnchainRec = logs.filter((l) => l.args.rec && l.args.rec !== ZERO).at(-1)?.args.rec
     assert.equal(lastOnchainRec, chain.at(-1)!.hash, `${name}: on-chain tail anchored to the last record`)
@@ -115,6 +120,14 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     let kilnLines = 0
     try { kilnLines = readFileSync(join(dir, 'kiln.jsonl'), 'utf8').trim().split('\n').filter(Boolean).length } catch {} // no file = 0 calls
     assert.equal(chain.at(-1)!.rec.body.kiln_calls, kilnLines, `${name}: SESSION_END.kiln_calls == this bundle's kiln.jsonl lines`)
+    // an attempt that threw (llm_error) counts against the cap but writes no kiln.jsonl line
+    const thrown = events.filter((e) => e.src === 'kiln' && e.ev === 'llm_error').length
+    assert.equal(session.llmCtx.counter!.calls, kilnLines + thrown, `${name}: LLM_CALL_CAP counts this session's attempts, not the process's`)
+
+    const st = session.state()
+    assert.equal(st.jobs.find((j) => j.inference)?.state, 'CLOSED', `${name}: the INFERENCE row shows CLOSED`)
+    assert.equal(st.can.windDown, false, `${name}: no wind-down button once the session ended`)
+    assert.deepEqual(await session.action({ type: 'WIND_DOWN', stateVersion: st.version }), { ok: false, status: 400, reason: 'not all jobs stopped/exhausted or a tx is pending' })
 
     // windDown a second time sends 0 txs
     const before = session.ledger.length
@@ -174,7 +187,17 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
 
     // StateView (types.ts): real values, not placeholders
     const end = states.at(-1)!, g = end.grant
-    assert.equal(BigInt(g.paid) + BigInt(g.fees) + BigInt(g.inference_paid) + BigInt(g.open_holds) + BigInt(g.refundable), BigInt(g.budget), 'the budget bar adds up')
+    const bar = (x: StateView['grant']) => BigInt(x.paid) + BigInt(x.fees) + BigInt(x.inference_paid) + BigInt(x.open_holds) + BigInt(x.refundable)
+    assert.equal(bar(g), BigInt(g.budget), 'the budget bar adds up')
+    for (const st of states) assert.equal(bar(st.grant), BigInt(st.grant.budget), `v${st.version}: the budget bar adds up on every poll`)
+    // Regression: a dashboard poll between a Settled receipt and the next chain read (snapshot older than the receipt)
+    // counted the settle as paid AND still held (sum $21.03 of $20). Every part now comes from the one snapshot.
+    const firstSettle = logs.find((l) => l.name === 'Settled')!
+    ;(session as any).lastSnapshot = await snapshot(client, dep.vault, { vendors: [], block: firstSettle.blockNumber - 1n })
+    const old = session.state().grant
+    assert.equal(bar(old), BigInt(old.budget), 'a snapshot older than the Settled receipts still adds up')
+    assert.deepEqual([old.paid, old.fees, old.inference_paid], ['0', '0', '0'], 'nothing paid before the first Settled block')
+    ;(session as any).lastSnapshot = null
     const settled = logs.filter((l) => l.name === 'Settled')
     assert.equal(BigInt(g.fees), settled.reduce((a, l) => a + (l.args.fee as bigint), 0n), 'fees = Σ decoded Settled.fee')
     assert.ok(BigInt(g.fees) > 0n && states.some((st) => st.jobs.some((j) => j.state === 'RUNNING') && BigInt(st.grant.fees) > 0n))
@@ -190,6 +213,13 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     assert.match(end.receipts[0].qwenReason ?? '', /scope creep/, "job 1's receipt carries the Qwen deny reason")
     assert.ok(end.health.kiln.lastLatencyMs !== null && end.health.kiln.errors === 0)
     assert.ok(Number(end.health.ethAgent) > 0 && Number(end.health.ethFounder) > 0, `ETH ${end.health.ethAgent} / ${end.health.ethFounder}`)
+    assert.match(end.health.ethAgent, /^\d+(\.\d+)?$/, 'ETH as a decimal string')
+    // evidence feed: signer per line, the stolen key's two txs as 'attacker' lines (no record), recordDecision with its code
+    const lines = states.flatMap((st) => st.ledger)
+    const attacker = [...new Map(lines.filter((l) => l.signer === 'attacker').map((l) => [l.txHash, l])).values()]
+    assert.deepEqual(attacker.map((l) => [l.fn, l.status, l.code, l.recHash]), [['open', 'DENIED', 'VENDOR_NOT_ALLOWED', null], ['topUp', 'DENIED', 'OVER_MAX_HOLD', null]])
+    for (const code of ['QWEN_DENIED', 'VENDOR_NOT_ALLOWED']) assert.ok(lines.some((l) => l.fn === 'recordDecision' && l.status === 'OK' && l.code === code && l.signer === 'agent'), `recordDecision ${code} line`)
+    assert.ok(lines.some((l) => l.fn === 'setPaused' && l.signer === 'founder'))
     assert.ok(end.topups.every((t) => t.stage === 'DONE' && (t.result !== null || t.code === 'CANCELLED')), 'every top-up card reached a terminal state')
     assert.ok(end.topups.some((t) => t.result === 'APPROVED_ONCHAIN') && end.topups.some((t) => t.result === 'DENIED_RECORDED'))
     const stages = states.map((st) => st.stop).filter((x, i, a) => x !== a[i - 1])
@@ -296,7 +326,13 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
   test('the chain watcher reads the vault once per block, not once per loop step (RPC load at demo speed)', async () => {
     const { session, dep } = await build({ ...scenario('normal'), name: 'per-block' })
     const s = session as any
-    await session.start()
+    assert.equal(session.state().can.windDown, false, 'nothing to wind down before start')
+    slowLlm(session, 200)
+    const started = session.start()
+    while (!s.inference) await sleep(5)
+    assert.equal(s.slots.length, 0)
+    assert.equal(session.state().can.windDown, false, 'INFERENCE is open but no vendor job exists yet')
+    await started
     await s.freshSnapshot() // the head moved past start()'s last read (the open tx): one full read
     let full = 0
     const getBlock = s.client.getBlock.bind(s.client)
@@ -333,6 +369,25 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     const s = (await build('demo', { speed: 2 })).session as any
     s.o = { ...s.o, hardCapMs: undefined } // the CLI / server pass none
     assert.ok(s.hardCapMs >= 300 * 1000 / 2 + 60_000, `demo at speed 2 (150 s of script) is not cut at 150 s: cap ${s.hardCapMs}`)
+  })
+
+  test('bootSession (run.ts CLI and the dashboard CLI): Akash warm-up + a fresh vault + createSession; --vault reuses the deployment', async () => {
+    const base = join(root, 'boot')
+    const o = { scenario: scenario('normal'), chain: 'anvil' as const, rpc: url, keysDir: join(base, 'keys'), outDir: join(base, 'deployments'), runsDir: join(base, 'runs') }
+    const warmed: string[] = []
+    const prev = process.env.LLM_MODE
+    process.env.LLM_MODE = 'stub'
+    try {
+      const session = await bootSession({ ...o, fetch: (async (u: string) => { warmed.push(u); throw new Error('offline') }) as unknown as typeof fetch })
+      assert.deepEqual(warmed, [AKASH_URL])
+      assert.ok(session.dir.startsWith(o.runsDir) && session.records.seq === 0, 'a fresh, unstarted session')
+      assert.equal(await client.getBytecode({ address: session.dep.vault }).then((b) => (b?.length ?? 0) > 2), true, 'the vault was deployed')
+      const again = await bootSession({ ...o, vault: session.dep.vault, fetch: failFetch })
+      assert.deepEqual(again.dep, session.dep)
+    } finally {
+      if (prev === undefined) delete process.env.LLM_MODE
+      else process.env.LLM_MODE = prev
+    }
   })
 
   test('injection: F2 called 0 times for the fooled request; stolen key -> on-chain Denied with no matching record', async () => {
@@ -456,6 +511,7 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     const { chain } = await assertClean('llm-throws', session, dep, dir)
     const decisions = chain.filter((r) => r.rec.type === 'DECISION').map((r) => r.rec.body as unknown as Decision).filter((d) => d.action !== 'inference')
     assert.ok(decisions.length >= 1 && decisions.every((d) => !d.verdict.approve && d.verdict.code === 'QWEN_UNAVAILABLE'))
+    assert.ok(session.state().health.kiln.errors >= decisions.length, 'every failed Kiln call is counted in health')
   })
 
   test('a HALTed Committer: run() fails loudly with the HALT reason instead of a ledger error', async () => {

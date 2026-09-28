@@ -106,10 +106,12 @@ export class Session {
   private kilnCosts: (number | null)[] = []
   private kilnLastMs: number | null = null
   private kilnErrors = 0
-  /** Per job id, from decoded Settled events (CHAIN): the budget bar and receipts split net / fee exactly as paid. */
+  /** Per job id, from decoded Settled events (CHAIN): receipts split net / fee exactly as paid. */
   private settledChain = new Map<string, { net: bigint; fee: bigint }>()
+  private feeLog: { block: bigint; fee: bigint }[] = [] // per decoded Settled: the budget bar counts fees mined <= its snapshot
   private jobTxs = new Map<string, Hex[]>()
   private eth = { agent: '?', founder: '?', at: 0 }
+  private lastTxBlock = 0n // highest mined block of our own txs: run.json lastBlock is never below it
   private deadlineDemoDone = false
   private rpcOk = false
   private realT0 = 0
@@ -129,7 +131,8 @@ export class Session {
       client: this.client, vault: this.dep.vault, records: this.records, eventsPath: this.eventsPath,
       wallets: { agent: makeWallet(o.chain, o.rpcUrls, o.agentPk), founder: makeWallet(o.chain, o.rpcUrls, o.founderPk) },
     })
-    this.llmCtx = { mode: o.llm.mode, stub: o.llm.stub, cap: o.llm.cap, sink: join(this.dir, 'kiln.jsonl') }
+    // One call counter per Session: LLM_CALL_CAP is per session, not per process (the dashboard runs many in one process).
+    this.llmCtx = { mode: o.llm.mode, stub: o.llm.stub, cap: o.llm.cap, counter: { calls: 0 }, sink: join(this.dir, 'kiln.jsonl') }
   }
 
   get runId() { return `${this.dep.label}-${this.dep.vault.slice(2, 10)}` }
@@ -192,12 +195,13 @@ export class Session {
     const client = makePublicClient(o.chain, o.rpcUrls)
     // Wall clock, not the latest block ts: an idle anvil's latest block can be seconds/minutes stale, which would
     // put a short scenario deadline in the past. New blocks are timestamped at wall clock, so this matches the chain.
-    const now = o.now ?? Math.floor(Date.now() / 1000)
+    // Read at fund time (deploy's last tx): the ~11 setup blocks before it must not eat the deadline demo's 12 s.
     const v = scenario.vault
+    const secs = Math.round(v.deadlineHours * 3600)
     const dep = await deploy({
       chain: o.chain, rpcUrls: o.rpcUrls, founderPk, label: scenario.name,
       budget: parseUnits(v.budgetUsd, 6), maxHold: parseUnits(v.maxHoldUsd, 6),
-      deadline: now + Math.round(v.deadlineHours * 3600), keysDir: o.keysDir, outDir: o.outDir, log: o.log,
+      deadline: o.now !== undefined ? o.now + secs : () => Math.floor(Date.now() / 1000) + secs, keysDir: o.keysDir, outDir: o.outDir, log: o.log,
     } satisfies DeployOpts)
     const fails = await preflight(dep, client, { relaxDeadline: v.deadlineHours < 2 })
     if (fails.length) throw new Error(`preflight failed: ${fails.join(', ')}`)
@@ -211,13 +215,14 @@ export class Session {
     // deploy address is deterministic and collides across fresh chains): fail loudly instead of concatenating sessions.
     if (this.records.seq !== 0) throw new Error(`bundle ${this.dir} already has ${this.records.seq} records; deploy a fresh vault or clear the bundle`)
     this.started = true
-    this.prices = (await loadPrices({ fetch: this.o.priceFetch, timeoutMs: this.o.priceTimeoutMs })).book
+    const { book, bytes: priceBytes } = await loadPrices({ fetch: this.o.priceFetch, timeoutMs: this.o.priceTimeoutMs })
+    this.prices = book
     const now = Math.floor(Date.now() / 1000)
     this.spec = this.scenario.spec({ vault: this.dep.vault, chainId: this.dep.chainId, now })
     this.specBytes = makeSpec(this.spec)
     this.specSig = await signSpec(this.specBytes, privateKeyToAccount(this.o.founderPk))
     mkdirSync(join(this.dir, 'prices'), { recursive: true })
-    writeFileSync(join(this.dir, 'prices', 'akash.json'), serialize({ source: this.prices.source, fetchedAt: this.prices.fetchedAt, gpu: this.prices.gpu, vendors: this.prices.vendors }))
+    writeFileSync(join(this.dir, 'prices', 'akash.json'), priceBytes) // keccak == prices.snapshotHash (auditor check 2)
     writeFileSync(join(this.dir, 'spec.json'), this.specBytes)
     writeFileSync(join(this.dir, 'spec.sig'), this.specSig)
     this.writeRunJson(null)
@@ -492,12 +497,14 @@ export class Session {
   // ---- the single tx helper: every tx goes through here ----
   private async send(i: TxIntent): Promise<Outcome> {
     const out = await this.committer.commit(i)
-    this.ledger.push({
+    // recordDecision lines show the code the backend decided (QWEN_DENIED, VENDOR_NOT_ALLOWED, ...), anchored by that tx
+    const decided = i.fn === 'recordDecision' ? fromBytes32(i.args[1] as Hex) : null
+    this.pushLedger({
       ts: Date.now(), fn: i.fn, status: out.status,
-      code: (out as { code?: string }).code ?? ('reason' in out ? String((out as { reason?: string }).reason) : null),
-      txHash: (out as { txHash?: Hex }).txHash ?? null, recHash: (out as { recHash?: Hex }).recHash ?? null, job_id: i.job_id,
+      code: (out as { code?: string }).code ?? ('reason' in out ? String((out as { reason?: string }).reason) : decided),
+      txHash: (out as { txHash?: Hex }).txHash ?? null, recHash: (out as { recHash?: Hex }).recHash ?? null, job_id: i.job_id, signer: i.signer,
     })
-    if (this.ledger.length > 50) this.ledger = this.ledger.slice(-50)
+    if ('block' in out && out.block > this.lastTxBlock) this.lastTxBlock = out.block
     const txHash = (out as { txHash?: Hex }).txHash
     const jid = i.job_id ?? (out.status === 'OK' && out.jobId !== undefined ? out.jobId.toString() : null)
     if (txHash && jid !== null) this.jobTxs.set(jid, [...(this.jobTxs.get(jid) ?? []), txHash])
@@ -505,9 +512,15 @@ export class Session {
       if (e.name !== 'Settled') continue
       const k = String(e.args.jobId), p = this.settledChain.get(k) ?? { net: 0n, fee: 0n }
       this.settledChain.set(k, { net: p.net + (e.args.amount as bigint), fee: p.fee + (e.args.fee as bigint) })
+      this.feeLog.push({ block: out.block, fee: e.args.fee as bigint })
     }
     this.bump()
     return out
+  }
+
+  private pushLedger(line: StateView['ledger'][number]) {
+    this.ledger.push(line)
+    if (this.ledger.length > 50) this.ledger = this.ledger.slice(-50)
   }
 
   // ---- executor loop ----
@@ -719,10 +732,15 @@ export class Session {
         const hash = await attacker.writeContract({ address: this.dep.vault, abi: vaultAbi, functionName: fn, args, account: attacker.account!, chain: CHAINS[this.o.chain] } as any)
         const r = await this.client.waitForTransactionReceipt({ hash })
         const denied = decodeVaultLogs(r, this.dep.vault).find((e) => e.name === 'Denied')
-        this.logEvent('scenario', 'stolen_key', { fn, txHash: hash, status: r.status, code: denied ? fromBytes32(denied.args.code as Hex) : null })
+        const code = denied ? fromBytes32(denied.args.code as Hex) : null
+        this.logEvent('scenario', 'stolen_key', { fn, txHash: hash, status: r.status, code })
+        // Evidence feed: the attacker's tx, no record (its rec names none)
+        this.pushLedger({ ts: Date.now(), fn, status: denied ? 'DENIED' : r.status === 'success' ? 'OK' : 'REVERTED', code, txHash: hash, recHash: null, job_id: fn === 'topUp' ? String(args[0]) : null, signer: 'attacker' })
       } catch (e) {
         this.logEvent('scenario', 'stolen_key', { fn, error: (e as Error).name })
+        this.pushLedger({ ts: Date.now(), fn, status: 'ERROR', code: (e as Error).name, txHash: null, recHash: null, job_id: null, signer: 'attacker' })
       }
+      this.bump()
     }
   }
 
@@ -745,15 +763,17 @@ export class Session {
     return { ok: true }
   }
 
+  /** False before any vendor job exists (nothing to wind down yet) and once the session ended (SESSION_END is sent once). */
   private canWindDown(): boolean {
-    return this.slots.every((s) =>
+    return this.slots.length > 0 && !this.ended && this.slots.every((s) =>
       (s.job.state === 'STOPPED' || s.job.state === 'CLOSED' || (s.job.state === 'HOLD_EXHAUSTED' && !isRearmable(s.job))) &&
       this.committer.pendingFor(s.job.id?.toString() ?? '') === 0)
   }
 
-  // ---- windDown: idempotent session end. Concurrent calls dedupe; a second call after completion re-plans and,
-  // because every job is CLOSED and refund == 0, sends zero txs. ----
+  // ---- windDown: idempotent session end. Concurrent calls dedupe; a call after completion sends zero txs (the plan
+  // would only be another refund(0) + SESSION_END). A windDown that threw did not end the session: it re-plans. ----
   async windDown(): Promise<void> {
+    if (this.ended) return
     if (this.windDownP) return this.windDownP
     this.windDownP = this.doWindDown()
     try { await this.windDownP } finally { this.windDownP = null }
@@ -777,10 +797,14 @@ export class Session {
 
     await this.windJobs(false) // vendor jobs: settle(delta) + close
     for (const slot of this.slots) if (slot.job.state === 'CLOSED' && !slot.f3Done) await this.f3(slot)
-    for (const it of await this.windJobs(true)) await this.execWind(it) // INFERENCE after every F3 (its usage includes them), then the refund
+    for (const it of await this.windJobs(true)) { // INFERENCE after every F3 (its usage includes them), then the refund
+      // The refund anchors SESSION_END: the session only ends once it landed (a later windDown() is then a no-op).
+      if (!(await this.execWind(it))) { if (this.committer.halted) this.throwHalted(); throw new Error('windDown: refund not confirmed; run windDown again') }
+    }
 
+    // Uncached head read AFTER the final refund receipt; never below our own last mined tx (a lagging fallback RPC)
     const head = await this.client.getBlockNumber({ cacheTime: 0 })
-    this.writeRunJson(Number(head))
+    this.writeRunJson(Number(head > this.lastTxBlock ? head : this.lastTxBlock))
     this.ended = true
     this.advanceStop('HALTED')
     try { writeFileSync(join(this.dir, 'report.md'), report(this.dir)) } catch (e) { this.logEvent('windDown', 'report_failed', { err: (e as Error).message }) }
@@ -826,7 +850,11 @@ export class Session {
     }
     if (it.kind === 'close') {
       const out = await this.send({ signer: it.signer, fn: 'close', args: [it.jobId], expect: ['Closed'], req_id: null, job_id: it.jobId.toString(), record: { type: 'CLOSE', body: { job_id: it.jobId.toString(), signer: it.signer, reason: 'windDown', accrued: slot ? dec(slot.job.accrued) : '0', settledNet: slot ? dec(slot.job.settledNet) : '0' } } })
-      if (out.status === 'OK' && slot && slot.job.state !== 'CLOSED') this.applyEvent(slot, { type: 'Closed' })
+      const closed = slot ?? (this.inference?.jobId === it.jobId ? this.inference.slot : undefined)
+      if (out.status === 'OK' && closed && closed.job.state !== 'CLOSED') {
+        if (closed.job.state === 'OPEN') this.applyEvent(closed, { type: 'Stop', reason: 'END' }) // the INFERENCE hold never runs
+        this.applyEvent(closed, { type: 'Closed' })
+      }
       return out.status === 'OK'
     }
     const cm = costToMicro(this.kilnCosts)
@@ -874,14 +902,17 @@ export class Session {
   // ---- StateView (dashboard) ----
   state(): StateView {
     const s = this.lastSnapshot
-    // The budget bar's five parts add up to the budget: vendor net + fees + inference (decoded Settled) + open holds +
-    // refundable (snapshot). committed = Σheld + Σpaid on chain.
-    let paidNet = 0n, fees = 0n, inferencePaid = 0n
-    for (const [id, p] of this.settledChain) {
-      if (id === this.inference?.jobId.toString()) inferencePaid += p.net + p.fee
-      else { paidNet += p.net; fees += p.fee }
+    // The budget bar's five parts come from ONE snapshot, so they always add up to its budget (committed = Σheld + Σpaid
+    // on chain). Only the vendor net/fee split uses decoded Settled fees, those mined at or before the snapshot block: a
+    // receipt newer than the snapshot would otherwise count as paid while the snapshot still holds it (sum > budget).
+    const infId = this.inference ? Number(this.inference.jobId) : -1
+    let vendorPaid = 0n, inferencePaid = 0n, openHolds = 0n
+    for (const [i, j] of (s?.jobs ?? []).entries()) {
+      openHolds += j.held
+      if (i === infId) inferencePaid += j.paid; else vendorPaid += j.paid
     }
-    const openHolds = s ? s.jobs.reduce((a, j) => a + j.held, 0n) : 0n
+    const fees = s ? this.feeLog.reduce((a, f) => (f.block <= s.block ? a + f.fee : a), 0n) : 0n // INFERENCE is fee-exempt
+    const paidNet = vendorPaid - fees
     const budget = s?.budget ?? this.budgetMicro
     const committed = s?.committed ?? 0n
     const specDl = this.spec?.deadline ?? 0

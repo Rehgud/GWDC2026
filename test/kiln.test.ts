@@ -145,24 +145,40 @@ test('network error: NETWORK, no retry', async () => {
 
 test('cap: warns at 80%, at the cap returns CAP with zero fetches and no JSONL line', async () => {
   const warns: string[] = []
-  llmStats.calls = 7
-  await llm(req(), ctx({ cap: 10, warn: (m) => warns.push(m) })) // call #8 = 80%
+  const counter = { calls: 7 }
+  await llm(req(), ctx({ cap: 10, counter, warn: (m) => warns.push(m) })) // call #8 = 80%
   assert.equal(warns.length, 1)
-  llmStats.calls = 10
+  assert.equal(counter.calls, 8)
+  counter.calls = 10
   hits = 0; lines = []
   let fetched = 0
-  const r = await llm(req(), ctx({ cap: 10, fetch: (...a) => { fetched++; return fetch(...a) } }))
+  const r = await llm(req(), ctx({ cap: 10, counter, fetch: (...a) => { fetched++; return fetch(...a) } }))
   assert.equal(r.error, 'CAP')
   assert.equal(parseVerdict(r).approve === false && parseVerdict(r).code, 'LLM_CALL_CAP')
   assert.equal(fetched, 0)
   assert.equal(hits, 0)
   assert.equal(lines.length, 0)
   // a retry that would cross the cap is not sent either
-  llmStats.calls = 9
   plan = [{ status: 500 }, { status: 200 }]
-  const r2 = await llm(req(), ctx({ cap: 10 }))
+  const r2 = await llm(req(), ctx({ cap: 10, counter: { calls: 9 } }))
   assert.equal(r2.error, 'CAP')
   assert.equal(hits, 1)
+})
+
+test('cap is per counter (one per session): a capped session does not starve the next; llmStats keeps the process total', async () => {
+  const a = { calls: 0 }, b = { calls: 0 }
+  const stub = (counter: { calls: number }) => ({ mode: 'stub' as const, sink: () => {}, cap: 2, counter, warn: () => {} })
+  for (let i = 0; i < 3; i++) await llm(req(), stub(a))
+  assert.equal((await llm(req(), stub(a))).error, 'CAP')
+  assert.equal(a.calls, 2)
+  assert.equal((await llm(req(), stub(b))).error, undefined) // a fresh session starts at 0, not at the process total
+  assert.equal(b.calls, 1)
+  assert.equal(llmStats.calls, 3)
+  const owned: LlmCtx = stub(undefined as never)
+  delete owned.counter
+  await llm(req(), owned); await llm(req(), owned)
+  assert.equal((await llm(req(), owned)).error, 'CAP') // no counter given: one is created on (and shared through) the ctx
+  assert.deepEqual(owned.counter, { calls: 2 })
 })
 
 test('semaphore: never more than 4 requests in flight', async () => {

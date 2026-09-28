@@ -218,9 +218,11 @@ describe('chain layer on anvil', { skip: ANVIL ? false : 'anvil binary not found
     const o1 = await close()
     assert.equal(o1.status, 'OK')
     const n = await nonce(dep.agent, 'pending')
+    const seq = records.seq
     const o2 = await close()
-    assert.equal(o2.status, 'ALREADY_CLOSED')
+    assert.deepEqual(o2, { status: 'ALREADY_CLOSED' })
     assert.equal(await nonce(dep.agent, 'pending'), n)
+    assert.equal(records.seq, seq) // simulated before the record: no unanchored CLOSE left behind
     assert.equal(c.halted, false)
   })
 
@@ -277,9 +279,9 @@ describe('chain layer on anvil', { skip: ANVIL ? false : 'anvil binary not found
     assert.equal(await nonce(dep.agent, 'pending'), n)
     const u = committer({ records: new RecordChain(join(dir, 'records-unknown'), 'run-unknown') })
     const o = await u.commit(intent({ fn: 'close', args: [999n], expect: ['Closed'], record: { type: 'CLOSE', body: {} } }))
-    assert.equal(o.status, 'HALT')
-    assert.equal((o as { reason: string }).reason, 'PRESEND_REVERT:JobClosed')
+    assert.deepEqual(o, { status: 'HALT', reason: 'PRESEND_REVERT:JobClosed' })
     assert.equal(await nonce(dep.agent, 'pending'), n)
+    assert.equal(readChain(join(dir, 'records-unknown')).length, 0)
   })
 
   test('stillValid() is asked when the intent reaches the head of the queue, not when it is enqueued', async () => {
@@ -370,13 +372,15 @@ describe('chain layer on anvil', { skip: ANVIL ? false : 'anvil binary not found
     }
   })
 
-  test('unauthorized pre-send revert -> HALT, no tx, committer stays halted', async () => {
+  test('unauthorized pre-send revert -> HALT, no record, no tx, committer stays halted', async () => {
     const s = committer({ agentPk: STRANGER_PK, records: new RecordChain(join(dir, 'records-stranger'), 'run-stranger') })
     const stranger = makeWallet('anvil', [url], STRANGER_PK).account!.address
     const n = await nonce(stranger, 'pending')
-    const o = await s.commit(intent({ fn: 'open', args: [dep.vendors.A, 1_000_000n], expect: ['HoldOpened'], record: { type: 'DECISION', body: {} } }))
-    assert.equal(o.status, 'HALT')
-    assert.equal((o as { reason: string }).reason, 'PRESEND_REVERT:Unauthorized')
+    const o = await s.commit(intent({ fn: 'open', args: [dep.vendors.A, 1_000_000n], expect: ['HoldOpened'], record: { type: 'DECISION', body: {} }, req_id: 'r-stranger' }))
+    assert.deepEqual(o, { status: 'HALT', reason: 'PRESEND_REVERT:Unauthorized' })
+    // simulated before the record is written: nothing unanchored for the auditor to report as UNANCHORED_TAIL
+    assert.equal(readChain(join(dir, 'records-stranger')).length, 0)
+    assert.deepEqual(events().filter((l) => l.req_id === 'r-stranger').map((l) => l.ev), ['halt'])
     assert.equal(s.halted, true)
     assert.deepEqual(await s.commit(decision('x')), { status: 'HALT', reason: 'halted' })
     assert.equal(await nonce(stranger, 'pending'), n)

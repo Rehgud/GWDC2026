@@ -420,7 +420,8 @@
       "code": null,
       "txHash": "0xc07bb36dcc65bcec46a96ee5217a22f1151fb17f02419dff42687462697e348c",
       "recHash": "0x49d174ab00499a78632f87847112f1c2b5a43fb341ba9f695aedb40752d5006a",
-      "job_id": null
+      "job_id": null,
+      "signer": "agent"
     },
     {
       "ts": 1790617002300,
@@ -429,7 +430,8 @@
       "code": null,
       "txHash": "0x7e66576014aa22732245a0f42359f53d28fc0e2c31d327c3a777a3ecfac8d2ae",
       "recHash": "0x60532fa107870a624489701802db3b0c1af0c73bb8b9b2ff7517f3923606688a",
-      "job_id": null
+      "job_id": null,
+      "signer": "agent"
     },
     {
       "ts": 1790617004600,
@@ -438,7 +440,8 @@
       "code": null,
       "txHash": "0x7dd0c32856be20e089542f3483bbee9368ce748e1cfe21f2914a55c51238e90d",
       "recHash": "0x01771de5eb472786380f8f06f1e198177d9a155ae3780f0f14e671f7104e1cd1",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617006900,
@@ -447,7 +450,8 @@
       "code": null,
       "txHash": "0x905eedfccb211b2085b11937fa06229c61391a8d6137323a00ca0804bf72afd0",
       "recHash": "0x04417d7111202dee003790dffe7090155679b0db8b73152e412a8bcad20ba3bd",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617009200,
@@ -456,7 +460,8 @@
       "code": null,
       "txHash": "0x96d9c0a43cb605de4a6d88797eeed71d2af12a405c771f2bec8335781752f8e8",
       "recHash": "0x23dc3ba8d24cd24b823c61c166081f54e3e17528fc2e91db58028ea35f186824",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617011500,
@@ -465,7 +470,8 @@
       "code": "QWEN_DENIED",
       "txHash": "0x25c91c69ec53cc56b0fb4dee5e5f944a216c3016b6041dfb5356db49fa36d48c",
       "recHash": "0x05bf4720e712212a9e8506c58cbd8105f78cc0c54fe9250582c7d93f720e6643",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617013800,
@@ -474,7 +480,8 @@
       "code": null,
       "txHash": "0xeb138170110246b13acdc0393b6d59d4e0a02eefe2103da5f83d6fb6b0c5ccd8",
       "recHash": "0xf0172e59494698badd29828cce295a39a9223a51a66457f264397774f8d5a352",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617016100,
@@ -483,7 +490,8 @@
       "code": null,
       "txHash": "0xe21b261f3c704afcc53b2a6840561a960ac0a29831f862b6b6e1cb4797e6ce05",
       "recHash": "0x8a5bb3f866fa0ee14c450f4b75474f8fe3d36896acc09c0308f7c8b71633505a",
-      "job_id": "1"
+      "job_id": "1",
+      "signer": "agent"
     },
     {
       "ts": 1790617018400,
@@ -492,7 +500,8 @@
       "code": null,
       "txHash": "0x27886f653cf9c07df5191ed520af47a8f67fe45e994aa33e2e69c205d11ee5e0",
       "recHash": "0xf1b3671f534d5fc509dd9a50dabe6a411f480dc58ff9b1cde6c191ec65c69829",
-      "job_id": null
+      "job_id": null,
+      "signer": "agent"
     },
     {
       "ts": 1790617020700,
@@ -501,7 +510,8 @@
       "code": null,
       "txHash": "0xdb8b7fc7a68aa32da6b31ef8abe456bbb499e477b394e157039672214336a64b",
       "recHash": "0xc22b5b423fb896235fdd005418cec926d98417a7fdc00a96f7f2b8d932a114c8",
-      "job_id": "2"
+      "job_id": "2",
+      "signer": "agent"
     },
     {
       "ts": 1790617023000,
@@ -510,7 +520,8 @@
       "code": "VENDOR_NOT_ALLOWED",
       "txHash": "0x99b12a457184d205a120632dc274fd71350174c0f9e56235435fa4d04c8dc9d2",
       "recHash": "0x0ba8467d173c112ffbbb0a7d0362681c4a85e33ecbb1f9adae19264b5001a850",
-      "job_id": "2"
+      "job_id": "2",
+      "signer": "agent"
     },
     {
       "ts": 1790617025300,
@@ -518,8 +529,9 @@
       "status": "DENIED",
       "code": "OVER_MAX_HOLD",
       "txHash": "0x5c15341f21b93c060cdcc6093b623b46f10fb387d00daa717cd6148423c3db8b",
-      "recHash": "0x97154a62cd5641a577e092d2eee7e39fcb3333dc595371a4303417dae0c2c006",
-      "job_id": "0"
+      "recHash": null,
+      "job_id": "0",
+      "signer": "attacker"
     }
   ],
   "receipts": [

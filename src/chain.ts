@@ -127,6 +127,21 @@ export class Committer {
         this.#log(i, 'cancelled', {})
         return { status: 'CANCELLED', reason: 'stale' }
       }
+      const account = this.#o.wallets[i.signer].account!
+      // Simulate BEFORE the record exists, so a pre-send revert leaves no unanchored record (auditor: UNANCHORED_TAIL).
+      // rec is plain data to the contract: ZERO_HASH stands in for the hash the record is about to get.
+      try {
+        await client.simulateContract({ address: vault, abi: vaultAbi, functionName: i.fn, args: i.record ? [...i.args, ZERO_HASH] : [...i.args], account } as any)
+      } catch (e) {
+        const name = revertName(e)
+        if (name === 'JobClosed' && (await this.#isClosed(i.args[0]))) {
+          this.#log(i, 'already_closed', {})
+          return { status: 'ALREADY_CLOSED' }
+        }
+        return this.#halt(i, `PRESEND_REVERT:${name}`, e, {})
+      }
+
+      // The record is still on disk before anything is signed or broadcast.
       if (i.record) {
         try {
           recHash = this.#o.records.append(i.record.type, i.record.body).hash
@@ -135,19 +150,7 @@ export class Committer {
         }
       }
       const args = recHash ? [...i.args, recHash] : [...i.args]
-      const account = this.#o.wallets[i.signer].account!
       this.#log(i, 'intent', { signer: i.signer, from: account.address, recHash, args })
-
-      try {
-        await client.simulateContract({ address: vault, abi: vaultAbi, functionName: i.fn, args, account } as any)
-      } catch (e) {
-        const name = revertName(e)
-        if (name === 'JobClosed' && (await this.#isClosed(args[0]))) {
-          this.#log(i, 'already_closed', { recHash })
-          return { status: 'ALREADY_CLOSED', recHash: recHash ?? ZERO_HASH }
-        }
-        return this.#halt(i, `PRESEND_REVERT:${name}`, e, { recHash })
-      }
 
       // Sign locally so the hash is on disk BEFORE anything is broadcast: a lost RPC answer is then re-queried, not re-sent.
       const w = this.#o.wallets[i.signer]

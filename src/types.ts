@@ -56,9 +56,9 @@ export type PriceBook = {
 export type Outcome =
   | { status: 'OK'; txHash: Hex; recHash: Hex; block: bigint; jobId?: bigint; events: DecodedEvent[] }
   | { status: 'DENIED'; code: string; txHash: Hex; recHash: Hex; block: bigint; events: DecodedEvent[] }
-  | { status: 'ALREADY_CLOSED'; recHash: Hex }
+  | { status: 'ALREADY_CLOSED' } // simulate said JobClosed and the job is closed on chain: no record, no tx
   | { status: 'CANCELLED'; reason: string } // epoch changed before send; no record, no tx
-  | { status: 'HALT'; reason: string; txHash?: Hex; recHash?: Hex } // REVERTED, UNEXPECTED, UNCONFIRMED, record write failure
+  | { status: 'HALT'; reason: string; txHash?: Hex; recHash?: Hex } // REVERTED, UNEXPECTED, UNCONFIRMED, record write failure; PRESEND_REVERT writes no record
 
 export type DecodedEvent = { name: string; args: Record<string, unknown>; logIndex: number }
 
@@ -96,7 +96,7 @@ export type Source = 'CHAIN' | 'LEDGER' | 'QWEN'
 export type StopStage = 'RUNNING' | 'SENDING' | 'PAUSED_ON_CHAIN' | 'HALTING' | 'HALTED'
 
 export type StateView = {
-  version: number // bumps on every change; POST /action must echo it (stale -> 409)
+  version: number // bumps on every change (every loop step too). POST /action echoes it, but see ActionRequest: no action rejects a stale one
   run_id: string
   scenario: string
   vault: Hex
@@ -126,7 +126,8 @@ export type StateView = {
     code: string | null; txHash: Hex | null; recHash: Hex | null
   }[]
   stop: StopStage
-  ledger: { ts: number; fn: string; status: string; code: string | null; txHash: Hex | null; recHash: Hex | null; job_id: string | null }[]
+  // recordDecision lines carry the decided code; signer 'attacker' = a stolen-key tx outside the backend (no record, recHash null)
+  ledger: { ts: number; fn: string; status: string; code: string | null; txHash: Hex | null; recHash: Hex | null; job_id: string | null; signer?: 'agent' | 'founder' | 'attacker' }[]
   receipts: {
     job_id: string; vendorLabel: string; provider: string; priceSource: string; simHours: string
     amount: string; fee: string; gross: string; txHashes: Hex[]; qwenReason: string | null; f3: string | null
@@ -135,9 +136,12 @@ export type StateView = {
     rpcOk: boolean; kiln: { mode: 'kiln' | 'stub'; calls: number; lastLatencyMs: number | null; errors: number }
     akash: string; pendingTx: number; halted: string | null; ethAgent: string; ethFounder: string
   }
-  can: { stop: boolean; windDown: boolean } // server-side button guards
+  can: { stop: boolean; windDown: boolean } // server-side button guards (windDown: a vendor job exists, all stopped/exhausted, none pending, not ended)
 }
 
+/** stateVersion is required by the server's shape check but the session never compares it (the version bumps every loop
+ *  step, so any echoed value is stale by the click). STOP: accepted once while RUNNING; a duplicate STOP, or one once
+ *  windDown began, -> 409. WIND_DOWN: guarded by can.windDown (400 otherwise) and idempotent (a second one sends 0 txs). */
 export type ActionRequest =
   | { type: 'STOP'; reason: 'SCOPE_DRIFT' | 'BUDGET_CONCERN' | 'MANUAL'; stateVersion: number }
   | { type: 'WIND_DOWN'; stateVersion: number }

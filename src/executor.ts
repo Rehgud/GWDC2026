@@ -215,8 +215,9 @@ export type Intent =
 /**
  * Session end for [종료], [STOP] and [기한]. Plan on a fresh snapshot after the commit queue drained.
  * Per open vendor job: settle(usage up to the executor stop - decoded Settled sum) if > 0, then close; then INFERENCE
- * settle(usage - paid) + close; then refund(budget - committed after those). Jobs closed on chain are skipped, so a
- * second run after the first one landed plans nothing.
+ * settle(usage - paid) + close; then refund(budget - committed after those), ALWAYS, even refund(0): it anchors the
+ * SESSION_END record (the contract accepts 0). Jobs closed on chain are skipped, so a second run after the first one
+ * landed plans only refund(0); the session sends it once (Session.windDown is a no-op after the session ended).
  */
 export function planWindDown(i: {
   jobs: Job[] // vendor jobs as the executor holds them
@@ -252,7 +253,6 @@ export function planWindDown(i: {
   }
   // INFERENCE is fee-exempt, so chain paid == net settled.
   if (i.inference) wind(i.inference.jobId, i.inference.usageNet - (s.jobs[Number(i.inference.jobId)]?.paid ?? 0n))
-  const refund = s.budget - committed
-  if (refund > 0n) out.push({ kind: 'refund', amount: refund, signer: 'founder' })
+  out.push({ kind: 'refund', amount: s.budget - committed, signer: 'founder' })
   return out
 }

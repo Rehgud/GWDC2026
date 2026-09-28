@@ -331,8 +331,9 @@ test('planWindDown: STOP path pays the vendor exactly the ledger usage; a second
   assert.equal(v.c.received.get(INF), 8_400n)
   assert.equal(v.c.budget, v.c.committed) // everything not spent went back to the founder
   assert.equal(jobs[0].state, 'CLOSED')
-  // second run: fresh snapshot, even with the executor's stale (pre-close) job objects
-  assert.deepEqual(planWindDown({ jobs: [j], inference: { jobId: inf.id, usageNet: 8_400n }, snapshot: v.at(45_300, { paused: true }) }), [])
+  // second run: fresh snapshot, even with the executor's stale (pre-close) job objects. budget == committed now, and the
+  // plan still ends in refund(0) so SESSION_END is always written and anchored (the session sends it only once)
+  assert.deepEqual(planWindDown({ jobs: [j], inference: { jobId: inf.id, usageNet: 8_400n }, snapshot: v.at(45_300, { paused: true }) }), [{ kind: 'refund', amount: 0n, signer: 'founder' }])
 })
 
 test('planWindDown: a re-run after only the settle landed never pays the vendor twice', () => {
