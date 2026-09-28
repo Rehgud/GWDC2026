@@ -58,7 +58,20 @@ async function main(): Promise<void> {
     let audit = 'n/a';
     try {
       const { auditBundle } = await import('../auditor/audit.ts');
-      const r = await auditBundle({ dir, rpcUrl: process.env.RPC_URL!, expectedVault: dep.vault });
+      let chainData: unknown = null;
+      const r = await auditBundle({ dir, rpcUrl: process.env.RPC_URL!, expectedVault: dep.vault, chainOut: (c) => (chainData = c) });
+      if (process.argv.includes('--golden') && r.verdict === 'PASS') {
+        // freeze bundle + the chain data it was judged against (audit() is pure over these)
+        const { cpSync, mkdirSync, rmSync: rm, writeFileSync } = await import('node:fs');
+        const out = `test/fixtures/golden/${name}`;
+        rm(out, { recursive: true, force: true });
+        mkdirSync(`${out}/bundle`, { recursive: true });
+        for (const f of ['run.json', 'spec.json', 'spec.sig', 'ledger.jsonl']) cpSync(`${dir}/${f}`, `${out}/bundle/${f}`);
+        cpSync(`${dir}/records`, `${out}/bundle/records`, { recursive: true });
+        cpSync(`${dir}/prices`, `${out}/bundle/prices`, { recursive: true });
+        writeFileSync(`${out}/chain.json`, JSON.stringify(chainData));
+        console.log(`e2e: golden fixture -> ${out}`);
+      }
       audit = `${r.verdict}${r.warnings.length ? ` (${r.warnings.length} WARN)` : ''}`;
       if (r.verdict !== 'PASS') for (const f of r.failures.slice(0, 8)) console.log(`   FAIL ${f.check} ${f.code}${f.seq !== undefined ? ` #${f.seq}` : ''}: ${f.detail}`);
     } catch (e) {

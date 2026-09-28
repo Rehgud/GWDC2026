@@ -93,6 +93,8 @@ export type Scenario = {
   stub: StubResponder;
   /** windDown tries the agent first so the chain shows Denied(PAUSED / PAST_DEADLINE) */
   denyDemo?: boolean;
+  /** migration: founder disables the old vendor BEFORE its final settle (D3: agent settle Denied) */
+  migrationDisableFirst?: boolean;
 };
 
 export type F1Summary = { vendorLabel: string; vendor: Hex | null; gpu: string; amount: string; reason: string };
@@ -611,19 +613,20 @@ export class Session {
     this.nextCkptIdx = a.idx + 1;
     this.taskLosses.push(a.loss);
     this.progressLog.push(`[ckpt ${a.idx}] job ${t.jobId} vendor ${t.label} sim=${(Number(a.simSeconds) / 60).toFixed(0)}min loss=${a.loss}`);
-    await this.settleJob(t, 'agent', 'checkpoint', this.checkpointOf(a, t));
     // scenario interventions happen at checkpoints (recorded as overrides on the next request)
     await this.d.scenario.onCheckpoint?.(a.idx, this.api());
     if (this.endReason) return;
+    const cap = this.vendors.find((v) => v.label === t.label);
+    if (this.migrationRequested || (cap && (cap.capOverride ?? cap.capacity) <= 0)) {
+      // migration: this checkpoint's usage is settled inside the migration (settle(A) -> close(A))
+      this.migrationRequested = false;
+      await this.migrate(t, this.checkpointOf(a, t));
+      return;
+    }
+    await this.settleJob(t, 'agent', 'checkpoint', this.checkpointOf(a, t));
     if (t.exec.state.phase === 'RUNNING' && t.exec.state.latch === 'denied') {
       const { canRearm } = await import('./executor.ts');
       if (canRearm(t.exec.state)) t.exec.apply({ type: 'REARM' });
-    }
-    const cap = this.vendors.find((v) => v.label === t.label);
-    if (this.migrationRequested || (cap && (cap.capOverride ?? cap.capacity) <= 0)) {
-      this.migrationRequested = false;
-      await this.migrate(t);
-      return;
     }
     const done = a.idx + 1 >= this.d.scenario.maxCheckpoints || (typeof a.loss === 'number' && this.d.scenario.targetLoss !== undefined && a.loss < this.d.scenario.targetLoss);
     if (done && typeof a.loss === 'number') {
@@ -671,14 +674,17 @@ export class Session {
   }
 
   /** checkpoint -> settle -> close, agent first and founder if the chain Denies the agent */
-  private async finishJob(t: TaskJob, prefer: 'agent' | 'founder', reason: string): Promise<void> {
+  private async finishJob(t: TaskJob, prefer: 'agent' | 'founder', reason: string, atCheckpoint: Checkpoint | null = null): Promise<void> {
     if (t.closed) return;
     const ph = t.exec.state.phase;
     if (ph !== 'STOPPED' && ph !== 'CLOSED') t.exec.apply({ type: 'STOP', reason: 'MANUAL' });
-    const ck = t.exec.forceCheckpoint();
-    this.taskLosses.push(ck.loss);
-    this.nextCkptIdx = ck.idx + 1;
-    const ckpt = this.checkpointOf(ck, t);
+    let ckpt = atCheckpoint;
+    if (!ckpt) {
+      const ck = t.exec.forceCheckpoint();
+      this.taskLosses.push(ck.loss);
+      this.nextCkptIdx = ck.idx + 1;
+      ckpt = this.checkpointOf(ck, t);
+    }
     let by = prefer;
     if (!(await this.settleJob(t, by, 'halt', ckpt)) && by === 'agent') {
       by = 'founder';
@@ -725,10 +731,19 @@ export class Session {
   }
 
   // -------------------------------------------------------------- migration
-  private async migrate(t: TaskJob): Promise<void> {
+  private async migrate(t: TaskJob, ckpt: Checkpoint): Promise<void> {
     this.epoch++;
-    await this.finishJob(t, 'agent', 'migration: vendor capacity 0');
-    await this.commit({ ...this.header('ADMIN', null, { fn: 'setVendor', from: 'founder', args: [t.vendor, false] }), body: { reason: `migration: disable vendor ${t.label}`, overrides: this.overrides.splice(0) } });
+    const disable = () =>
+      this.commit({ ...this.header('ADMIN', null, { fn: 'setVendor', from: 'founder', args: [t.vendor, false] }), body: { reason: `migration: disable vendor ${t.label}`, overrides: this.overrides.splice(0) } });
+    if (this.d.scenario.migrationDisableFirst) {
+      // founder disables first: the agent's final settle is Denied(VENDOR_NOT_ALLOWED) by the D3
+      // guard, the founder settles instead, and the agent can still close (close has no vendor check)
+      await disable();
+      await this.finishJob(t, 'agent', 'migration: vendor capacity 0 (disabled first)', ckpt);
+    } else {
+      await this.finishJob(t, 'agent', 'migration: vendor capacity 0', ckpt);
+      await disable();
+    }
     this.current = null;
     if (!(await this.openVendorJob('migration', [t.label]))) void this.windDown('MIGRATION_OPEN_FAILED');
   }

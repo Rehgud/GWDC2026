@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "run_id": "injection-2026-09-28T18-24-16-856Z",
+  "chain_id": 31337,
+  "vault": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+  "deploy_block": "31",
+  "git_sha": "afce6a238677bd1ee50efa1f5286518057cbc3c8-dirty",
+  "scenario": "injection",
+  "flags": {
+    "LLM_MODE": "stub",
+    "KILN_MODEL": "qwen3-32b",
+    "CLOCK_MULT": 600,
+    "TOPUP_TRIGGER": 0.4,
+    "DEADLINE_MARGIN_S": 15,
+    "LLM_CALL_CAP": 60,
+    "PRICE_SOURCE": "SNAPSHOT:forced"
+  },
+  "roles": {
+    "founder": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "agent": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+    "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+    "usdc": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e"
+  },
+  "rpc_hosts": [
+    "127.0.0.1:63681"
+  ],
+  "last_block": "44",
+  "end_reason": "TOPUP_DENIED",
+  "ended_at": "2026-09-28T18:24:29.751Z"
+}

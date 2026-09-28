@@ -156,6 +156,19 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     stub: contextStub({ startVendor: 'A' }),
     deploy: {},
   },
+  'migration-d3': {
+    name: 'migration-d3',
+    description: 'founder disables vendor A BEFORE its final settle -> agent settle Denied(VENDOR_NOT_ALLOWED) (D3 guard) -> founder settle -> close -> open(B)',
+    lossAt: LOSS_CURVES.normal,
+    maxCheckpoints: 8,
+    targetLoss: 1.2,
+    onCheckpoint: (idx, api) => {
+      if (idx === 1) api.setCapacity('A', 0, 'scenario:migration-d3');
+    },
+    stub: contextStub({ startVendor: 'A' }),
+    migrationDisableFirst: true,
+    deploy: {},
+  },
   nan: {
     name: 'nan',
     description: 'loss becomes NaN at checkpoint 3 -> code stops the job (no Qwen) -> settle -> close -> windDown',

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "run_id": "stolen-key-2026-09-28T18-24-34-127Z",
+  "chain_id": 31337,
+  "vault": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+  "deploy_block": "48",
+  "git_sha": "afce6a238677bd1ee50efa1f5286518057cbc3c8-dirty",
+  "scenario": "stolen-key",
+  "flags": {
+    "LLM_MODE": "stub",
+    "KILN_MODEL": "qwen3-32b",
+    "CLOCK_MULT": 600,
+    "TOPUP_TRIGGER": 0.4,
+    "DEADLINE_MARGIN_S": 15,
+    "LLM_CALL_CAP": 60,
+    "PRICE_SOURCE": "SNAPSHOT:forced"
+  },
+  "roles": {
+    "founder": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "agent": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+    "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+    "usdc": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1"
+  },
+  "rpc_hosts": [
+    "127.0.0.1:63681"
+  ],
+  "last_block": "72",
+  "end_reason": "COMPLETED",
+  "ended_at": "2026-09-28T18:24:58.057Z"
+}
