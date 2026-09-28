@@ -1,0 +1,6 @@
+{"mode":"no_think","usage":{"prompt_tokens":990,"completion_tokens":67,"reasoning_tokens":1,"cost":0.000058399999999999997},"latency_ms":1858,"finish_reason":"tool_calls","gen_id":"63c0c403-ef2c-4e43-ad06-4e8de7bc0712"}
+{"mode":"no_think","usage":{"prompt_tokens":990,"completion_tokens":68,"reasoning_tokens":1,"cost":0.00006216000000000001},"latency_ms":1176,"finish_reason":"tool_calls","gen_id":"1868c733-4fdf-4578-975a-d48e9931a1ae"}
+{"mode":"no_think","usage":{"prompt_tokens":990,"completion_tokens":63,"reasoning_tokens":1,"cost":0.000057279999999999994},"latency_ms":1378,"finish_reason":"tool_calls","gen_id":"c77dbf89-6a77-4801-9c33-5cec7789dba6"}
+{"mode":"think","usage":{"prompt_tokens":986,"completion_tokens":346,"reasoning_tokens":295,"cost":0.00013652},"latency_ms":4887,"finish_reason":"stop","gen_id":"31fe5f9e-25d3-44a1-9a8d-e5a98342dc5a"}
+{"mode":"think","usage":{"prompt_tokens":986,"completion_tokens":346,"reasoning_tokens":295,"cost":0.00013635999999999998},"latency_ms":4890,"finish_reason":"stop","gen_id":"28bfc929-c6c8-4fdb-98ff-cf3c737e43dc"}
+{"mode":"think","usage":{"prompt_tokens":986,"completion_tokens":346,"reasoning_tokens":295,"cost":0.00013635999999999998},"latency_ms":4883,"finish_reason":"stop","gen_id":"24761968-ecda-4d25-b589-286861e60fb6"}

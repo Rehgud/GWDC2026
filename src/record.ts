@@ -26,6 +26,8 @@ export type KilnCall = {
   gen_id: string | null // X-Neocloud-Generation-Id; "stub-..." in LLM_MODE=stub
   usage: { prompt_tokens: number; completion_tokens: number; reasoning_tokens: number; cost: number | null } | null
   raw: string | null // message content / tool call arguments exactly as received
+  finish_reason: string | null // the auditor needs it to recompute a verdict: parseVerdictRaw(raw, finish_reason)
+  cost_known: boolean
   llm_mode: 'kiln' | 'stub'
 }
 

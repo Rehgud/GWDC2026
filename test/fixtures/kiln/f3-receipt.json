@@ -1,0 +1,43 @@
+{
+  "flow": "F3",
+  "gen_id": "1fb5eb5c-9505-4fc6-a85f-cff8f1a91463",
+  "expect": "text",
+  "body": {
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "\n\nThis job rented a single H100 GPU for 2 hours from vendor B, costing $5.12 net plus a $0.1536 vault fee, for a total of $5.27. The job ended because the CFO denied a scope-creep top-up, and the allocated hold time expired, leading to settlement and closure.",
+          "reasoning": "\n\n",
+          "tool_calls": []
+        },
+        "logprobs": null,
+        "finish_reason": "stop",
+        "token_ids": null
+      }
+    ],
+    "created": 1790612749,
+    "id": "chat-14c5e25b7cd049479d14559866a65a32",
+    "model": "qwen3-32b",
+    "object": "chat.completion",
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "usage": {
+      "completion_tokens": 80,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1,
+        "rejected_prediction_tokens": 0
+      },
+      "cost": 0.000029559999999999998,
+      "prompt_tokens": 178,
+      "prompt_tokens_details": {
+        "cached_tokens": 177,
+        "audio_tokens": 0
+      },
+      "total_tokens": 258
+    }
+  }
+}

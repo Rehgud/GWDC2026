@@ -1,0 +1,6 @@
+{"mode":"think","usage":{"prompt_tokens":600,"completion_tokens":400,"reasoning_tokens":330,"cost":0.00016},"latency_ms":6000}
+{"mode":"think","usage":{"prompt_tokens":600,"completion_tokens":360,"reasoning_tokens":300,"cost":0.0001488},"latency_ms":5500}
+{"mode":"think","usage":{"prompt_tokens":600,"completion_tokens":440,"reasoning_tokens":360,"cost":0.0001712},"latency_ms":6500}
+{"mode":"no_think","usage":{"prompt_tokens":610,"completion_tokens":50,"reasoning_tokens":1,"cost":0.0000628},"latency_ms":1500}
+{"mode":"no_think","usage":{"prompt_tokens":610,"completion_tokens":60,"reasoning_tokens":1,"cost":0.0000656},"latency_ms":1700}
+{"mode":"no_think","usage":{"prompt_tokens":610,"completion_tokens":40,"reasoning_tokens":1,"cost":0.00006},"latency_ms":1300}

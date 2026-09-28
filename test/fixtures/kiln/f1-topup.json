@@ -1,0 +1,54 @@
+{
+  "flow": "F1",
+  "gen_id": "2bae71e7-d160-46c0-bb38-cc7099500fab",
+  "expect": {
+    "vendorLabel": "B"
+  },
+  "body": {
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "\n\n",
+          "reasoning": "\n\n",
+          "tool_calls": [
+            {
+              "id": "call-b096fa9da3694de3bc2e9e9b6162f947",
+              "type": "function",
+              "function": {
+                "name": "request_gpu_hold",
+                "arguments": "{\"vendor_label\": \"B\", \"gpu\": \"h100\", \"amount_usd\": \"2.56\", \"rationale\": \"The model's eval loss is approaching the target of 1.80, and the current hold is running low. Need to continue training.\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "token_ids": null
+      }
+    ],
+    "created": 1790612738,
+    "id": "chat-7fce09016e5c459787a7fda8b8e80620",
+    "model": "qwen3-32b",
+    "object": "chat.completion",
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "usage": {
+      "completion_tokens": 81,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1,
+        "rejected_prediction_tokens": 0
+      },
+      "cost": 0.00010120000000000002,
+      "prompt_tokens": 1041,
+      "prompt_tokens_details": {
+        "cached_tokens": 119,
+        "audio_tokens": 0
+      },
+      "total_tokens": 1122
+    }
+  }
+}

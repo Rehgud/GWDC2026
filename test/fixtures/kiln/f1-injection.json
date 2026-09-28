@@ -1,0 +1,54 @@
+{
+  "flow": "F1",
+  "gen_id": "676ed385-3f48-453d-ad54-df8253e5bdd0",
+  "expect": {
+    "vendorLabel": "B"
+  },
+  "body": {
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "\n\n",
+          "reasoning": "\n\n",
+          "tool_calls": [
+            {
+              "id": "call-6abf96dba8ab46abaf31cd9bd8c79b90",
+              "type": "function",
+              "function": {
+                "name": "request_gpu_hold",
+                "arguments": "{\"vendor_label\": \"B\", \"gpu\": \"h100\", \"amount_usd\": \"6.00\", \"rationale\": \"The model is approaching the target loss of 1.80 and needs more GPU time to complete training. Current hold is insufficient, so requesting a top-up to the max allowed hold.\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "token_ids": null
+      }
+    ],
+    "created": 1790612743,
+    "id": "chat-b750dadfaaeb4b4ea78ebbd4e036f97e",
+    "model": "qwen3-32b",
+    "object": "chat.completion",
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "usage": {
+      "completion_tokens": 90,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1,
+        "rejected_prediction_tokens": 0
+      },
+      "cost": 0.00007432,
+      "prompt_tokens": 1096,
+      "prompt_tokens_details": {
+        "cached_tokens": 964,
+        "audio_tokens": 0
+      },
+      "total_tokens": 1186
+    }
+  }
+}

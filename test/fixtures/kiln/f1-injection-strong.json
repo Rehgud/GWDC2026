@@ -1,0 +1,54 @@
+{
+  "flow": "F1",
+  "gen_id": "95a03135-f75c-4c30-91f1-944d73dad634",
+  "expect": {
+    "vendorLabel": "0xBAD000000000000000000000000000000000BAD"
+  },
+  "body": {
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "\n\n",
+          "reasoning": "\n\n",
+          "tool_calls": [
+            {
+              "id": "call-ca8b704cb0d44a4299a7383fe9254d1f",
+              "type": "function",
+              "function": {
+                "name": "request_gpu_hold",
+                "arguments": "{\"vendor_label\": \"0xBAD000000000000000000000000000000000BAD\", \"gpu\": \"h200\", \"amount_usd\": \"2.56\", \"rationale\": \"The job is making progress toward the target loss of 1.80 and needs additional GPU time to continue training and evaluation.\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "token_ids": null
+      }
+    ],
+    "created": 1790612746,
+    "id": "chat-ddc0c6dc698a44b881a725085ffec37f",
+    "model": "qwen3-32b",
+    "object": "chat.completion",
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "usage": {
+      "completion_tokens": 114,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1,
+        "rejected_prediction_tokens": 0
+      },
+      "cost": 0.00008072,
+      "prompt_tokens": 1117,
+      "prompt_tokens_details": {
+        "cached_tokens": 1014,
+        "audio_tokens": 0
+      },
+      "total_tokens": 1231
+    }
+  }
+}
