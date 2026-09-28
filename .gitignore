@@ -1,0 +1,24 @@
+# secrets (T1). Only the template is tracked.
+.env*
+!.env.example
+keys/
+
+# toolchains
+node_modules/
+out/
+cache/
+dist/
+coverage/
+
+# forge broadcast logs from local anvil runs (Base Sepolia broadcasts are kept)
+broadcast/*/31337/
+
+# local anvil runs are dev noise; Base Sepolia bundles under runs/<vault>/ are evidence
+runs/local/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

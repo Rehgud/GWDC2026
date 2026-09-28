@@ -1,0 +1,28 @@
+{
+  "name": "cfo-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CFO Agent: per-job escrow with top-ups for a GPU-renting AI agent, gated by code rules and a Qwen3-32B CFO review, audited from records + public RPC.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --import tsx --test \"test/ts/**/*.test.ts\"",
+    "test:sol": "forge test",
+    "typecheck": "tsc --noEmit",
+    "build:sol": "forge build",
+    "gen:abi": "forge build && tsx scripts/gen-abi.ts",
+    "gen:fixtures": "tsx scripts/gen-fixtures.ts",
+    "check-secrets": "bash scripts/check-secrets.sh",
+    "hooks": "git config core.hooksPath .githooks"
+  },
+  "dependencies": {
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

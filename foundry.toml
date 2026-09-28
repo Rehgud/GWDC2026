@@ -1,0 +1,22 @@
+[profile.default]
+src = "contracts"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# Cross-language fixtures shared with the TS side (C12): fee-cases.json, deny-codes.json
+fs_permissions = [{ access = "read", path = "./fixtures" }]
+
+[fuzz]
+runs = 512
+
+[invariant]
+runs = 64
+depth = 64
+
+[fmt]
+line_length = 110

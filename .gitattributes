@@ -1,0 +1,12 @@
+# Record files are hashed byte-for-byte (recHash = keccak256(file bytes)).
+# A CRLF conversion on checkout would change every hash, so evidence and
+# fixtures are stored and checked out exactly as written (G16).
+runs/** -text
+fixtures/** -text
+test/fixtures/** -text
+prices/** -text
+
+# Shell scripts and hooks must keep LF or bash fails with $'\r' on Windows clones.
+*.sh text eol=lf
+.githooks/* text eol=lf
+Makefile text eol=lf
