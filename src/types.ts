@@ -88,3 +88,56 @@ export type WorkRequest = {
 
 export type TopupResult = 'APPROVED_ONCHAIN' | 'DENIED_RECORDED' | 'APPROVED_BUT_DENIED_ONCHAIN' | 'QWEN_NOT_A_JUDGEMENT' | 'TX_ERROR'
 export type DenyCode = Code
+
+// ---- Dashboard contract ([IFACE]): GET /state returns StateView, POST /action takes ActionRequest ----
+// Amounts are micro-USDC decimal strings. Every number carries where it came from (CHAIN / LEDGER / QWEN).
+
+export type Source = 'CHAIN' | 'LEDGER' | 'QWEN'
+export type StopStage = 'RUNNING' | 'SENDING' | 'PAUSED_ON_CHAIN' | 'HALTING' | 'HALTED'
+
+export type StateView = {
+  version: number // bumps on every change; POST /action must echo it (stale -> 409)
+  run_id: string
+  scenario: string
+  vault: Hex
+  chainId: number
+  explorer: string | null // tx link prefix, e.g. https://sepolia.basescan.org/tx/ ; null on anvil
+  asOfBlock: string
+  blockTs: number
+  syncAgeMs: number // > 10_000 => STALE banner
+  badges: { llm: 'kiln' | 'stub'; price: string; scenario: string }
+  grant: {
+    purpose: string; success_metric: string; allowed_gpu_types: string[]; job_cap: string; deadline: number
+    budget: string; paid: string; fees: string; inference_paid: string; open_holds: string; refundable: string // CHAIN
+    maxHold: string
+    vendors: { label: string; address: Hex; provider: string; pricePerHour: string; available: number; allowed: boolean }[]
+  }
+  jobs: {
+    id: string; vendorLabel: string; inference: boolean; state: string; latch: string; stopReason: string | null
+    held: string; holdSize: string; accrued: string; settled: string; unsettled: string; remainingPct: number; pendingTx: number
+  }[]
+  topups: {
+    req_id: string; job_id: string | null; action: 'open' | 'topUp'
+    stage: 'F1' | 'GATE' | 'F2' | 'CHAIN' | 'DONE'
+    result: TopupResult | null
+    request: { vendorLabel: string; gpu: string; amount: string; rationale: string } | null
+    gate: { code: string; pass: boolean }[] // the 10 gate chips, in rules order
+    qwen: { verdict: 'approve' | 'deny' | null; reason: string } | null
+    code: string | null; txHash: Hex | null; recHash: Hex | null
+  }[]
+  stop: StopStage
+  ledger: { ts: number; fn: string; status: string; code: string | null; txHash: Hex | null; recHash: Hex | null; job_id: string | null }[]
+  receipts: {
+    job_id: string; vendorLabel: string; provider: string; priceSource: string; simHours: string
+    amount: string; fee: string; gross: string; txHashes: Hex[]; qwenReason: string | null; f3: string | null
+  }[]
+  health: {
+    rpcOk: boolean; kiln: { mode: 'kiln' | 'stub'; calls: number; lastLatencyMs: number | null; errors: number }
+    akash: string; pendingTx: number; halted: string | null; ethAgent: string; ethFounder: string
+  }
+  can: { stop: boolean; windDown: boolean } // server-side button guards
+}
+
+export type ActionRequest =
+  | { type: 'STOP'; reason: 'SCOPE_DRIFT' | 'BUDGET_CONCERN' | 'MANUAL'; stateVersion: number }
+  | { type: 'WIND_DOWN'; stateVersion: number }

@@ -7,3 +7,4 @@ cache/
 dist/
 broadcast/*/31337/
 .DS_Store
+deployments/31337-*

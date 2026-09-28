@@ -7,7 +7,10 @@
   },
   "scripts": {
     "test": "node --test",
-    "abi": "node scripts/gen-abi.ts"
+    "abi": "node scripts/gen-abi.ts",
+    "anvil": "anvil --block-time 1",
+    "deploy": "node --env-file-if-exists=.env src/deploy.ts",
+    "check-secrets": "sh scripts/check-secrets.sh"
   },
   "dependencies": {
     "viem": "^2.56.9"

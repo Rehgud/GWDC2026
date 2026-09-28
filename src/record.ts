@@ -31,17 +31,54 @@ export type KilnCall = {
   llm_mode: 'kiln' | 'stub'
 }
 
+// ---- Record bodies ([IFACE]: the orchestrator writes them, the auditor and the report read them) ----
+// All amounts are micro-USDC decimal strings; addresses are checksummed Hex; job ids are decimal strings.
+
+/** A scripted change to what an agent saw or said. Every one is listed in the README "대본 개입" table. */
+export type Override = { field: string; from: unknown; to: unknown; by: `scenario:${string}` }
+
+/** seq 0. The spec bytes are stored as the exact signed UTF-8 string. */
+export type SessionStartBody = {
+  vault: Hex; chainId: number; deployBlock: number
+  founder: Hex; agent: Hex; feeTo: Hex; inferencePayee: Hex
+  vendors: Record<'A' | 'B' | 'C', Hex>
+  spec_raw: string // exactly the signed bytes (spec.makeSpec)
+  spec_sig: Hex // EIP-191 by founder over spec_raw
+  prices: { source: string; snapshotHash: Hex; gpu: string; vendors: Record<'A' | 'B' | 'C', { provider: string; hostUri: string; pricePerHour: string; available: number }> }
+  scenario: string
+  flags: Record<string, string> // LLM_MODE, SCENARIO, CLOCK_MULT, ... never URLs or secrets
+}
+
 /** Body of a DECISION record. gate.input is GateInput with bigints as strings (see rules.gateInputFromJson). */
 export type Decision = {
   action: 'open' | 'topUp' | 'inference'
   req_id: string
   job_id: string | null // null before a job exists (anchored with NO_JOB)
+  spec_id: string
+  request: { vendorLabel: string; vendor: Hex; gpu: string; amount: string; rationale: string } // frozen R; tx args come only from it
   gate: { input: unknown; codes: Code[] }
   f1: KilnCall[] // empty for inference
   f2: KilnCall[] // empty when the gate already denied (the saving) or for inference
   verdict: { approve: true } | { approve: false; code: Code }
   reason: string // Qwen reason or the gate code, for the dashboard/receipt
+  tx: { fn: 'open' | 'topUp' | 'recordDecision'; args: string[] } // what this record authorized (rec appended by commit)
+  overrides: Override[]
 }
+
+/** The contract answered Denied to a tx whose DECISION approved it (auditor: CHAIN_OVERRIDE, not FAIL). */
+export type ChainDeniedBody = { req_id: string; job_id: string | null; approval: Hex; code: string; txHash: Hex }
+
+/** One settle: usage the executor accrued for a job since the last decoded Settled. */
+export type CheckpointBody = {
+  job_id: string; amount: string; signer: 'agent' | 'founder'
+  reason: 'periodic' | 'topup' | 'stop' | 'exhausted' | 'windDown'
+  accrued: string; settledNet: string; runningMs: string; loss: number | string
+}
+
+export type CloseBody = { job_id: string; signer: 'agent' | 'founder'; reason: string; accrued: string; settledNet: string }
+export type ReceiptBody = { job_id: string; f3: KilnCall[]; text: string } // text = trimmed F3 content, or "설명 생성 실패(<code>)"
+export type StopBody = { reason: string; by: 'founder' } // anchored as setPaused reasonHash
+export type SessionEndBody = { refund: string; inference_usage: string; kiln_calls: number; kiln_cost_unknown: number; jobs: string[] }
 
 export type Rec = {
   schema_version: typeof SCHEMA_VERSION
