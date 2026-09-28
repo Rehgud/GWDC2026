@@ -1070,18 +1070,20 @@ make deploy
 ### Implementation Tasks
 이 리뷰의 발견 사항을 합쳐서 만든 작업 목록이다. 작업마다 위 발견 사항 하나 이상에서 나왔다. Claude Code나 Codex로 진행하고, 끝나면 체크한다. (노력 추정 가정: 스캐폴딩 ~100배, 테스트 ~50배, 기능 ~30배, 아키텍처 ~5배)
 
-- [ ] **T1 (P1, human: ~1h / CC: ~10min)** — repo — 비밀 관리 위생(.gitignore, .gitattributes, .npmrc, check-secrets 훅)
+- [x] **T1 (P1, human: ~1h / CC: ~10min)** — repo — 비밀 관리 위생(.gitignore, .gitattributes, .npmrc, check-secrets 훅)
   - Surfaced by: Section 3/9 — S3-1, S9-2 (공개 레포에 .gitignore 없음)
   - Files: `.gitignore`, `.gitattributes`, `.npmrc`, `scripts/check-secrets.sh`
   - Verify: `git check-ignore .env` 성공, `scripts/check-secrets.sh` 통과
+  - Done 2026-09-29: `.prettierignore`·락파일은 npm 도입(T2) 때 추가. 훅 설치: `ln -sf ../../scripts/check-secrets.sh .git/hooks/pre-commit`
 - [ ] **T2 (P1, human: ~3h / CC: ~30min)** — backend — 인터페이스 3파일 고정(ABI와 codes.ts, record.ts, rules.ts)
   - Surfaced by: Section 5/9 — S5-1, S5-2, S9-4, R3-12, R3-19
   - Files: to be determined
   - Verify: rules.ts 표 기반 단위 테스트(경계값 포함) 통과
-- [ ] **T3 (P1, human: ~6h / CC: ~45min)** — contracts — 금고 수정(Denied 모델, 검사 순서, bytes32 코드, recordDecision, maxHold, INFERENCE 면제, close/refund rec, D3 가드) + Foundry 테스트
+- [x] **T3 (P1, human: ~6h / CC: ~45min)** — contracts — 금고 수정(Denied 모델, 검사 순서, bytes32 코드, recordDecision, maxHold, INFERENCE 면제, close/refund rec, D3 가드) + Foundry 테스트
   - Surfaced by: Section 1/2/6/10 — S1-4, S1-5, S2-10, S6-5, S6-6, S10-2, D3
   - Files: `contracts/AgentBudgetVault.sol`, `contracts/MockUSDC.sol`, `test/*.t.sol`
   - Verify: `forge test` (본문 10종 + D3 2종 + 리뷰 추가 케이스)
+  - Done 2026-09-29: `forge test` 25개 통과(퍼즈 불변식 포함). C12 교차 언어 JSON은 T2의 codes.ts와 함께 추가
 - [ ] **T4 (P1, human: ~2h / CC: ~15min)** — deploy — `make deploy` + preflight + deployments json
   - Surfaced by: Section 9 — S9-1, S9-3, S9-4
   - Files: `Makefile`, `deployments/`
