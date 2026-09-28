@@ -109,7 +109,7 @@ function artifact(name: string): { abi: unknown[]; bytecode: Hex } {
 /** Fresh vault: budget $20, maxHold $6, vendors A/B/C + INFERENCE allowed, deadline now+runway. */
 export async function deployFixture(anvil: Anvil, opts: { budget?: bigint; maxHold?: bigint; runway?: bigint } = {}): Promise<Fixture> {
   const chain = defineChain({ id: 31337, name: 'anvil', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [anvil.url] } } });
-  const pc = createPublicClient({ chain, transport: http(anvil.url) }) as PublicClient;
+  const pc = createPublicClient({ chain, transport: http(anvil.url), cacheTime: 0 }) as PublicClient;
   const mk = (pk: Hex) => {
     const account = privateKeyToAccount(pk);
     return { account, wallet: createWalletClient({ account, chain, transport: http(anvil.url) }) };

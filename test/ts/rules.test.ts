@@ -170,12 +170,27 @@ describe('B1 rules.check table', () => {
     ['clockMult 0', (x) => (x.clockMult = 0)],
     ['bad loss string', (x) => (x.progress.losses = ['nan' as 'NaN'])],
     ['version', (x) => ((x as { v: number }).v = 2)],
+    ['excluded not an address list', (x) => (x.excluded = ['B'])],
   ];
   for (const [name, m] of BAD_INPUTS) {
     test(`malformed input throws GateInputError: ${name}`, () => {
       assert.throws(() => check(withMut(m)), GateInputError);
     });
   }
+});
+
+describe('D2 re-proposal: an open to a vendor denied earlier in the sequence', () => {
+  test('open to an excluded vendor -> VENDOR_NOT_ALLOWED (address compared case-insensitively)', () => {
+    assert.deepEqual(check(withMut((x) => (x.excluded = [B.toLowerCase()]))), ['VENDOR_NOT_ALLOWED']);
+  });
+  test('open to a different vendor passes; absent / empty excluded = none', () => {
+    assert.deepEqual(check(withMut((x) => (x.excluded = [BAD]))), []);
+    assert.deepEqual(check(withMut((x) => (x.excluded = []))), []);
+    assert.deepEqual(check(base()), []);
+  });
+  test('a topUp is not affected by excluded (it pays its own job vendor)', () => {
+    assert.deepEqual(check(withMut(topUpOf(B), (x) => (x.excluded = [B]))), []);
+  });
 });
 
 describe('chainRules (INFERENCE open, D2)', () => {

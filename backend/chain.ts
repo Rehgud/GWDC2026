@@ -21,7 +21,9 @@ import type { Dec, JobView } from './rules.ts';
 // ------------------------------------------------------------------------------ clients
 export function makePublicClient(rpcUrls: string[], opts: { timeoutMs?: number } = {}): PublicClient {
   const transports = rpcUrls.map((u) => http(u, { timeout: opts.timeoutMs ?? 8_000, retryCount: 0 }));
-  return createPublicClient({ transport: transports.length > 1 ? fallback(transports) : transports[0]! }) as PublicClient;
+  // cacheTime 0: viem would otherwise reuse a block number for 4 s, so a tick could re-read an old
+  // head and see a STOP late (the design checks STOP on every tick)
+  return createPublicClient({ transport: transports.length > 1 ? fallback(transports) : transports[0]!, cacheTime: 0 }) as PublicClient;
 }
 
 // ------------------------------------------------------------------------------ decoding

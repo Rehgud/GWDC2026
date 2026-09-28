@@ -632,7 +632,9 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
         L.state = approved ? 'none' : code && TRANSIENT.has(code) ? 'transient' : 'final';
         latch.set(x.job_id, L);
       } else if (!isTopUp) {
-        const v = b2.request?.vendor ?? '';
+        // compare resolved vendors ("Vendor B" == "B" == its address), not raw F1 labels
+        const raw = (b2.request?.vendor ?? '').trim().replace(/^vendor\s+/i, '').toLowerCase();
+        const v = b2.gateInput?.request.vendor ? lc(b2.gateInput.request.vendor) : (market.find((m) => m.label.toLowerCase() === raw)?.address ?? raw);
         if (approved) {
           if (deniedOpens.length >= 2) add('FAIL', 'check5', 'OPEN_RETRIED_BEYOND_ONCE', `open approved after ${deniedOpens.length} denied opens (one re-proposal allowed)`, { seq: r.seq });
           if (deniedOpens.includes(v)) add('FAIL', 'check5', 'REPROPOSE_SAME_VENDOR', `re-proposal to the vendor that was just denied (${v})`, { seq: r.seq });

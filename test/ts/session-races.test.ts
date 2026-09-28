@@ -1,10 +1,12 @@
 // Session races and failure paths from the core review (S2, S3, S5, S9), on anvil.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import type { PublicClient } from 'viem';
+import { decodeFunctionData, parseTransaction, type Hex, type PublicClient } from 'viem';
 import { auditBundle } from '../../auditor/audit.ts';
+import { usdcAbi, vaultAbi } from '../../backend/abi.ts';
 import { HaltError } from '../../backend/commit.ts';
-import { contextStub } from '../../backend/scenarios.ts';
+import { contextStub, SCENARIOS } from '../../backend/scenarios.ts';
+import { windDownBundle } from '../../scripts/wind-down.ts';
 import { anvilAvailable } from './helpers/anvil.ts';
 import { makeSession } from './helpers/session.ts';
 
@@ -40,6 +42,55 @@ describe('session races on anvil', { skip: SKIP }, () => {
       await t.cleanup();
     }
   });
+
+  test('AUD-FF-1 a capacity override that lands while a top-up F1 runs is recorded with the REQUEST whose gate used it', async () => {
+    const mig = SCENARIOS.migration!;
+    const base = mig.stub;
+    const stub = async (flow: 'F1' | 'F2' | 'F3', msgs: { role: string; content: string }[], attempt: number) => {
+      const u = msgs.filter((m) => m.role === 'user').at(-1)?.content ?? '';
+      if (flow === 'F1' && u.includes('REQUEST TYPE: topup')) await sleep(3_000); // the checkpoint (capacity -> 0) lands meanwhile
+      return base(flow, msgs as never, attempt);
+    };
+    const t = await makeSession({ stub, scenario: { ...mig, stub } });
+    try {
+      assert.equal(await t.session.run(), 'COMPLETED');
+      const recs = await t.records();
+      const used = recs.find((r) => r.kind === 'REQUEST' && r.body.gateInput?.market?.capacity === 0);
+      if (used) assert.ok(recs.some((r) => r.seq <= used.seq && (r.body.overrides ?? []).some((o: { field: string }) => o.field === 'akash.capacity.A')), 'override recorded at or before its first use');
+      const audit = await auditBundle({ dir: t.dir, rpcUrl: t.anvil.url, expectedVault: t.fx.vault });
+      assert.equal(audit.verdict, 'PASS', JSON.stringify(audit.failures, null, 1));
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  for (const variant of ['deny', 'unavailable'] as const) {
+    test(`AUD-FF-3 F1 ignores the prompt hint and re-proposes the denied vendor (first F2: ${variant}) -> gate VENDOR_NOT_ALLOWED, audit PASS`, async () => {
+      const base = contextStub();
+      let f2Calls = 0;
+      const stub = async (flow: 'F1' | 'F2' | 'F3', msgs: { role: string; content: string }[]) => {
+        if (flow === 'F1') {
+          // an F1 that disregards "Do NOT propose these vendors" (the hint is not the enforcement)
+          return base(flow, msgs.map((m) => ({ ...m, content: m.content.replace(/Do NOT propose these vendors \(just denied\):[^\n]*/g, '') })) as never);
+        }
+        if (flow === 'F2' && ++f2Calls <= (variant === 'deny' ? 1 : 2)) {
+          return variant === 'deny' ? { content: JSON.stringify({ verdict: 'deny', reason: 'not now' }) } : { content: null, http: 503 };
+        }
+        return base(flow, msgs as never);
+      };
+      const t = await makeSession({ stub });
+      try {
+        assert.equal(await t.session.run(), 'INITIAL_OPEN_FAILED');
+        const reqs = (await t.records()).filter((r) => r.kind === 'REQUEST');
+        assert.deepEqual(reqs.map((r) => [r.body.trigger, r.body.code]), [['start', variant === 'deny' ? 'QWEN_DENIED' : 'QWEN_UNAVAILABLE'], ['repropose', 'VENDOR_NOT_ALLOWED']]);
+        assert.equal(reqs[1]!.body.f2, null, 'the gate stops it before F2');
+        const audit = await auditBundle({ dir: t.dir, rpcUrl: t.anvil.url, expectedVault: t.fx.vault });
+        assert.equal(audit.verdict, 'PASS', JSON.stringify(audit.failures, null, 1));
+      } finally {
+        await t.cleanup();
+      }
+    });
+  }
 
   test('S3 windDown while a top-up flow is in flight: SESSION_END stays the last record', async () => {
     const base = contextStub();
@@ -89,6 +140,44 @@ describe('session races on anvil', { skip: SKIP }, () => {
       assert.equal(await t.session.run(), 'COMPLETED');
       const audit = await auditBundle({ dir: t.dir, rpcUrl: t.anvil.url, expectedVault: t.fx.vault });
       assert.equal(audit.verdict, 'PASS', JSON.stringify(audit.failures, null, 1));
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test('AUD-FF-2 SESSION_END recorded but its refund never sent: wind-down sends that refund under the same record, audit PASS, then a no-op', async () => {
+    let failed = false;
+    const wrap = (pc: PublicClient): PublicClient =>
+      new Proxy(pc, {
+        get(target, prop, recv) {
+          if (prop === 'sendRawTransaction') {
+            return async (args: { serializedTransaction: Hex }) => {
+              const { functionName } = decodeFunctionData({ abi: vaultAbi, data: parseTransaction(args.serializedTransaction).data! });
+              if (functionName === 'refund' && !failed) {
+                failed = true;
+                throw new Error('connection reset'); // never reached the node
+              }
+              return (target.sendRawTransaction as (a: unknown) => Promise<unknown>)(args);
+            };
+          }
+          return Reflect.get(target, prop, recv);
+        },
+      }) as PublicClient;
+    const t = await makeSession({ stub: contextStub(), wrapPc: wrap, scenario: { maxCheckpoints: 2 } });
+    try {
+      await assert.rejects(t.session.run(), (e: unknown) => e instanceof HaltError && e.reason === 'SEND_FAILED');
+      const before = await auditBundle({ dir: t.dir, rpcUrl: t.anvil.url, expectedVault: t.fx.vault });
+      assert.equal(before.verdict, 'FAIL', 'unanchored SESSION_END before the wind-down');
+      const nRecords = (await t.records()).length;
+      const opts = { dir: t.dir, dep: t.dep, chainId: 31337, pc: t.fx.pc, chain: t.fx.chain, founder: t.fx.founder, agent: t.fx.agent, reason: 'EXECUTOR_CRASH' as const, log: () => {} };
+      const w = await windDownBundle(opts);
+      assert.equal(w.status, 'REANCHORED');
+      assert.equal((await t.records()).length, nRecords, 'no second SESSION_END');
+      const audit = await auditBundle({ dir: t.dir, rpcUrl: t.anvil.url, expectedVault: t.fx.vault });
+      assert.equal(audit.verdict, 'PASS', JSON.stringify(audit.failures, null, 1));
+      assert.equal((await windDownBundle(opts)).status, 'NOTHING_TO_DO');
+      const bal = await t.fx.pc.readContract({ address: t.fx.usdc, abi: usdcAbi, functionName: 'balanceOf', args: [t.fx.vault] });
+      assert.equal(bal, 0n, 'the refund left the vault');
     } finally {
       await t.cleanup();
     }

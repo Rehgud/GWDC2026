@@ -40,6 +40,7 @@ import {
   ZERO_HASH,
   type DecisionRecord,
   type Head,
+  type LoadedRecord,
   type RecordDraft,
   type TxIntent,
 } from './record.ts';
@@ -148,6 +149,8 @@ export class Committer {
   private head: Head = null;
   private halted: HaltError | null = null;
   private pendingCount = 0;
+  /** the last record found on disk at open() (anchorTail only) */
+  private lastLoaded: LoadedRecord | null = null;
   private readonly recordsDir: string;
   private readonly ledgerPath: string;
   private readonly d: CommitDeps;
@@ -168,6 +171,7 @@ export class Committer {
       throw new HaltError('CHAIN_FORK', `records dir is not a clean chain: ${JSON.stringify(issues.slice(0, 3))} stray=${stray.join(',')}`);
     }
     c.head = headOf(records);
+    c.lastLoaded = records.at(-1) ?? null;
     return c;
   }
 
@@ -214,6 +218,29 @@ export class Committer {
     });
   }
 
+  /**
+   * Operator recovery only (wind-down), never the backend: the LAST record on disk was written
+   * but its tx never reached the chain (the process died, or HALT SEND_FAILED, between ledger
+   * `intent` and the send). Send that record's own tx now, anchored by the same rec hash. No new
+   * record, so nothing is written after SESSION_END. Simulated first like every send.
+   */
+  anchorTail(): Promise<CommitOutcome> {
+    this.pendingCount++;
+    const p = this.tail.then(async () => {
+      if (this.halted) throw this.halted;
+      const t = this.lastLoaded;
+      const tx = t?.record?.tx;
+      if (!t || !t.record || !tx || this.head?.hash !== t.hash) this.halt('BAD_INTENT', 'anchorTail: the last record has no tx (or records were added since open)');
+      const early = await this.simulate(t.record.kind, tx);
+      if (early) return early;
+      return this.send({ seq: t.seq, hash: t.hash, file: t.file }, t.record, tx);
+    });
+    this.tail = p.catch(() => {});
+    return p.finally(() => {
+      this.pendingCount--;
+    });
+  }
+
   private now(): Date {
     return this.d.now ? this.d.now() : new Date();
   }
@@ -249,37 +276,46 @@ export class Committer {
   private async run(draft: RecordDraft): Promise<CommitOutcome> {
     if (this.halted) throw this.halted;
     const tx = draft.tx;
-
-    // 0. pre-send simulation (no record, no tx on revert)
-    let call: { functionName: string; args: unknown[] } | null = null;
-    let sender: Sender | null = null;
     if (tx) {
-      call = encodeIntent(tx, ZERO_HASH);
-      sender = this.sender(tx.from);
-      try {
-        await this.d.pc.simulateContract({
-          address: this.d.vault,
-          abi: vaultAbi,
-          functionName: call.functionName as never,
-          args: call.args as never,
-          account: sender.account,
-        });
-      } catch (e) {
-        const name = revertName(e);
-        await this.ledger({ kind: draft.kind, fn: tx.fn, from: tx.from, status: 'presend_revert', error: name });
-        if (name === 'JobClosed' && (tx.fn === 'close' || tx.fn === 'settle' || tx.fn === 'topUp')) {
-          return { status: 'ALREADY_CLOSED', errorName: name };
-        }
-        this.halt('PRESEND_REVERT', `${tx.fn}: ${name}`);
-      }
+      const early = await this.simulate(draft.kind, tx);
+      if (early) return early;
     }
 
     // 1-6. record
     const w = await this.write(draft);
-    if (!tx || !call || !sender) {
+    if (!tx) {
       await this.ledger({ seq: w.seq, rec: w.hash, kind: draft.kind, status: 'recorded' });
       return { status: 'RECORDED', rec: w };
     }
+    return this.send(w, draft, tx);
+  }
+
+  /** 0. pre-send simulation (no record, no tx on revert). Returns ALREADY_CLOSED or null (go on). */
+  private async simulate(kind: RecordDraft['kind'], tx: TxIntent): Promise<CommitOutcome | null> {
+    const call = encodeIntent(tx, ZERO_HASH);
+    const sender = this.sender(tx.from);
+    try {
+      await this.d.pc.simulateContract({
+        address: this.d.vault,
+        abi: vaultAbi,
+        functionName: call.functionName as never,
+        args: call.args as never,
+        account: sender.account,
+      });
+    } catch (e) {
+      const name = revertName(e);
+      await this.ledger({ kind, fn: tx.fn, from: tx.from, status: 'presend_revert', error: name });
+      if (name === 'JobClosed' && (tx.fn === 'close' || tx.fn === 'settle' || tx.fn === 'topUp')) {
+        return { status: 'ALREADY_CLOSED', errorName: name };
+      }
+      this.halt('PRESEND_REVERT', `${tx.fn}: ${name}`);
+    }
+    return null;
+  }
+
+  /** 7-13 for a written record. */
+  private async send(w: Written, draft: Omit<RecordDraft, 'body' | 'at' | 'tx'>, tx: TxIntent): Promise<CommitOutcome> {
+    const sender = this.sender(tx.from);
 
     // 7. intent
     await this.ledger({ seq: w.seq, rec: w.hash, kind: draft.kind, fn: tx.fn, from: tx.from, args: tx.args, status: 'intent' });

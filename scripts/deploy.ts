@@ -47,8 +47,8 @@ type BroadcastTx = {
   contractAddress: Hex | null;
   function: string | null;
   arguments: string[] | null;
+  transaction: { from: Hex; nonce: Hex };
 };
-type BroadcastReceipt = { transactionHash: Hex; blockNumber: string; status: string };
 
 export type DeployOpts = {
   skipTests?: boolean;
@@ -69,7 +69,7 @@ export async function deploy(o: DeployOpts = {}): Promise<{ dep: Deployment; pre
   if (!agentPk) throw new Error('AGENT_PK is required (use a NEW agent key for every recorded vault)');
   const agent = privateKeyToAccount(agentPk).address;
 
-  const pc = createPublicClient({ transport: http(rpc) });
+  const pc = createPublicClient({ transport: http(rpc), cacheTime: 0 });
   const chainNow = Number((await pc.getBlock()).timestamp);
   const now = Math.max(chainNow, Math.floor(Date.now() / 1000));
   const deadline = o.deadlineSeconds ? now + o.deadlineSeconds : now + demo.runwayHours * 3600;
@@ -96,15 +96,14 @@ export async function deploy(o: DeployOpts = {}): Promise<{ dep: Deployment; pre
     MAX_HOLD_MICRO: demo.maxHold.toString(),
     FEE_BPS: String(demo.feeBps),
   };
+  const startBlock = await pc.getBlockNumber();
   const fargs = ['script', 'script/Deploy.s.sol:Deploy', '--rpc-url', rpc, '--broadcast', ...auth];
   if (c.name !== 'anvil') fargs.push('--slow');
   if (o.verbose !== false) console.log(`deploy: forge ${fargs.map((a) => (a.startsWith('0x') && a.length > 60 ? '<key>' : a)).join(' ')}`);
   const r = spawnSync('forge', fargs, { stdio: c.name === 'anvil' ? stdio : 'inherit', env });
   if (r.status !== 0) throw new Error(`forge script failed${r.stderr ? `: ${String(r.stderr).slice(0, 400)}` : ''}`);
 
-  const run = JSON.parse(readFileSync(`broadcast/Deploy.s.sol/${c.id}/run-latest.json`, 'utf8')) as { transactions: BroadcastTx[]; receipts: BroadcastReceipt[] };
-  const byHash = new Map(run.receipts.map((x) => [x.transactionHash.toLowerCase(), x]));
-  for (const x of run.receipts) if (x.status !== '0x1') throw new Error(`setup tx ${x.transactionHash} failed`);
+  const run = JSON.parse(readFileSync(`broadcast/Deploy.s.sol/${c.id}/run-latest.json`, 'utf8')) as { transactions: BroadcastTx[] };
   const created = (name: string) => {
     const t = run.transactions.find((x) => x.transactionType === 'CREATE' && x.contractName === name);
     if (!t?.contractAddress) throw new Error(`no ${name} CREATE in broadcast`);
@@ -113,12 +112,32 @@ export async function deploy(o: DeployOpts = {}): Promise<{ dep: Deployment; pre
   const vaultTx = created('AgentBudgetVault');
   const usdcTx = created('MockUSDC');
   const vault = getAddress(vaultTx.contractAddress!);
+  // forge's broadcast file pairs tx hashes (and receipts) with the wrong transactions when several
+  // land together (seen on anvil: the "vault CREATE" hash was a setVendor). The pairing that holds
+  // is (sender, nonce), so the real txs are read back from the blocks this deploy touched.
+  const endBlock = await pc.getBlockNumber();
+  const deployer = getAddress(vaultTx.transaction.from);
+  const onChain = new Map<number, { hash: Hex; block: bigint }>();
+  for (let b = startBlock; b <= endBlock; b++) {
+    const blk = await pc.getBlock({ blockNumber: b, includeTransactions: true });
+    for (const tx of blk.transactions) if (getAddress(tx.from) === deployer) onChain.set(tx.nonce, { hash: tx.hash, block: b });
+  }
+  const real = (t: BroadcastTx) => {
+    const x = onChain.get(Number(BigInt(t.transaction.nonce)));
+    if (!x) throw new Error(`deploy tx nonce ${t.transaction.nonce} (${t.contractName}.${t.function ?? 'CREATE'}) not found in blocks ${startBlock}..${endBlock}`);
+    return x;
+  };
+  for (const t of run.transactions) {
+    const rc = await pc.getTransactionReceipt({ hash: real(t).hash });
+    if (rc.status !== 'success') throw new Error(`setup tx ${rc.transactionHash} failed`);
+    if (t === vaultTx && (!rc.contractAddress || getAddress(rc.contractAddress) !== vault)) throw new Error(`vault CREATE ${rc.transactionHash} does not create ${vault}`);
+  }
   const setupTxs = run.transactions.map((t) => {
-    const rc = byHash.get(t.hash.toLowerCase());
     const step = t.transactionType === 'CREATE' ? `deploy ${t.contractName}` : `${t.contractName}.${t.function}${t.arguments ? `(${t.arguments.join(', ')})` : ''}`;
-    return { step, hash: t.hash, block: rc ? BigInt(rc.blockNumber).toString() : '?' };
+    return { step, hash: real(t).hash, block: real(t).block.toString() };
   });
-  const deployBlock = BigInt(byHash.get(vaultTx.hash.toLowerCase())!.blockNumber).toString();
+  // the auditor replays logs from deployBlock: the vault CREATE, before every setup event
+  const deployBlock = real(vaultTx).block.toString();
   const founder = getAddress((await pc.readContract({ address: vault, abi: vaultAbi, functionName: 'founder' })) as Hex);
   const dep: Deployment = {
     schema_version: 1,

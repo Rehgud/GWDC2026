@@ -13,7 +13,7 @@ import { ADDR, deployFixture, startAnvil, type Anvil, type Fixture } from './anv
 
 const HOSTS = { A: 'https://provider.h100.siamaidol.com:8443', B: 'https://provider.h100.ams.val.akash.pub:8443', C: 'https://provider.h100.wdc.hh.akash.pub:8443' };
 
-export type TestSession = { session: Session; fx: Fixture; anvil: Anvil; dir: string; cleanup: () => Promise<void>; records: () => Promise<Record<string, any>[]>; ledger: () => Promise<Record<string, any>[]> };
+export type TestSession = { session: Session; fx: Fixture; anvil: Anvil; dir: string; dep: Deployment; cleanup: () => Promise<void>; records: () => Promise<Record<string, any>[]>; ledger: () => Promise<Record<string, any>[]> };
 
 export async function makeSession(o: {
   stub: StubResponder;
@@ -83,6 +83,7 @@ export async function makeSession(o: {
     fx,
     anvil,
     dir,
+    dep,
     cleanup: async () => {
       await anvil.stop();
       await rm(dir, { recursive: true, force: true });

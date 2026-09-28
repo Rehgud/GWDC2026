@@ -475,6 +475,12 @@ export class Session {
     } catch {
       return finish('READ_FAILED', null, summary); // fail-closed, local record (no gate input, no F2)
     }
+    // a capacity override that landed while F1 ran is part of THIS gate's market view: record it
+    // here, not in a later record (the auditor replays overrides in record order, check 6)
+    for (let i = 0; i < this.overrides.length; ) {
+      if (this.overrides[i]!.field.startsWith('akash.capacity.')) body.overrides.push(...this.overrides.splice(i, 1));
+      else i++;
+    }
     const gateInput: GateInput = {
       v: 1,
       request: R,
@@ -484,6 +490,8 @@ export class Session {
       market: this.marketView(vendor, req.gpu),
       progress: { losses: [...this.taskLosses] },
       clockMult: this.d.cfg.clockMult,
+      // D2: the re-proposal names a different vendor; enforced by the gate, not only the F1 prompt
+      excluded: p.exclude.map((l) => this.resolveVendor(l)).filter((a): a is Hex => a !== null),
     };
     body.gateInput = gateInput;
     body.gateInputHash = hashBytes(serialize(R));

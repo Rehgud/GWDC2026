@@ -15,7 +15,7 @@
 npm ci && git submodule update --init   # Foundry(forge/anvil/cast)가 PATH에 있어야 한다
 make deploy      # npm run deploy     : forge test → 새 금고 배포 → deployments/*.json → preflight
 make run         # npm run session -- --scenario normal --serve : 세션 1회 + 대시보드 http://127.0.0.1:8787
-make wind-down   # npm run wind-down  : 백엔드 없이 founder 키로 정산 → close → refund (멱등)
+make wind-down   # npm run wind-down  : 백엔드 없이 founder 키로 정산 → close → refund (멱등. SESSION_END가 기록만 되고 전송 전에 멈췄으면 같은 기록으로 refund만 보낸다)
 make audit BUNDLE=runs/<vault>        # npm run audit -- runs/<vault> : 기록 + 공개 RPC만으로 PASS/FAIL (exit 0/1/2)
 make health      # npm run health     : preflight + 대기 tx 없음 + 대시보드 /health
 ```
@@ -26,7 +26,7 @@ make health      # npm run health     : preflight + 대기 tx 없음 + 대시보
 
 ```bash
 forge test                 # 컨트랙트 68개 (C1~C14, D3 가드, 경계, 불변식, 이벤트 재생 불변식)
-npm test                   # TS 356개 (규칙, 기록, 파서, Kiln 래퍼, 실행기, commit/classify·세션 경합 on anvil, 감사자 골든 G1~G16)
+npm test                   # TS 364개 (규칙, 기록, 파서, Kiln 래퍼, 실행기, commit/classify·세션 경합 on anvil, 감사자 골든 G1~G16)
 npm run e2e:local          # anvil + stub LLM + CLOCK_MULT=600 : 시나리오마다 새 금고 → 세션 → 감사
 npm run crash:test         # I7: 실행 중 kill -9 → wind-down → 감사 PASS
 ```
@@ -234,6 +234,8 @@ npm run audit -- runs/<vault> --rpc https://sepolia.base.org --vault 0x... --sub
 - **F2 approve는 정확히 `"approve"`만** 인정한다. 설계의 `trim().toLowerCase()`보다 엄격하다. 구현 지시(prompt §18)가 `"Approve"`를 승인으로 치지 말라고 했고, 둘 다 fail-closed이므로 더 엄격한 쪽을 택했다.
 - 요청 시간은 **net 금액 ÷ 시간당 net 가격**(설계 R3-13 예시 $5.12 @ $2.56 = 120s)을 썼다. 구현 지시의 `amount / gross_hourly_price`와는 floor 오차 수준에서 같다.
 - topUp은 벤더 인자가 없으므로, F1이 job 벤더와 다른 벤더를 말하면 **게이트만** `VENDOR_NOT_ALLOWED`로 거절한다(컨트랙트는 job 벤더만 본다). 그래서 D5의 "같은 요청을 직접 보내기"는 `open(0xBAD…, …)`으로 보낸다.
+- D2의 "거절되면 **다른 벤더로** 1회 재제안"을 F1 프롬프트 힌트에만 맡기지 않고 **게이트가 강제**한다: 게이트 입력 `excluded`(이번 open 순서에서 거절된 벤더 주소)에 든 벤더로의 open은 `VENDOR_NOT_ALLOWED`(새 코드 없음). 감사자는 같은 `check()`로 재판정하고, 재제안 비교는 F1 라벨이 아니라 해석된 주소로 한다.
+- `forge script`의 broadcast 파일은 여러 tx가 한 블록에 들어가면 tx 해시·receipt를 **다른 tx에 짝지어** 기록한다(anvil에서 "금고 CREATE" 해시가 실제로는 setVendor였다). 배포 스크립트는 이 파일의 해시를 믿지 않고 (보낸 주소, nonce)로 블록에서 실제 tx를 다시 찾아 `deployBlock`(금고 CREATE 블록)과 `setupTxs`를 기록한다.
 - 설계 I1의 "종료 후 committed == 0"은 이 금고 모델(committed = 열린 hold + 지급 gross)에서 성립하지 않는다. 정직한 종료 상태는 `committed == budget == Σ지급 gross`, 금고 잔액 0이다.
 - 설계의 탈취 키 손실 상한 문구(`budget − committed`)를 실제 상한(금고 잔액)으로 바로잡았다(위 한계 절).
 

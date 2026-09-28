@@ -105,6 +105,12 @@ export type GateInput = {
   progress: { losses: LossWire[] };
   /** simulated seconds per real second (60 in the demo) */
   clockMult: number;
+  /**
+   * D2: vendors (addresses) whose open was denied earlier in this open sequence. The one
+   * re-proposal must name a different vendor, so an open to one of them is VENDOR_NOT_ALLOWED.
+   * Absent (older records) = none.
+   */
+  excluded?: string[];
 };
 
 /** Input for the INFERENCE open (D2): chain rules only, no spec/market/progress. */
@@ -372,7 +378,8 @@ export function chainRules(input: ChainRuleInput): GateCode[] {
 /**
  * The 10-rule deterministic gate. Returns every violated code in GATE_ORDER; an empty array is
  * PASS; the decision code is codes[0]. Throws GateInputError on a malformed input (the auditor
- * reports that as a FAIL of the record, never as a PASS).
+ * reports that as a FAIL of the record, never as a PASS). Besides the topUp vendor match above,
+ * VENDOR_NOT_ALLOWED also covers the D2 re-proposal: an open naming a vendor in `excluded`.
  */
 export function check(input: GateInput): GateCode[] {
   if (!input || input.v !== 1) throw new GateInputError('GateInput.v must be 1');
@@ -386,6 +393,9 @@ export function check(input: GateInput): GateCode[] {
   if (!Number.isSafeInteger(input.clockMult) || input.clockMult <= 0) throw new GateInputError('clockMult');
   const losses = input.progress?.losses;
   if (!Array.isArray(losses)) throw new GateInputError('progress.losses');
+  const excluded = input.excluded ?? [];
+  if (!Array.isArray(excluded) || !excluded.every((a) => typeof a === 'string' && isAddress(a))) throw new GateInputError('excluded');
+  const reproposedDenied = req.kind === 'open' && req.vendor !== null && excluded.some((a) => sameAddress(a, req.vendor!));
 
   // market entry must be the one for exactly (request.vendor, request.gpu)
   let price: bigint | null = null;
@@ -410,7 +420,7 @@ export function check(input: GateInput): GateCode[] {
   const hit = new Set<GateCode>();
   if (ch.paused) hit.add('PAUSED');
   if (pastDeadline(ch.ts, realS, eff)) hit.add('PAST_DEADLINE');
-  if (!vendorOk(req, ch)) hit.add('VENDOR_NOT_ALLOWED');
+  if (!vendorOk(req, ch) || reproposedDenied) hit.add('VENDOR_NOT_ALLOWED');
   if (req.amount > ch.maxHold) hit.add('OVER_MAX_HOLD');
   if (ch.committed + g > ch.budget) hit.add('OVER_BUDGET_WITH_FEE');
   if (!allowed.has(normGpu(req.gpu))) hit.add('GPU_TYPE_NOT_ALLOWED');
