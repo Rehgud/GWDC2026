@@ -18,7 +18,9 @@
     "smoke:kiln": "node --env-file=.env scripts/smoke-kiln.ts",
     "eval:f2": "node --env-file=.env scripts/eval-f2.ts",
     "abi": "node scripts/gen-abi.ts",
-    "check-secrets": "sh scripts/check-secrets.sh"
+    "check-secrets": "sh scripts/check-secrets.sh",
+    "eval:f1": "node --env-file=.env scripts/eval-f1.ts",
+    "wind-down": "node --env-file-if-exists=.env scripts/wind-down.ts"
   },
   "dependencies": {
     "viem": "^2.56.9"

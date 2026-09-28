@@ -94,6 +94,10 @@ describe('server', () => {
       assert.equal((await req(port, m, p)).status, 404, `${m} ${p}`)
     }
     assert.equal((await req(port, 'GET', '/report')).status, 404)
+    const video = await req(port, 'GET', '/?video=1') // video mode is the same page, same pinned script
+    assert.equal(video.status, 200)
+    assert.equal(video.body, HTML)
+    assert.equal(video.headers['content-security-policy'], csp)
   })
 
   test('POST /action guards: Origin 403, Content-Type 415, malformed 400, oversized 413; nothing reaches the session', async () => {
@@ -242,11 +246,12 @@ class El {
   }
 }
 
-function boot(initial: StateView) {
+function boot(initial: StateView, search = '') {
   const ids = new Map<string, El>()
   const created: string[] = []
   const document = {
     title: '',
+    documentElement: new El('html'),
     getElementById(id: string) { if (!ids.has(id)) ids.set(id, new El('div')); return ids.get(id)! },
     createElement(tag: string) { created.push(tag); return new El(tag) },
   }
@@ -257,6 +262,8 @@ function boot(initial: StateView) {
     reply: { status: 200, body: { ok: true } as unknown },
     timers: [] as (() => void)[],
     created,
+    urls: [] as string[], // history.replaceState targets
+    document,
     $: (id: string) => document.getElementById(id),
   }
   const fetch = async (url: string, init?: { method?: string; body?: string }) => {
@@ -270,7 +277,9 @@ function boot(initial: StateView) {
     throw new Error(`unexpected fetch ${url}`)
   }
   const AbortSignal = { timeout: (ms: number) => ({ timeoutMs: ms }) }
-  vm.runInNewContext(SCRIPT, { document, fetch, AbortSignal, setTimeout: (f: () => void) => env.timers.push(f), console })
+  const location = { search, pathname: '/' }
+  const history = { replaceState: (_s: unknown, _t: string, url: string) => env.urls.push(url) }
+  vm.runInNewContext(SCRIPT, { document, fetch, AbortSignal, setTimeout: (f: () => void) => env.timers.push(f), console, location, history })
   return env
 }
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)) }
@@ -428,4 +437,40 @@ test('index.html: INFERENCE pinned whatever its id, only https explorers link, a
   assert.match($('banners').textContent, /렌더 오류 · renderReceipts/)
   assert.equal($('stop-MANUAL').disabled, true)
   assert.match($('run').textContent, /demo-5fc8d326/) // other zones still rendered
+})
+
+test('index.html video mode: ?video=1 hook and toggle, CSS-only layout, closed jobs marked, same security rules', async () => {
+  // static: the hook is there and the page still has no HTML parsing, eval or outside URLs
+  assert.match(SCRIPT, /\[\?&\]video=1/)
+  assert.match(HTML, /id="video-btn"/)
+  for (const sel of ['html.video { zoom: 1.5; }', '.video #ledger tr:nth-child(n+7)', '.video #topups > :nth-child(n+2)', '.video #jobs:has(tr:not(.closed)) tr.closed']) assert.ok(HTML.includes(sel), sel)
+  for (const bad of ['innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'eval(', 'new Function', '@import', 'url(']) assert.ok(!HTML.includes(bad), bad)
+  assert.ok(!/(https?:)?\/\/[a-z0-9.-]+\.[a-z]{2,}/i.test(HTML), 'no external URLs')
+  assert.equal(HTML.match(/<script/g)?.length, 1)
+
+  // default: off
+  const plain = boot(FIXTURE)
+  await settle()
+  assert.equal(plain.document.documentElement.className, '')
+  assert.equal(plain.$('video-btn').attrs['aria-pressed'], 'false')
+
+  // ?video=1: on; the button toggles and keeps the URL in step (no reload, no navigation)
+  const env = boot(FIXTURE, '?scenario=demo&video=1')
+  await settle()
+  const { $ } = env
+  assert.equal(env.document.documentElement.className, 'video')
+  assert.equal($('video-btn').attrs['aria-pressed'], 'true')
+  assert.equal($('video-btn').textContent, '기본 보기')
+  $('video-btn').click()
+  assert.equal(env.document.documentElement.className, '')
+  assert.equal($('video-btn').textContent, '영상 모드')
+  $('video-btn').click()
+  assert.deepEqual(env.urls, ['/', '?video=1'])
+  assert.equal(env.document.documentElement.className, 'video')
+  assert.equal(boot(FIXTURE, '?video=10').document.documentElement.className, '')
+
+  // the rows CSS hides in video mode: CLOSED jobs are marked, INFERENCE stays pinned; the newest ledger line is the stolen-key one
+  assert.deepEqual($('jobs').all((e) => e.tagName === 'TR').map((r) => r.className), ['pin', 'closed', ''])
+  assert.match($('ledger').all((e) => e.tagName === 'TR')[0].textContent, /탈취 키/)
+  assert.equal($('topups').all((e) => e.tagName === 'ARTICLE').length, FIXTURE.topups.length) // DOM keeps every card; CSS shows the first
 })

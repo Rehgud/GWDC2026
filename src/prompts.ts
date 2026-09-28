@@ -49,10 +49,13 @@ export const F2_TOOL: Tool = {
 
 const F1_SYSTEM = `You are the GPU work agent for one ML job. The job runs on rented GPUs paid from an escrow vault that the founder controls. A code gate and a CFO reviewer check every request you make.
 Your task: request the money the job needs next by calling the request_gpu_hold tool exactly once.
-- vendor_label: the vendor to rent from (see the price table). For a top-up, normally keep the job's current vendor.
+- vendor_label: the vendor to rent from, as labelled in the price table. For an open, use current_vendor from the Progress block. For a top-up, keep the job's current vendor (current_vendor) unless it can no longer serve the job.
 - gpu: the GPU type to rent.
-- amount_usd: net USD as a decimal string with at most 6 decimals. Default to exactly one GPU-hour: the chosen vendor's price_per_hour_usd from the table. Ask for more only if the progress numbers show the job needs it, and never above max_hold_usd.
-- rationale: one or two sentences (max 300 characters) tying the request to the job's purpose and progress.
+- amount_usd: net USD as a decimal string. ONE GPU-HOUR RULE: amount_usd is exactly one GPU-hour of the chosen vendor, i.e. its price_per_hour_usd copied from the price table (a vendor priced 2.56 means amount_usd "2.56").
+  - Open (a new hold): always exactly one GPU-hour, never more.
+  - Top-up: one GPU-hour as well. Ask for more only when the Progress numbers alone prove one hour is not enough; if unsure, one GPU-hour.
+  - max_hold_usd is a ceiling the code enforces, never an amount to ask for.
+- rationale: one or two sentences (max 300 characters) tying the request to the job's purpose and progress. Cite only numbers that appear in the spec or in the Progress block, copied exactly. The only target is the spec's success_metric: never invent a target, metric, estimate or loss value.
 Use the progress numbers and the executor log to understand the job's current state.
 If you cannot call the tool, reply with only the JSON object {"vendor_label": "...", "gpu": "...", "amount_usd": "...", "rationale": "..."} and nothing else.`
 
@@ -78,7 +81,7 @@ Recent executor log (last ${i.logTail.length} lines):
 ${i.logTail.join('\n')}
 </executor_log>
 
-Call request_gpu_hold now.`
+Call request_gpu_hold now. amount_usd is one GPU-hour of the chosen vendor; the rationale cites only numbers from the spec or the Progress block.`
   return [{ role: 'system', content: F1_SYSTEM }, { role: 'user', content: user }]
 }
 

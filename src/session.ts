@@ -554,9 +554,10 @@ export class Session {
   }
 
   private logCheckpointLoss(slot: Slot) {
-    const n = slot.job.losses.length
-    if (n && this.execLog.filter((l) => l.startsWith(`[ckpt ${slot.label}]`)).length < n) {
-      this.execLog.push(`[ckpt ${slot.label}] loss ${slot.job.losses[n - 1].toFixed(3)} at ${Number(slot.job.runningMs / 1000n)} sim-min`)
+    // Counted per job: a second job on the same vendor must log its own checkpoints, not show job 1's stale losses.
+    const n = slot.job.losses.length, tag = `[ckpt ${slot.label} job ${slot.job.id}]`
+    if (n && this.execLog.filter((l) => l.startsWith(tag)).length < n) {
+      this.execLog.push(`${tag} loss ${slot.job.losses[n - 1].toFixed(3)} at ${Number(slot.job.runningMs / 1000n)} sim-min`)
     }
   }
 

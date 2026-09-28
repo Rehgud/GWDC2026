@@ -122,22 +122,70 @@ tr.denied td { background: color-mix(in srgb, var(--crit) 8%, var(--surface)); }
 .quote { border-left: 3px solid var(--line); padding-left: 8px; margin: 4px 0 0; overflow-wrap: anywhere; }
 .w-3 { width: 3.5em; } .w-5 { width: 5em; } .w-6 { width: 5.5em; }
 .receipt { border: 1px solid var(--ring); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.btn.small { min-height: 0; padding: 1px 10px; font-size: 15px; font-weight: 600; }
+
+/* ---- video mode (?video=1 or the 영상 모드 button): one screen, no scroll, laid out for 1280x720 and zoomed
+   x1.25 / x1.5 for 1600x900 / 1920x1080. budget strip / LATEST top-up card / live jobs + last 6 ledger lines. ---- */
+.video body { height: 100vh; display: flex; flex-direction: column; line-height: 1.35; }
+@media (min-width: 1600px) and (min-height: 900px) { html.video { zoom: 1.25; } .video body { height: calc(100vh / 1.25); } } /* zoom scales vh too */
+@media (min-width: 1920px) and (min-height: 1080px) { html.video { zoom: 1.5; } .video body { height: calc(100vh / 1.5); } }
+.video .novid, .video .z-grant > h2, .video #spec, .video #vendors, .video .z-live > h2, .video .z-live > h3,
+.video #topups > :nth-child(n+2), .video #receipts, .video #ledger tr:nth-child(n+7),
+.video #jobs:has(tr:not(.closed)) tr.closed { display: none; }
+.video header.top { position: static; padding: 6px 16px; }
+.video .badge, .video .pill, .video th, .video .step h4, .video .tanktxt { font-size: 16px; }
+.video .controls { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.video .controls .row { gap: 6px 8px; }
+.video .controls .btn { min-height: 34px; padding: 2px 8px; }
+.video .stages li { padding: 2px 5px; }
+.video .stages li + li::before { margin-right: 3px; }
+.video .confirm, .video .msg { order: 1; flex-basis: 100%; }
+.video .msg:empty { display: none; }
+.video main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 6px 16px; gap: 6px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "budget budget" "card card" "jobs evi"; }
+.video section.zone { padding: 4px 12px; }
+.video .z-grant { grid-area: budget; }
+.video .cols.grant, .video .cols.evi { display: block; }
+.video #budget { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 14px; }
+.video .bar { margin: 0; height: 18px; }
+.video .legend { grid-column: 1 / -1; grid-template-columns: repeat(5, auto auto auto auto); justify-content: start; gap: 0 6px; }
+.video .legend .sw:not(:first-child) { margin-left: 18px; }
+.video .legend .src, .video .tanktxt .src { display: none; }
+.video .tanktxt { word-break: keep-all; }
+.video .z-live { display: contents; }
+.video #topups { grid-area: card; min-width: 0; }
+.video .card { padding: 8px 14px; }
+.video .pipe { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1.25fr) minmax(0, .75fr); margin-top: 6px; }
+.video .chip { font-size: 15px; line-height: 1.3; }
+.video .pill { white-space: nowrap; }
+.video .quote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+.video .z-live > .scroll, .video .z-evi { overflow: hidden; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; }
+.video .z-live > .scroll { grid-area: jobs; padding: 2px 10px; }
+.video .z-evi { grid-area: evi; }
+.video .z-evi h2 { font-size: 16px; margin: 0; }
+.video .scroll { overflow: hidden; }
+.video table { table-layout: auto; }
+.video colgroup, .video .z-live :is(th, td):nth-child(3), .video .z-live :is(th, td):nth-child(n+5), .video .z-live th .src,
+.video .z-evi :is(th, td):nth-child(7) { display: none; }
+.video th, .video td { padding: 3px 8px; }
 </style>
 </head>
 <body>
 <header class="top">
   <div class="row">
-    <h1>CFO Agent &middot; 금고 대시보드</h1>
+    <h1>CFO Agent<span class="novid"> &middot; 금고 대시보드</span></h1>
     <span>run <b id="run" class="mono">&mdash;</b></span>
     <span>vault <b id="vault" class="mono">&mdash;</b></span>
-    <span>block <b id="block" class="num">&mdash;</b> <span class="src chain">CHAIN</span></span>
+    <span class="novid">block <b id="block" class="num">&mdash;</b> <span class="src chain">CHAIN</span></span>
     <span id="sync" class="num">sync &mdash;</span>
     <span id="b-llm" class="badge">LLM</span>
     <span id="b-price" class="badge">PRICE</span>
     <span id="b-scn" class="badge info">SCENARIO</span>
     <span id="b-pending" class="badge">pending tx</span>
+    <button id="video-btn" class="btn small" type="button" aria-pressed="false" title="1280&times;720 / 1920&times;1080 녹화용 한 화면 보기 (?video=1)">영상 모드</button>
   </div>
-  <div class="row health">
+  <div class="row health novid">
     <span id="health">&mdash;</span>
     <span>출처: <span class="src chain">CHAIN</span> 체인 이벤트/스냅샷 &middot; <span class="src ledger">LEDGER</span> 백엔드 장부·기록 &middot; <span class="src qwen">QWEN</span> LLM 출력(신뢰하지 않음)</span>
   </div>
@@ -145,24 +193,24 @@ tr.denied td { background: color-mix(in srgb, var(--crit) 8%, var(--surface)); }
   <div class="controls">
     <div class="row">
       <b>STOP</b>
-      <button id="stop-SCOPE_DRIFT" class="btn danger" type="button" disabled>STOP &middot; SCOPE_DRIFT</button>
-      <button id="stop-BUDGET_CONCERN" class="btn danger" type="button" disabled>STOP &middot; BUDGET_CONCERN</button>
-      <button id="stop-MANUAL" class="btn danger" type="button" disabled>STOP &middot; MANUAL</button>
-      <button id="wind-btn" class="btn" type="button" disabled>정산&middot;환불 (wind-down)</button>
-      <span class="muted">재개(resume) 버튼 없음 &middot; 정지는 되돌리지 않는다</span>
+      <button id="stop-SCOPE_DRIFT" class="btn danger" type="button" disabled><span class="novid">STOP &middot; </span>SCOPE_DRIFT</button>
+      <button id="stop-BUDGET_CONCERN" class="btn danger" type="button" disabled><span class="novid">STOP &middot; </span>BUDGET_CONCERN</button>
+      <button id="stop-MANUAL" class="btn danger" type="button" disabled><span class="novid">STOP &middot; </span>MANUAL</button>
+      <button id="wind-btn" class="btn" type="button" disabled>정산&middot;환불<span class="novid"> (wind-down)</span></button>
+      <span class="muted novid">재개(resume) 버튼 없음 &middot; 정지는 되돌리지 않는다</span>
     </div>
     <div id="confirm" class="confirm" hidden>
       <span id="confirm-text"></span>
       <button id="confirm-yes" class="btn danger" type="button">확인 &middot; 전송</button>
       <button id="confirm-no" class="btn" type="button">취소</button>
     </div>
-    <div class="row"><span>정지 단계</span><ol id="stop-stages" class="stages"></ol></div>
+    <div class="row"><span class="novid">정지 단계</span><ol id="stop-stages" class="stages"></ol></div>
     <p id="action-msg" class="msg" role="status" aria-live="polite"></p>
   </div>
 </header>
 
 <main>
-  <section class="zone" aria-labelledby="h-grant">
+  <section class="zone z-grant" aria-labelledby="h-grant">
     <h2 id="h-grant">GRANT <small>서명된 명세 &middot; 예산 &middot; 벤더</small></h2>
     <div class="cols grant">
       <div id="spec"></div>
@@ -171,7 +219,7 @@ tr.denied td { background: color-mix(in srgb, var(--crit) 8%, var(--surface)); }
     </div>
   </section>
 
-  <section class="zone" aria-labelledby="h-live">
+  <section class="zone z-live" aria-labelledby="h-live">
     <h2 id="h-live">LIVE <small>작업 &middot; hold 탱크 &middot; 충전 판단</small></h2>
     <div class="scroll">
       <table>
@@ -190,8 +238,8 @@ tr.denied td { background: color-mix(in srgb, var(--crit) 8%, var(--surface)); }
     <div id="topups" class="cards"></div>
   </section>
 
-  <section class="zone" aria-labelledby="h-evi">
-    <h2 id="h-evi">EVIDENCE <small>장부 피드 (tx 1건 = 1줄) &middot; 영수증</small></h2>
+  <section class="zone z-evi" aria-labelledby="h-evi">
+    <h2 id="h-evi">EVIDENCE <small class="novid">장부 피드 (tx 1건 = 1줄) &middot; 영수증</small></h2>
     <div class="cols evi">
       <div class="scroll">
         <table>
@@ -379,8 +427,8 @@ function tank(j) {
 
 function renderJobs(s) {
   const jobs = [...(s.jobs || [])].sort((a, b) => (b.inference ? 1 : 0) - (a.inference ? 1 : 0) || Number(a.id) - Number(b.id))
-  $('jobs').replaceChildren(...(jobs.length ? jobs.map((j) => h('tr', { class: j.inference ? 'pin' : null },
-    h('td', null, h('b', null, '#' + j.id), ' ', j.inference ? 'INFERENCE' : '· ' + j.vendorLabel, j.inference ? h('div', { class: 'muted' }, '상단 고정') : null),
+  $('jobs').replaceChildren(...(jobs.length ? jobs.map((j) => h('tr', { class: j.inference ? 'pin' : j.state === 'CLOSED' ? 'closed' : null }, // video mode hides closed rows
+    h('td', null, h('b', null, '#' + j.id), ' ', j.inference ? 'INFERENCE' : '· ' + j.vendorLabel, j.inference ? h('div', { class: 'muted novid' }, '상단 고정') : null),
     h('td', null, pill(JOB_KIND[j.state] || 'grey', j.state), j.stopReason ? h('div', { class: 'muted' }, j.stopReason) : null),
     h('td', null, j.latch === 'none' ? j.latch : pill(j.latch === 'inflight' ? 'warn' : 'ser', j.latch)),
     h('td', null, j.state === 'CLOSED' ? h('span', { class: 'muted' }, '종료됨 (hold 해제)') : tank(j)),
@@ -544,6 +592,19 @@ for (const r of REASONS) $('stop-' + r).addEventListener('click', () => ask({ ty
 $('wind-btn').addEventListener('click', () => ask({ type: 'WIND_DOWN' }))
 $('confirm-yes').addEventListener('click', () => { const a = confirmFor; confirmFor = null; if (a) act(a); else renderControls() })
 $('confirm-no').addEventListener('click', () => { confirmFor = null; renderControls() })
+
+// ---- video mode: CSS only (html.video); ?video=1 opens in it, the button toggles and keeps the URL in step ----
+function setVideo(on) {
+  document.documentElement.className = on ? 'video' : ''
+  $('video-btn').setAttribute('aria-pressed', String(on))
+  $('video-btn').textContent = on ? '기본 보기' : '영상 모드'
+}
+setVideo(/[?&]video=1(&|$)/.test(location.search))
+$('video-btn').addEventListener('click', () => {
+  const on = document.documentElement.className !== 'video'
+  setVideo(on)
+  history.replaceState(null, '', on ? '?video=1' : location.pathname)
+})
 
 // ---- poll ----
 function render(s) {
