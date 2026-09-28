@@ -12,5 +12,11 @@
     "C": "0x9850F9CEdE2711d0bC1FC57715dF742daE81Ca8E"
   },
   "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
-  "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb"
+  "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+  "akash_hosts": {
+    "A": "https://provider.h100.siamaidol.com:8443",
+    "B": "https://provider.h100.ams.val.akash.pub:8443",
+    "C": "https://provider.h100.wdc.hh.akash.pub:8443"
+  },
+  "akash_gpu": "H100"
 }
