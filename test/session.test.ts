@@ -127,7 +127,7 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     const st = session.state()
     assert.equal(st.jobs.find((j) => j.inference)?.state, 'CLOSED', `${name}: the INFERENCE row shows CLOSED`)
     assert.equal(st.can.windDown, false, `${name}: no wind-down button once the session ended`)
-    assert.deepEqual(await session.action({ type: 'WIND_DOWN', stateVersion: st.version }), { ok: false, status: 400, reason: 'not all jobs stopped/exhausted or a tx is pending' })
+    assert.deepEqual(await session.action({ type: 'WIND_DOWN', stateVersion: st.version }), { ok: false, status: 400, reason: 'the session already ended' })
 
     // windDown a second time sends 0 txs
     const before = session.ledger.length
@@ -190,6 +190,9 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     const bar = (x: StateView['grant']) => BigInt(x.paid) + BigInt(x.fees) + BigInt(x.inference_paid) + BigInt(x.open_holds) + BigInt(x.refundable)
     assert.equal(bar(g), BigInt(g.budget), 'the budget bar adds up')
     for (const st of states) assert.equal(bar(st.grant), BigInt(st.grant.budget), `v${st.version}: the budget bar adds up on every poll`)
+    // Regression: between job 2 closing and job 3 opening every job is terminal; wind-down must still wait for the STOP.
+    for (const st of states) if (st.stop === 'RUNNING') assert.equal(st.can.windDown, false, `v${st.version}: no wind-down mid-scenario before STOP`)
+    assert.ok(states.some((st) => st.stop !== 'RUNNING' && st.can.windDown), 'wind-down offered after the STOP')
     // Regression: a dashboard poll between a Settled receipt and the next chain read (snapshot older than the receipt)
     // counted the settle as paid AND still held (sum $21.03 of $20). Every part now comes from the one snapshot.
     const firstSettle = logs.find((l) => l.name === 'Settled')!

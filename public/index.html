@@ -367,12 +367,13 @@ function renderGrant(s) {
 
 // ---- LIVE ----
 function tank(j) {
-  const pct = Math.max(0, Math.min(100, Number(j.remainingPct) || 0))
+  const raw = Math.max(0, Number(j.remainingPct) || 0) // > 100 right after a top-up (held > one hold)
+  const pct = Math.min(100, raw)
   const fill = h('div', { class: 'fill' + (pct < 40 ? ' low' : '') })
   fill.style.width = pct + '%'
   return [
-    h('div', { class: 'tank', role: 'img', 'aria-label': 'hold 잔여 ' + pct + '%, 충전 트리거 40%' }, fill, h('div', { class: 'trig' })),
-    h('div', { class: 'tanktxt num' }, pct + '% 잔여 / hold ' + money(j.holdSize) + (pct < 40 ? ' · 40% 미만' : ''), ' ', src('LEDGER')),
+    h('div', { class: 'tank', role: 'img', 'aria-label': 'hold 잔여 ' + raw + '%, 충전 트리거 40%' }, fill, h('div', { class: 'trig' })),
+    h('div', { class: 'tanktxt num' }, raw + '% 잔여 / hold ' + money(j.holdSize) + (raw < 40 ? ' · 40% 미만' : ''), ' ', src('LEDGER')),
   ]
 }
 

@@ -70,7 +70,7 @@ export async function bootSession(o: BootOpts): Promise<Session> {
     dep = JSON.parse(readFileSync(join(o.outDir ?? 'deployments', `${CHAINS[o.chain].id}-${o.vault}.json`), 'utf8'))
   } else {
     log(`deploying a fresh vault for scenario "${o.scenario.name}" on ${o.chain} (${o.rpc}) ...`)
-    dep = await Session.deployFor(o.scenario, { chain: o.chain, rpcUrls: [o.rpc], keysDir: o.keysDir, outDir: o.outDir, log: (s) => log(`  ${s}`) })
+    dep = await Session.deployFor(o.scenario, { chain: o.chain, rpcUrls: [o.rpc], founderPk: o.chain === 'anvil' ? undefined : (process.env.FOUNDER_PK as Hex | undefined), keysDir: o.keysDir, outDir: o.outDir, log: (s) => log(`  ${s}`) })
     log(`  vault ${dep.vault}  agent ${dep.agent}  deployBlock ${dep.deployBlock}`)
   }
   await warm

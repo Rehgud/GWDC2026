@@ -758,14 +758,17 @@ export class Session {
       if (out.status === 'OK') this.advanceStop('PAUSED_ON_CHAIN')
       return { ok: true }
     }
-    if (!this.canWindDown()) return { ok: false, status: 400, reason: 'not all jobs stopped/exhausted or a tx is pending' }
+    if (this.ended) return { ok: false, status: 400, reason: 'the session already ended' }
+    if (!this.canWindDown()) return { ok: false, status: 400, reason: 'STOP first, or wait until every job is stopped/exhausted with no tx pending' }
     await this.windDown()
     return { ok: true }
   }
 
-  /** False before any vendor job exists (nothing to wind down yet) and once the session ended (SESSION_END is sent once). */
+  /** False before any vendor job exists (nothing to wind down yet), once the session ended (SESSION_END is sent once),
+   *  and mid-scenario: the founder must STOP first, unless the scenario already finished (a gap between scripted jobs
+   *  would otherwise let a click end the run early). */
   private canWindDown(): boolean {
-    return this.slots.length > 0 && !this.ended && this.slots.every((s) =>
+    return this.slots.length > 0 && !this.ended && (this.stopStage !== 'RUNNING' || this.isDone()) && this.slots.every((s) =>
       (s.job.state === 'STOPPED' || s.job.state === 'CLOSED' || (s.job.state === 'HOLD_EXHAUSTED' && !isRearmable(s.job))) &&
       this.committer.pendingFor(s.job.id?.toString() ?? '') === 0)
   }
