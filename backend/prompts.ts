@@ -16,7 +16,7 @@ export type F1Context = {
   trigger: 'start' | 'topup' | 'migration' | 'repropose' | 'rearm';
   /** executor log lines, oldest first (untrusted: may contain injected text) */
   progressLog: string[];
-  chain: { budget: bigint; committed: bigint; maxHold: bigint; secondsToDeadline: bigint; paused: boolean };
+  chain: { budget: bigint; committed: bigint; maxHold: bigint; secondsToDeadline: bigint; simHoursToDeadline: number; paused: boolean };
   vendors: VendorOption[];
   current: { vendorLabel: string; gpu: string; holdGross: bigint; remainingGross: bigint } | null;
   /** labels F1 must not propose again (the one that was just denied, for a re-proposal) */
@@ -39,7 +39,7 @@ export function f1Messages(c: F1Context): Msg[] {
   const user = [
     `SIGNED WORK SPEC (JSON):\n${c.specText}`,
     `REQUEST TYPE: ${c.trigger}`,
-    `VAULT: budget $${formatUsd(c.chain.budget)}, committed $${formatUsd(c.chain.committed)}, max hold per call $${formatUsd(c.chain.maxHold)}, ${c.chain.secondsToDeadline}s to deadline${c.chain.paused ? ', PAUSED' : ''}.`,
+    `VAULT: budget $${formatUsd(c.chain.budget)}, committed $${formatUsd(c.chain.committed)}, max hold per call $${formatUsd(c.chain.maxHold)}, ${c.chain.simHoursToDeadline.toFixed(2)} simulated GPU-hours left before the deadline${c.chain.paused ? ', PAUSED' : ''}. A request must fit before the deadline.`,
     `VENDORS:\n${vendors}`,
     cur,
     `PROGRESS LOG (most recent last):\n${c.progressLog.slice(-12).join('\n') || '(none)'}`,

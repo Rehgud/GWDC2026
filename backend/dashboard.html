@@ -1,0 +1,2 @@
+<!doctype html><meta charset="utf-8"><title>CFO Agent</title><pre id="s">loading…</pre>
+<script>setInterval(async()=>{const r=await fetch('/state');document.getElementById('s').textContent=JSON.stringify(await r.json(),null,2)},1000)</script>

@@ -218,6 +218,7 @@ export type SessionEndReason =
   | 'INITIAL_OPEN_FAILED'
   | 'MIGRATION_OPEN_FAILED'
   | 'QWEN_FINAL_DENY'
+  | 'TOPUP_DENIED' // final non-Qwen denial of a top-up (rule code), hold ran down
   | 'NAN'
   | 'WIND_DOWN'
   | 'EXECUTOR_CRASH';

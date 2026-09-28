@@ -25,7 +25,8 @@ export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 export type StubReply = {
   content: string | null;
   finish_reason?: string;
-  usage?: Partial<Usage>;
+  /** raw usage object as Kiln would send it */
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number | string | null };
   /** simulate an HTTP status (429 / 500 / ...) instead of a 200 */
   http?: number;
   /** simulate latency; > timeout -> TIMEOUT */

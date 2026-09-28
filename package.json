@@ -19,7 +19,10 @@
     "deploy": "tsx scripts/deploy.ts",
     "preflight": "tsx scripts/preflight.ts",
     "sign-spec": "tsx scripts/sign-spec.ts",
-    "anvil": "anvil --block-time 2"
+    "anvil": "anvil --block-time 2",
+    "session": "tsx scripts/run.ts",
+    "e2e:local": "tsx scripts/e2e-local.ts",
+    "audit": "tsx auditor/cli.ts"
   },
   "dependencies": {
     "viem": "2.56.9"

@@ -182,6 +182,27 @@ export class Committer {
     return this.pendingCount;
   }
 
+  /**
+   * Run fn inside the queue WITHOUT writing a record (the stolen-key demo sends its raw txs here
+   * so they never race the backend's nonces: "cast only while the backend is idle").
+   */
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    this.pendingCount++;
+    const p = this.tail.then(() => {
+      if (this.halted) throw this.halted;
+      return fn();
+    });
+    this.tail = p.catch(() => {});
+    return p.finally(() => {
+      this.pendingCount--;
+    });
+  }
+
+  /** Resolves when everything queued so far has finished. */
+  drain(): Promise<void> {
+    return this.tail.then(() => undefined);
+  }
+
   /** Enqueue one unit. Resolves with its outcome; rejects with HaltError (and halts the queue). */
   commit(draft: RecordDraft): Promise<CommitOutcome> {
     this.pendingCount++;
