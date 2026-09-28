@@ -1120,6 +1120,13 @@ make deploy
   - Surfaced by: Section 7 / 본문 성공기준 5
   - Files: to be determined
   - Verify: JSONL로 표 생성, 게이트 선거절 절감 건수 표시
+  - 2026-09-29 결정: "flow"를 운영진에게 묻지 않고, 같은 Kiln JSONL로 **여러 단위의 표를 모두** 만든다. 디테일이 보여야 한다.
+    1. 호출 종류별(F1 요청 / F2 CFO 심사 / F3 영수증): 호출 수, 입력·출력·reasoning 토큰, 비용, 에너지, 지연 p50/p95, 429·실패 수
+    2. 결정 흐름별(충전 요청 1건 = F1 → 게이트 → F2 → tx): 요청마다 토큰·비용·에너지, 결과(승인 / 게이트 거절 / Qwen 거절 / 체인 Denied), recHash와 tx 해시
+    3. GPU 작업(job)별: 추론비 대비 GPU 지출 비율("컴퓨트 $X를 통제하는 데 든 AI 비용")
+    4. 세션별 합계와 온체인 INFERENCE 정산 금액 대조
+    5. 결과별 집계와 절감: 게이트 선거절로 F2를 건너뛴 건수와 절약 토큰, `/no_think` 켬/끔 비교
+    6. 에너지 범위: RNGD 1.63 J/토큰 기준, GPU(RTX Pro 6000) 4.02 J 비교, 상한 11.9 J
 - [ ] **T13 (P1, human: ~1.5h / CC: ~15min)** — docs — README 추가(데모용 지름길, 한계, 명령 5개, 권한×상태 표, D1 한계 문구)
   - Surfaced by: Section 10/3 — S10-1, S10-4, S3-15, S3-16, D1
   - Files: `README.md`
@@ -1136,6 +1143,7 @@ make deploy
   - Surfaced by: Section 9 — S9-9, 본문 Open Questions
   - Files: `docs/`
   - Verify: 답변 캡처를 docs/에 저장
+  - 2026-09-29: Kiln 키 문의 완료(키 발급, 호출 확인). TG 질문 3건은 보내지 않기로 함(모델 공지·Top 3 범위는 패스, flow 정의는 T12에서 여러 단위 표로 대체). 남은 것은 소스 검증 20분 타임박스(T4 배포 후)
 
 ### Completion Summary
 ```
