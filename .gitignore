@@ -13,8 +13,9 @@ coverage/
 # forge broadcast logs from local anvil runs (Base Sepolia broadcasts are kept)
 broadcast/*/31337/
 
-# local anvil runs are dev noise; Base Sepolia bundles under runs/<vault>/ are evidence
+# local anvil runs/deployments are dev noise; Base Sepolia bundles under runs/<vault>/ are evidence
 runs/local/
+deployments/local/
 
 # OS / editor
 .DS_Store

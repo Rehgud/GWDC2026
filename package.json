@@ -15,7 +15,11 @@
     "gen:abi": "forge build && tsx scripts/gen-abi.ts",
     "gen:fixtures": "tsx scripts/gen-fixtures.ts",
     "check-secrets": "bash scripts/check-secrets.sh",
-    "hooks": "git config core.hooksPath .githooks"
+    "hooks": "git config core.hooksPath .githooks",
+    "deploy": "tsx scripts/deploy.ts",
+    "preflight": "tsx scripts/preflight.ts",
+    "sign-spec": "tsx scripts/sign-spec.ts",
+    "anvil": "anvil --block-time 2"
   },
   "dependencies": {
     "viem": "2.56.9"

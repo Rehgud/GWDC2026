@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "note": "Receive-only demo addresses: last 20 bytes of keccak256('cfo-agent:receive-only:<label>'). Nobody holds their keys; MockUSDC sent there is only evidence. Override any of them with env VENDOR_A/B/C, INFERENCE_PAYEE, FEE_TO.",
+  "budget_usd": "20.00",
+  "max_hold_usd": "6.00",
+  "fee_bps": 300,
+  "vault_runway_hours": 3,
+  "inference_hold_usd": "0.05",
+  "vendors": {
+    "A": "0xB58557467B587928c0444f6d15743738Fb19BA38",
+    "B": "0x59E64c085b6cc41a98Cf6FBF8AA0e64b9c65403C",
+    "C": "0x9850F9CEdE2711d0bC1FC57715dF742daE81Ca8E"
+  },
+  "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+  "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb"
+}
