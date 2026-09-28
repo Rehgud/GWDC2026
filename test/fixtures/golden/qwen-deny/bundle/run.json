@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "run_id": "qwen-deny-2026-09-28T19-05-26-174Z",
+  "chain_id": 31337,
+  "vault": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "deploy_block": "5",
+  "git_sha": "cbc6e13b51f56f93f60f51f77ce33ff2c9cff3ca-dirty",
+  "scenario": "qwen-deny",
+  "flags": {
+    "LLM_MODE": "stub",
+    "KILN_MODEL": "qwen3-32b",
+    "CLOCK_MULT": 600,
+    "TOPUP_TRIGGER": 0.4,
+    "DEADLINE_MARGIN_S": 15,
+    "LLM_CALL_CAP": 60,
+    "PRICE_SOURCE": "SNAPSHOT:forced",
+    "KILN_HOST": "",
+    "F1_TIMEOUT_MS": 10000,
+    "F2_TIMEOUT_MS": 10000,
+    "NO_THINK": true
+  },
+  "roles": {
+    "founder": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "agent": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+    "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+    "usdc": "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  },
+  "rpc_hosts": [
+    "127.0.0.1:51821"
+  ],
+  "last_block": "17",
+  "end_reason": "QWEN_FINAL_DENY",
+  "ended_at": "2026-09-28T19:05:38.123Z"
+}

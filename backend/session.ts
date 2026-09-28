@@ -615,6 +615,15 @@ export class Session {
   private async onCheckpoint(t: TaskJob, a: TickAction & { kind: 'checkpoint' }): Promise<void> {
     this.nextCkptIdx = a.idx + 1;
     this.taskLosses.push(a.loss);
+    if (a.loss === 'NaN' || a.loss === 'Infinity' || a.loss === '-Infinity') {
+      // NaN is handled by code at once (no Qwen): stop before any in-flight top-up can commit,
+      // then checkpoint -> settle -> close -> windDown
+      if (t.exec.state.phase !== 'STOPPED' && t.exec.state.phase !== 'CLOSED') t.exec.apply({ type: 'STOP', reason: 'NAN' });
+      this.epoch++;
+      await this.finishJob(t, 'agent', 'NaN loss: checkpoint -> settle -> close', this.checkpointOf(a, t));
+      void this.windDown('NAN');
+      return;
+    }
     this.progressLog.push(`[ckpt ${a.idx}] job ${t.jobId} vendor ${t.label} sim=${(Number(a.simSeconds) / 60).toFixed(0)}min loss=${a.loss}`);
     // scenario interventions happen at checkpoints (recorded as overrides on the next request)
     await this.d.scenario.onCheckpoint?.(a.idx, this.api());

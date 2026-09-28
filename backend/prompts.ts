@@ -95,12 +95,17 @@ Answer with exactly one JSON object and nothing else:
 {"verdict": "approve" | "deny", "reason": "<one sentence>"}
 Use lowercase "approve" or "deny".`;
 
+/** The one line that tells F2 exactly what it is approving (re-rendered by the auditor from R). */
+export function f2RequestLine(kind: 'open' | 'topUp', vendorLabel: string, gpu: string, amountNet: bigint, amountGross: bigint): string {
+  return `REQUEST (${kind}): vendor ${vendorLabel}, ${gpu}, $${formatUsd(amountNet)} net ($${formatUsd(amountGross)} with fee).`;
+}
+
 export function f2Messages(c: F2Context): Msg[] {
   const s = c.summary;
   const rationale = untrusted(c.rationale, 300);
   const user = [
     `SIGNED WORK SPEC (JSON):\n${c.specText}`,
-    `REQUEST (${c.kind}): vendor ${c.request.vendorLabel}, ${c.request.gpu}, $${formatUsd(c.request.amountNet)} net ($${formatUsd(c.request.amountGross)} with fee).`,
+    f2RequestLine(c.kind, c.request.vendorLabel, c.request.gpu, c.request.amountNet, c.request.amountGross),
     `NUMBERS (computed by code): task spent/committed $${formatUsd(s.specSpentGross)} of job cap $${formatUsd(s.jobCapGross)}; vault budget left $${formatUsd(s.budgetLeftGross)}; ` +
       `${s.checkpoints} checkpoints, last loss ${s.lastLoss ?? 'n/a'}, improvement over the last checkpoints ${s.lossImprovementPct === null ? 'n/a' : `${s.lossImprovementPct.toFixed(2)}%`}; ` +
       `${s.simHoursSoFar.toFixed(2)} sim h used, ${s.simHoursRequested.toFixed(2)} sim h requested. Code gate: ${s.gateResult}.`,

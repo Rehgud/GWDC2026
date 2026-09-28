@@ -6,7 +6,8 @@
 //   judge(bundle, chain) -> PASS / FAIL / CANNOT_VERIFY with findings. Exit 0 / 1 / 2.
 //
 // Import boundary (R3-19, D3): rules / parse / record / spec / codes / chain (read side) /
-// pricedoc only. Never executor, kiln, akash, session or server (test/ts/audit.test.ts greps it).
+// pricedoc / cost / prompts (pure renderers) only. Never executor, kiln, akash, session, commit
+// or server (test/ts/audit.test.ts greps it).
 //
 // Checks (prompt.md §26):
 //   1 recHash == keccak(file bytes)        2 prevHash chain linear, genesis first, SESSION_END last
@@ -28,9 +29,11 @@ import { vaultAbi } from '../backend/abi.ts';
 import { decodeVaultLogs, getLogsChunked, makePublicClient, type DecodedLog } from '../backend/chain.ts';
 import { bytes32ToCode, describeBytes32, GATE_ORDER, NO_JOB, type DenyCode } from '../backend/codes.ts';
 import { f1FromRaw, verdictFromRaw } from '../backend/parse.ts';
+import { costToMicro } from '../backend/cost.ts';
 import { parsePriceDoc } from '../backend/pricedoc.ts';
+import { f2RequestLine } from '../backend/prompts.ts';
 import { hashBytes, loadRecordDir, serialize, verifyChain, type DecisionRecord, type LlmEvidence, type LoadedRecord } from '../backend/record.ts';
-import { chainRules, check, feeOf, gross, specGross, type ChainView, type GateInput } from '../backend/rules.ts';
+import { chainRules, check, feeOf, gross, normGpu, specGross, type ChainView, type GateInput } from '../backend/rules.ts';
 import { parseSpec, specJobCap, verifySpec, type WorkSpec } from '../backend/spec.ts';
 
 // ------------------------------------------------------------------------------ types
@@ -266,6 +269,7 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
   if (!chain.codeExists) add('FAIL', 'check4', 'NO_CODE', `no contract at ${vault}`);
   const imm = chain.immutables;
   const feeBps = BigInt(imm.feeBps);
+  if (imm.feeBps !== '300') add('FAIL', 'check9', 'FEE_BPS', `vault feeBps ${imm.feeBps} != designed 300 (3%)`);
 
   // ---- check 3 + 4: spec ----------------------------------------------------------------------
   let spec: WorkSpec | null = null;
@@ -386,6 +390,46 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
   const chainDeniedFor = new Map<string, DecisionRecord<'CHAIN_DENIED'>>();
   for (const r of parsed) if (R(r).kind === 'CHAIN_DENIED') chainDeniedFor.set(lc((R(r) as DecisionRecord<'CHAIN_DENIED'>).body.ref), R(r) as DecisionRecord<'CHAIN_DENIED'>);
 
+  // F1/F6 binding: a record authorizes ONLY the event(s) of its own tx (ledger mined, else sent,
+  // else the first event carrying its hash). The rec is public: anyone holding the agent key can
+  // replay it, and such a replay must count as unrecorded, never as gated.
+  const ledgerByRec = new Map<string, LedgerLine[]>();
+  for (const l of b.ledger) if (l.rec) ledgerByRec.set(lc(l.rec), [...(ledgerByRec.get(lc(l.rec)) ?? []), l]);
+  const firstEventTx = new Map<string, string>();
+  for (const ev of decoded) if ('rec' in ev && ev.rec && !firstEventTx.has(lc(ev.rec))) firstEventTx.set(lc(ev.rec), lc(ev.txHash));
+  const ownerTx = (rec: string): string | undefined => {
+    const lines = ledgerByRec.get(lc(rec)) ?? [];
+    const t = lines.find((l) => l.status === 'mined' && l.tx)?.tx ?? lines.find((l) => l.status === 'sent' && l.tx)?.tx;
+    return t ? lc(t) : firstEventTx.get(lc(rec));
+  };
+
+  // F7: the anchored checkpoint loss series of the task, in record order
+  const lossSeries: string[] = [];
+  const lossBefore = new Map<number, number>();
+  let nanSeq = Infinity;
+  for (const r of parsed) {
+    lossBefore.set(r.seq, lossSeries.length);
+    const x = R(r);
+    if (x.kind === 'SETTLE' || x.kind === 'CHECKPOINT') {
+      const ck = (x.body as { checkpoint?: { loss: unknown } | null }).checkpoint;
+      if (ck) {
+        lossSeries.push(JSON.stringify(ck.loss));
+        if ((ck.loss === 'NaN' || ck.loss === 'Infinity' || ck.loss === '-Infinity') && r.seq < nanSeq) nanSeq = r.seq;
+      }
+    }
+  }
+  /** gate losses must be a prefix of the anchored series and have seen all but at most the newest anchored entry */
+  const lossesConsistent = (seq: number, losses: unknown[]): boolean => {
+    const g = losses.map((l) => JSON.stringify(l));
+    if (g.length > lossSeries.length) return false;
+    for (let i = 0; i < g.length; i++) if (g[i] !== lossSeries[i]) return false;
+    return g.length >= (lossBefore.get(seq) ?? 0) - 1;
+  };
+  const labelOf = (addr: string | null) => genesis?.body.vendors.find((v) => eqA(v.address, addr))?.label ?? addr ?? '';
+  const specText = new TextDecoder().decode(b.specBytes);
+  const lastTopUpBlock = new Map<string, bigint>();
+  let infOpens = 0;
+
   const checkTxIntent = (x: DecisionRecord, fn: string, args: (string | boolean)[], seq: number, txHash: Hex) => {
     if (!x.tx || x.tx.fn !== fn) return add('FAIL', 'check5', 'TX_FN_MISMATCH', `record tx ${x.tx?.fn ?? 'none'} but chain ran ${fn}`, { seq, tx: txHash });
     const a = x.tx.args.map((v) => (typeof v === 'string' ? v.toLowerCase() : v));
@@ -399,9 +443,15 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
     const kind = ev.name === 'HoldOpened' ? 'open' : 'topUp';
     const vendor = ev.name === 'HoldOpened' ? ev.vendor : (st.jobs[Number(ev.jobId)]?.vendor ?? null);
     if (isInf(vendor)) {
-      // D2: INFERENCE open has no gate / F2, but a recorded chain-rule PASS
+      // D2: INFERENCE open has no gate / F2, but a recorded chain-rule PASS; exactly one, fixed
+      // $0.05, and no top-up path. Anything else is not covered by the exemption.
+      if (ev.name === 'ToppedUp') return add('FAIL', 'check5', 'INFERENCE_TOPUP', `D2: the INFERENCE job has no top-up path (topUp ${ev.net})`, { seq, tx: ev.txHash });
       if (x.kind !== 'INFERENCE_OPEN') return add('FAIL', 'check5', 'UNGATED_SPEND', `${ev.name} to INFERENCE backed by a ${x.kind} record`, { seq, tx: ev.txHash });
+      if (++infOpens > 1) add('FAIL', 'check5', 'INFERENCE_MULTI', 'D2: more than one INFERENCE hold in one session', { seq, tx: ev.txHash });
+      const hold = genesis?.body.config.inference_hold;
+      if (hold !== '50000' || ev.net.toString() !== hold) add('FAIL', 'check5', 'INFERENCE_HOLD', `D2: INFERENCE hold ${ev.net} != fixed $0.05 (config ${hold})`, { seq, tx: ev.txHash });
       const b2 = (x as DecisionRecord<'INFERENCE_OPEN'>).body;
+      if (BigInt(b2.ruleInput.chain.blockNumber) >= ev.blockNumber) add('FAIL', 'check6', 'SNAPSHOT_ORDER', `rule snapshot block ${b2.ruleInput.chain.blockNumber} is not before the tx block ${ev.blockNumber}`, { seq, tx: ev.txHash });
       let re: string[] = ['<throw>'];
       try {
         re = chainRules(b2.ruleInput);
@@ -436,6 +486,33 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
       add('FAIL', 'check5', 'R_MISMATCH', `R ${JSON.stringify(r0)} != on-chain ${ev.name}(${kind === 'open' ? vendor : ev.jobId}, ${ev.net})`, { seq, tx: ev.txHash });
     }
     checkTxIntent(x, kind, kind === 'open' ? [vendor!, ev.net.toString()] : [ev.jobId.toString(), ev.net.toString()], seq, ev.txHash);
+    // F4: the gate must have judged a snapshot taken BEFORE this tx, recent, with no other top-up
+    // of the same job landing in between
+    const snapBlock = BigInt(gi.chain.blockNumber);
+    if (snapBlock >= ev.blockNumber) add('FAIL', 'check6', 'SNAPSHOT_ORDER', `gate snapshot block ${snapBlock} is not before the tx block ${ev.blockNumber}`, { seq, tx: ev.txHash });
+    const txTs = ts(ev.blockNumber);
+    if (txTs !== null && txTs - BigInt(gi.chain.blockTimestamp) > 180n) add('FAIL', 'check6', 'SNAPSHOT_STALE', `gate snapshot is ${txTs - BigInt(gi.chain.blockTimestamp)} s older than the tx (> 180 s)`, { seq, tx: ev.txHash });
+    if (kind === 'topUp') {
+      const last = lastTopUpBlock.get(ev.jobId.toString());
+      if (last !== undefined && last > snapBlock) add('FAIL', 'check6', 'INTERVENING_TOPUP', `another top-up of job ${ev.jobId} landed at block ${last}, after the gate snapshot ${snapBlock}`, { seq, tx: ev.txHash });
+    }
+    // F5: R comes from F1's own words, and F2 reviewed exactly this R against the signed spec
+    const f1p = body.f1 && !body.f1.code ? f1FromRaw(body.f1.raw, body.f1.attempts.at(-1)?.finish_reason ?? null) : null;
+    if (!f1p || !f1p.ok) add('FAIL', 'check5', 'F1_NOT_BOUND', 'approval without a parseable F1 request', { seq });
+    else {
+      const p = f1p.value;
+      if (r0.vendorLabel !== p.vendor || r0.gpu !== p.gpu || r0.amount !== p.amountMicro.toString()) add('FAIL', 'check5', 'F1_NOT_BOUND', `R ${r0.vendorLabel}/${r0.gpu}/${r0.amount} != F1 ${p.vendor}/${p.gpu}/${p.amountMicro}`, { seq });
+      const br = body.request;
+      if (!br || br.vendor !== p.vendor || br.gpu !== p.gpu || br.amount !== p.amount) add('FAIL', 'check5', 'F1_NOT_BOUND', 'body.request differs from the F1 raw answer', { seq });
+    }
+    if (f2) {
+      const user = f2.messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+      const line = f2RequestLine(kind, labelOf(r0.vendor), normGpu(r0.gpu), BigInt(r0.amount), gross(BigInt(r0.amount), feeBps, isInf(r0.vendor)));
+      if (!user.includes(specText)) add('FAIL', 'check5', 'F2_NOT_BOUND', 'F2 did not review the signed spec text', { seq });
+      if (!user.includes(line)) add('FAIL', 'check5', 'F2_NOT_BOUND', `F2 did not review this request (expected "${line}")`, { seq });
+    }
+    // F7: approvals must be computed on the anchored loss series, and never after a NaN
+    if (!lossesConsistent(seq, gi.progress.losses)) add('FAIL', 'check6', 'LOSS_HISTORY_MISMATCH', `gate losses [${gi.progress.losses.join(', ')}] are not the anchored checkpoint series`, { seq });
     if (spec) {
       const sp = gi.spec;
       if (sp.spec_id !== spec.spec_id || sp.job_cap !== jobCap.toString() || sp.deadline !== String(spec.deadline) || JSON.stringify(sp.allowed_gpu_types) !== JSON.stringify(spec.allowed_gpu_types)) {
@@ -497,8 +574,7 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
           if (!e || gi.market.price !== e.price.toString() || gi.market.capacity !== cap) add('FAIL', 'check6', 'MARKET_INPUT_MISMATCH', `gateInput.market ${JSON.stringify(gi.market)} vs price file`, { seq: r.seq });
         } else if (e) add('FAIL', 'check6', 'MARKET_INPUT_MISMATCH', 'gateInput.market is null but the price file has an entry', { seq: r.seq });
         if (gi.clockMult !== genesis?.body.config.clock_mult) add('FAIL', 'check6', 'CLOCK_MISMATCH', `clockMult ${gi.clockMult} != run config`, { seq: r.seq });
-        const recorded = gi.progress.losses.map((l) => JSON.stringify(l));
-        if (JSON.stringify(recorded) !== JSON.stringify(lossesSeen)) add('WARN', 'check6', 'LOSS_HISTORY_MISMATCH', `gate losses ${recorded.length} vs anchored checkpoints ${lossesSeen.length}`, { seq: r.seq });
+        if (!lossesConsistent(r.seq, gi.progress.losses)) add('FAIL', 'check6', 'LOSS_HISTORY_MISMATCH', `gate losses ${gi.progress.losses.length} are not a prefix of the anchored checkpoint series (${lossesSeen.length} anchored before)`, { seq: r.seq });
         // the recorded result must be what the rules give, whatever the decision
         try {
           const re = check(gi);
@@ -508,9 +584,64 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
         }
       }
     }
+    if (x.kind === 'REQUEST') {
+      // F8: F2 only after a gate PASS; every non-local deny is written on-chain
+      const b2 = (x as DecisionRecord<'REQUEST'>).body;
+      const gateDenied = !!b2.gateResult && b2.gateResult.length > 0;
+      if (b2.f2 && gateDenied) add('FAIL', 'check6', 'F2_AFTER_GATE_DENY', 'F2 was called although the gate denied', { seq: r.seq });
+      if (b2.f2 && !b2.gateResult) add('FAIL', 'check6', 'F2_WITHOUT_GATE_PASS', 'F2 ran without a recorded gate PASS', { seq: r.seq });
+      if (b2.decision === 'DENY' && b2.code !== 'READ_FAILED' && x.tx?.fn !== 'recordDecision') add('FAIL', 'check11', 'DENY_NOT_ON_CHAIN', `DENY(${b2.code}) is not written on-chain with recordDecision`, { seq: r.seq });
+    }
     if (x.kind === 'INFERENCE_OPEN') {
       const ri = (x as DecisionRecord<'INFERENCE_OPEN'>).body.ruleInput;
       verifyGateChainInputs(r.seq, ri.chain, ri.request.vendor, null, null);
+    }
+  };
+
+  // F3: the latch and final denials, re-played over the records in order. After a final code
+  // (rule, QWEN_DENIED, QWEN_UNPARSEABLE, LLM_CALL_CAP, or the chain overriding an approval) the
+  // job gets no further request; after a transient code exactly one re-arm; operational codes
+  // must be re-derivable from their own evidence.
+  const TRANSIENT = new Set(['QWEN_UNAVAILABLE', 'READ_FAILED', 'TOPUP_TIMEOUT']);
+  const requestHistory = () => {
+    const latch = new Map<string, { state: 'none' | 'final' | 'transient'; rearmed: boolean }>();
+    let deniedOpens: string[] = [];
+    for (const r of parsed) {
+      const x = R(r);
+      if (x.kind !== 'REQUEST') continue;
+      const b2 = (x as DecisionRecord<'REQUEST'>).body;
+      const code = b2.code;
+      // operational codes re-derived from evidence (no relabeling a Qwen deny as transient)
+      const f2v = b2.f2 ? verdictFromRaw(b2.f2.raw, b2.f2.attempts.at(-1)?.finish_reason ?? null) : null;
+      if (b2.decision === 'DENY') {
+        if (code === 'READ_FAILED' && (b2.snapshot !== null || b2.f1 !== null)) add('FAIL', 'check11', 'RELABELED_DENY', 'READ_FAILED although a snapshot / F1 answer exists', { seq: r.seq });
+        if ((code === 'QWEN_UNAVAILABLE' || code === 'LLM_CALL_CAP') && b2.f1?.code !== code && b2.f2?.code !== code) add('FAIL', 'check11', 'RELABELED_DENY', `${code} not visible in the F1/F2 evidence`, { seq: r.seq });
+        if (code === 'TOPUP_TIMEOUT' && (!f2v || !f2v.ok)) add('FAIL', 'check11', 'RELABELED_DENY', 'TOPUP_TIMEOUT is only written after an F2 approve', { seq: r.seq });
+        if (f2v && !f2v.ok && f2v.code === 'QWEN_DENIED' && code !== 'QWEN_DENIED') add('FAIL', 'check11', 'RELABELED_DENY', `F2 said deny but the record says ${code}`, { seq: r.seq });
+      }
+      const overridden = chainDeniedFor.has(lc(r.nameHash));
+      const approved = b2.decision === 'APPROVE' && !overridden;
+      const isTopUp = b2.gateInput ? b2.gateInput.request.kind === 'topUp' : x.job_id !== null;
+      if (isTopUp && x.job_id !== null) {
+        const L = latch.get(x.job_id) ?? { state: 'none' as const, rearmed: false };
+        if (L.state === 'final') add('FAIL', 'check5', 'FINAL_DENY_REASKED', `job ${x.job_id} asked again after a final denial`, { seq: r.seq });
+        else if (L.state === 'transient') {
+          if (L.rearmed) add('FAIL', 'check5', 'REARM_TWICE', `job ${x.job_id} re-armed more than once (D4)`, { seq: r.seq });
+          L.rearmed = true;
+        }
+        L.state = approved ? 'none' : code && TRANSIENT.has(code) ? 'transient' : 'final';
+        latch.set(x.job_id, L);
+      } else if (!isTopUp) {
+        const v = b2.request?.vendor ?? '';
+        if (approved) {
+          if (deniedOpens.length >= 2) add('FAIL', 'check5', 'OPEN_RETRIED_BEYOND_ONCE', `open approved after ${deniedOpens.length} denied opens (one re-proposal allowed)`, { seq: r.seq });
+          if (deniedOpens.includes(v)) add('FAIL', 'check5', 'REPROPOSE_SAME_VENDOR', `re-proposal to the vendor that was just denied (${v})`, { seq: r.seq });
+          deniedOpens = [];
+        } else {
+          deniedOpens.push(v);
+          if (deniedOpens.length > 2) add('FAIL', 'check5', 'OPEN_RETRIED_BEYOND_ONCE', `${deniedOpens.length} open attempts in a row`, { seq: r.seq });
+        }
+      }
     }
   };
 
@@ -524,13 +655,18 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
     const who = role(from);
     const blockTs = ts(ev.blockNumber);
     const rec = 'rec' in ev ? ev.rec : null;
-    const lr = rec ? byHash.get(lc(rec)) : undefined;
+    const known = rec ? byHash.get(lc(rec)) : undefined;
+    // bound only when this event sits in the record's own tx; a foreign reuse of a public rec is
+    // handled as unrecorded activity (UNGATED_SPEND / UNRECORDED_ATTEMPT / UNRECORDED_ACTION)
+    const bound = !!known && ownerTx(rec!) === lc(ev.txHash);
+    if (known && !bound) add('WARN', 'check11', 'DUPLICATE_REC_REF', `record #${known.seq}'s public hash reused by ${ev.name} in foreign tx ${ev.txHash} (${who} ${from})`, { seq: known.seq, tx: ev.txHash });
+    const lr = bound ? known : undefined;
     const x = lr?.record ? R(lr) : null;
-    if (rec) {
+    if (rec && lr) {
       const list = recRefs.get(lc(rec)) ?? [];
       list.push(ev);
       recRefs.set(lc(rec), list);
-      if (lr) anchoredSeqs.push({ seq: lr.seq, ev });
+      anchoredSeqs.push({ seq: lr.seq, ev });
     }
     if (!tx) add('FAIL', 'check11', 'RECEIPT_MISSING', `no receipt for ${ev.txHash}`, { tx: ev.txHash });
 
@@ -541,6 +677,9 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
         if (!x) {
           add('FAIL', 'check12', 'UNGATED_SPEND', `${ev.name} (job ${ev.jobId}, net ${ev.net}) from ${who} ${from} has no record (rec ${rec})`, { tx: ev.txHash });
           break;
+        }
+        if ((ev.name === 'HoldOpened' || ev.name === 'ToppedUp') && lr!.seq > nanSeq && !isInf(ev.name === 'HoldOpened' ? ev.vendor : s0.jobs[Number(ev.jobId)]?.vendor)) {
+          add('FAIL', 'check6', 'SPEND_AFTER_NAN', `${ev.name} approved after the anchored NaN checkpoint #${nanSeq}`, { seq: lr!.seq, tx: ev.txHash });
         }
         // check 10: agent spends only while !paused and before the deadline (state before this tx)
         if (who === 'agent') {
@@ -595,17 +734,13 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
                 re = ['<invalid>'];
               }
               if (re[0] !== code) add('FAIL', 'check6', 'DENY_NOT_REDERIVED', `gate recomputes ${re[0] ?? 'PASS'} != ${label}`, { seq: lr!.seq });
-              if (b2.f2) add('FAIL', 'check6', 'F2_AFTER_GATE_DENY', 'F2 was called although the gate denied', { seq: lr!.seq });
             } else if (code === 'QWEN_DENIED' || code === 'QWEN_UNPARSEABLE') {
               const fromF2 = b2.f2 ? verdictFromRaw(b2.f2.raw, b2.f2.attempts.at(-1)?.finish_reason ?? null) : null;
               const fromF1 = b2.f1 && !b2.f1.code ? f1FromRaw(b2.f1.raw, b2.f1.attempts.at(-1)?.finish_reason ?? null) : null;
               const ok = (fromF2 && !fromF2.ok && fromF2.code === code) || (code === 'QWEN_UNPARSEABLE' && ((fromF1 && !fromF1.ok) || b2.f1?.code === code || b2.f2?.code === code));
               if (!ok) add('FAIL', 'check5', 'QWEN_DENY_NOT_REDERIVED', `${label} cannot be re-derived from the raw Qwen text`, { seq: lr!.seq });
-              if (b2.f2 && (() => { try { return b2.gateInput ? check(b2.gateInput).length > 0 : true; } catch { return true; } })()) add('FAIL', 'check6', 'F2_WITHOUT_GATE_PASS', 'F2 ran on a request the gate did not pass', { seq: lr!.seq });
-            } else if (code === 'QWEN_UNAVAILABLE' || code === 'LLM_CALL_CAP') {
-              if (b2.f1?.code !== code && b2.f2?.code !== code) add('WARN', 'check11', 'OPERATIONAL_DENY_EVIDENCE', `${label} not visible in the F1/F2 evidence`, { seq: lr!.seq });
             } else {
-              add('INFO', 'check11', 'OPERATIONAL_DENY', `${label}`, { seq: lr!.seq });
+              add('INFO', 'check11', 'OPERATIONAL_DENY', `${label}`, { seq: lr!.seq }); // evidence re-derived in the request history check
             }
           }
         } else {
@@ -647,6 +782,7 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
 
     const err = applyEvent(st, ev);
     if (err) add('FAIL', 'check9', 'REPLAY', err, { tx: ev.txHash });
+    if (ev.name === 'ToppedUp') lastTopUpBlock.set(ev.jobId.toString(), ev.blockNumber);
     if (st.committed > st.budget) add('FAIL', 'check9', 'OVER_BUDGET', `committed ${st.committed} > budget ${st.budget}`, { tx: ev.txHash });
     // check 8: the logical task's cumulative gross never exceeds the signed job cap
     if ((ev.name === 'HoldOpened' || ev.name === 'ToppedUp') && spec && !isInf(ev.name === 'HoldOpened' ? ev.vendor : st.jobs[Number(ev.jobId)]?.vendor)) {
@@ -656,11 +792,19 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
   }
   flushQueries(BigInt(chain.toBlock) + 1n);
   for (const r of parsed) perRecordInputChecks(r);
+  requestHistory();
+  // INFERENCE settles vs the recorded Kiln cost evidence (calls of cancelled flows are not in
+  // records, hence WARN): the chain already caps the settle at the $0.05 hold
+  {
+    const costs: (string | null)[] = [];
+    for (const r of parsed) for (const e of evidences(R(r))) for (const a of e.attempts) costs.push(a.cost_known && a.usage ? a.usage.cost : null);
+    const evidenced = costToMicro(costs).micro;
+    const settledInf = decoded.filter((e) => e.name === 'Settled' && isInf(e.vendor)).reduce((a2, e) => a2 + (e as { net: bigint }).net, 0n);
+    if (settledInf > evidenced) add('WARN', 'check9', 'INFERENCE_COST_UNEVIDENCED', `INFERENCE settled ${settledInf} micro-USD > recorded Kiln cost ${evidenced}`);
+  }
 
   // ---- duplicates, 1:1 matching, anchoring ------------------------------------------------------
   for (const [rec, evs] of recRefs) if (evs.length > 1) add('WARN', 'check11', 'DUPLICATE_REC_REF', `rec ${rec} referenced by ${evs.length} events (${evs.map((e) => e.name).join(',')})`);
-  const ledgerByRec = new Map<string, LedgerLine[]>();
-  for (const l of b.ledger) if (l.rec) ledgerByRec.set(lc(l.rec), [...(ledgerByRec.get(lc(l.rec)) ?? []), l]);
   const matching: AuditResult['matching'] = [];
   const REC_FNS = new Set(['open', 'topUp', 'settle', 'close', 'recordDecision', 'setPaused', 'refund']);
   for (const r of parsed) {
@@ -676,7 +820,8 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
         const lines = ledgerByRec.get(lc(r.nameHash)) ?? [];
         const sent = lines.find((l) => l.status === 'sent');
         const onChain = sent?.tx ? chain.txs[lc(sent.tx)] : null;
-        if (mined?.result === 'REVERTED' || onChain?.status === 'reverted') add('WARN', 'check13', 'TX_REVERTED', `${x.kind}#${r.seq} ${x.tx.fn} reverted on-chain`, { seq: r.seq, tx: mined?.tx ?? sent?.tx });
+        const minedOnChain = mined?.tx ? chain.txs[lc(mined.tx)] : null;
+        if (minedOnChain?.status === 'reverted' || (!mined && onChain?.status === 'reverted')) add('WARN', 'check13', 'TX_REVERTED', `${x.kind}#${r.seq} ${x.tx.fn} reverted on-chain`, { seq: r.seq, tx: mined?.tx ?? sent?.tx });
         else if (!sent && !mined) add('WARN', 'check13', 'TX_NEVER_SENT', `${x.kind}#${r.seq} ${x.tx.fn} was recorded but never sent (backend stopped before sending); nothing moved`, { seq: r.seq });
         else if (sent && !mined && !onChain) add('WARN', 'check13', 'TX_NOT_MINED', `${x.kind}#${r.seq} ${x.tx.fn} sent as ${sent.tx} but not on chain (HALT UNCONFIRMED / dropped); nothing moved`, { seq: r.seq, tx: sent.tx });
         else add('FAIL', 'check13', 'TX_NOT_ON_CHAIN', `${x.kind}#${r.seq} authorizes ${x.tx.fn} but no vault event carries its hash`, { seq: r.seq, tx: mined?.tx ?? sent?.tx });

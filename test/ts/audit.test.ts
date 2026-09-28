@@ -28,6 +28,7 @@ const SEL = {
   Denied: keccak256(toHex('Denied(uint256,bytes32,bytes32,bool)')),
   VendorSet: keccak256(toHex('VendorSet(address,bool)')),
   PausedSet: keccak256(toHex('PausedSet(bool,bytes32)')),
+  ToppedUp: keccak256(toHex('ToppedUp(uint256,uint256,uint256,bytes32)')),
 };
 
 /**
@@ -292,6 +293,147 @@ describe('auditor goldens', { skip: !HAVE && 'golden fixtures missing (npm run e
     assert.ok(codes(r).includes('TX_NOT_ON_CHAIN'));
   });
 
+  // ---------------------------------------------------------------- core-review soundness (F1..F10)
+  const topUpReq = (b: Bundle, n = 0) => b.records.filter((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.trigger === 'topup')[n]!;
+
+  test('F1 a stolen key replays an approved top-up rec in a new tx -> UNGATED_SPEND (not "gated")', async () => {
+    const { b, c, vault } = await golden('normal');
+    const t = clone(c);
+    const i = t.logs.findIndex((l) => l.topics[0] === SEL.ToppedUp);
+    const orig = t.logs[i]!;
+    const replay = { ...orig, transactionHash: keccak256(toHex('replayed-topup')), logIndex: 999 };
+    t.logs.splice(i + 1, 0, replay);
+    t.txs[replay.transactionHash.toLowerCase()] = { from: c.immutables.agent, blockNumber: orig.blockNumber, status: 'success' };
+    const r = await judgeWithSig(b, t, { expectedVault: vault });
+    assert.equal(r.verdict, 'FAIL');
+    assert.ok(codes(r).includes('UNGATED_SPEND'));
+    assert.ok(codes(r, 'WARN').includes('DUPLICATE_REC_REF'));
+  });
+
+  test('F6 an attacker Denied reusing a public rec stays an UNRECORDED_ATTEMPT; the honest bundle still PASSes', async () => {
+    const { b, c, vault } = await golden('stolen-key');
+    const t = clone(c);
+    const inf = b.records.find((x) => x.record?.kind === 'INFERENCE_OPEN')!;
+    const d = t.logs.filter((l) => l.topics[0] === SEL.Denied).at(-1)!;
+    d.topics = [d.topics[0]!, d.topics[1]!, d.topics[2]!, inf.nameHash];
+    const r = await judgeWithSig(b, t, { expectedVault: vault });
+    assert.equal(r.verdict, 'PASS', JSON.stringify(r.failures, null, 1));
+    assert.equal(r.unrecordedAttempts.length, 3, 'the reuse is still listed as an attack');
+    assert.ok(codes(r, 'WARN').includes('DUPLICATE_REC_REF'));
+  });
+
+  test('F2 an INFERENCE hold above the fixed $0.05 -> INFERENCE_HOLD FAIL', async () => {
+    const { b, c, vault } = await golden('normal');
+    const inf = b.records.find((x) => x.record?.kind === 'INFERENCE_OPEN')!;
+    const f = forge(b, c, inf.seq, (x) => {
+      x.body.ruleInput.request.amount = '6000000';
+      x.tx.args[1] = '6000000';
+    });
+    const ho = f.c.logs.find((l) => l.topics[0] === SEL.HoldOpened)!;
+    ho.data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [6_000_000n, 6_000_000n]);
+    assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('INFERENCE_HOLD'));
+  });
+
+  test('F2 a top-up of the INFERENCE job -> INFERENCE_TOPUP FAIL (D2: no inference top-up path)', async () => {
+    const { b, c, vault } = await golden('normal');
+    const t = clone(c);
+    const tu = t.logs.find((l) => l.topics[0] === SEL.ToppedUp)!;
+    tu.topics = [tu.topics[0]!, `0x${'0'.repeat(64)}` as Hex, tu.topics[2]!]; // job 0 = INFERENCE
+    assert.ok(codes(await judgeWithSig(b, t, { expectedVault: vault })).includes('INFERENCE_TOPUP'));
+  });
+
+  test('F3 asking the CFO again after a final QWEN_DENIED -> FINAL_DENY_REASKED', async () => {
+    const { b, c, vault } = await golden('normal');
+    const first = topUpReq(b, 0);
+    const f = forge(b, c, first.seq, (x) => {
+      x.body.decision = 'DENY';
+      x.body.code = 'QWEN_DENIED';
+      x.body.f2.raw = '{"verdict":"deny","reason":"scope"}';
+    });
+    assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('FINAL_DENY_REASKED'));
+  });
+
+  test('F3 a Qwen deny relabeled as a transient code -> RELABELED_DENY', async () => {
+    const { b, c, vault } = await golden('qwen-deny');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.code === 'QWEN_DENIED')!;
+    const f = forge(b, c, deny.seq, (x) => {
+      x.body.code = 'QWEN_UNAVAILABLE';
+      x.tx.args[1] = 'QWEN_UNAVAILABLE';
+    });
+    const d = f.c.logs.find((l) => l.topics[0] === SEL.Denied && l.topics[3]!.toLowerCase() === f.b.records.find((r) => r.seq === deny.seq)!.nameHash.toLowerCase())!;
+    d.topics = [d.topics[0]!, d.topics[1]!, codeToBytes32('QWEN_UNAVAILABLE'), d.topics[3]!];
+    assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('RELABELED_DENY'));
+  });
+
+  test('F4 a gate snapshot pinned at/after its own tx block -> SNAPSHOT_ORDER', async () => {
+    const { b, c, vault } = await golden('normal');
+    const req = topUpReq(b, 0);
+    const txBlock = c.logs.find((l) => l.topics[0] === SEL.ToppedUp)!.blockNumber;
+    const f = forge(b, c, req.seq, (x) => {
+      x.body.gateInput.chain.blockNumber = txBlock;
+      x.body.snapshot.blockNumber = txBlock;
+    });
+    assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('SNAPSHOT_ORDER'));
+  });
+
+  test('F5 F2 reviewed a different amount than the one topped up -> F2_NOT_BOUND', async () => {
+    const { b, c, vault } = await golden('normal');
+    const req = topUpReq(b, 1);
+    const f = forge(b, c, req.seq, (x) => {
+      const u = x.body.f2.messages.find((m: { role: string }) => m.role === 'user');
+      u.content = u.content.replace('$2.56 net', '$0.10 net');
+    });
+    assert.deepEqual(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })), ['F2_NOT_BOUND']);
+  });
+
+  test('F5 R not taken from F1\'s own answer -> F1_NOT_BOUND', async () => {
+    const { b, c, vault } = await golden('normal');
+    const req = topUpReq(b, 1);
+    const f = forge(b, c, req.seq, (x) => (x.body.f1.raw = x.body.f1.raw.replace('"amount":"2.56"', '"amount":"0.10"')));
+    assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('F1_NOT_BOUND'));
+  });
+
+  test('F7 a NaN hidden from the gate (anchored checkpoint says NaN) -> LOSS_HISTORY_MISMATCH + SPEND_AFTER_NAN', async () => {
+    const { b, c, vault } = await golden('normal');
+    const req = topUpReq(b, 1);
+    const settle = b.records.filter((x) => x.record?.kind === 'SETTLE' && x.seq < req.seq).at(-1)!;
+    const f = forge(b, c, settle.seq, (x) => (x.body.checkpoint.loss = 'NaN'));
+    const got = codes(await judgeWithSig(f.b, f.c, { expectedVault: vault }));
+    assert.ok(got.includes('LOSS_HISTORY_MISMATCH'), got.join(','));
+    assert.ok(got.includes('SPEND_AFTER_NAN'), got.join(','));
+  });
+
+  test('F8 F2 called on a gate-denied request that never reached the chain -> F2_AFTER_GATE_DENY + DENY_NOT_ON_CHAIN', async () => {
+    const { b, c, vault } = await golden('injection');
+    const start = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.trigger === 'start')!;
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.decision === 'DENY')!;
+    const f = forge(b, c, deny.seq, (x) => {
+      x.tx = null;
+      x.body.f2 = (start.record as DecisionRecord<'REQUEST'>).body.f2;
+    });
+    const newHash = f.b.records.find((r) => r.seq === deny.seq)!.nameHash.toLowerCase();
+    f.c.logs = f.c.logs.filter((l) => !(l.topics[0] === SEL.Denied && l.topics[3]?.toLowerCase() === newHash));
+    f.b.ledger = f.b.ledger.filter((l) => l.rec?.toLowerCase() !== newHash);
+    const got = codes(await judgeWithSig(f.b, f.c, { expectedVault: vault }));
+    assert.ok(got.includes('F2_AFTER_GATE_DENY') && got.includes('DENY_NOT_ON_CHAIN'), got.join(','));
+  });
+
+  test('F9 a "REVERTED" ledger claim pointing at a successful tx does not excuse a missing tx', async () => {
+    const { b, c, vault } = await golden('injection');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.decision === 'DENY')!;
+    const settle = b.ledger.find((l) => l.status === 'mined' && l.fn === 'settle')!;
+    const t = clone(b);
+    for (const l of t.ledger) if (l.rec?.toLowerCase() === deny.nameHash.toLowerCase() && l.status === 'mined') Object.assign(l, { result: 'REVERTED', tx: settle.tx, block: settle.block });
+    const tc = clone(c);
+    tc.logs = tc.logs.filter((l) => !(l.topics[0] === SEL.Denied && l.topics[3]?.toLowerCase() === deny.nameHash.toLowerCase()));
+    assert.ok(codes(await judgeWithSig(t, tc, { expectedVault: vault })).includes('TX_NOT_ON_CHAIN'));
+  });
+
+  test('F10 a vault whose fee is not the designed 3% -> FEE_BPS FAIL', async () => {
+    const { b, c, vault } = await golden('normal');
+    assert.ok(codes(await judgeWithSig(b, { ...c, immutables: { ...c.immutables, feeBps: '0' } }, { expectedVault: vault })).includes('FEE_BPS'));
+  });
+
   test('G14 stub LLM bundle with --submission -> FAIL; without the flag -> PASS', async () => {
     const { b, c, vault } = await golden('normal');
     const sub = await judgeWithSig(b, c, { expectedVault: vault, submission: true });
@@ -426,12 +568,12 @@ describe('auditor RPC handling', () => {
 });
 
 describe('auditor boundaries and portability', () => {
-  test('the auditor imports rules/parse/record/spec/codes/chain/pricedoc only (never executor/kiln/akash/session/server)', () => {
+  test('the auditor imports pure modules only (never executor/kiln/akash/session/server/commit)', () => {
     for (const f of readdirSync('auditor').filter((x) => x.endsWith('.ts'))) {
       const src = readFileSync(join('auditor', f), 'utf8');
       const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]!).filter((m) => m.startsWith('.'));
       for (const m of imports) {
-        assert.doesNotMatch(m, /(executor|kiln|akash|session|server|scenarios|prompts|commit)\.ts$/, `${f} imports ${m}`);
+        assert.doesNotMatch(m, /(executor|kiln|akash|session|server|scenarios|commit|config)\.ts$/, `${f} imports ${m}`);
       }
     }
   });
