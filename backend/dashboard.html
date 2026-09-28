@@ -1,2 +1,235 @@
-<!doctype html><meta charset="utf-8"><title>CFO Agent</title><pre id="s">loading…</pre>
-<script>setInterval(async()=>{const r=await fetch('/state');document.getElementById('s').textContent=JSON.stringify(await r.json(),null,2)},1000)</script>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CFO Agent Console</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #14181f; --muted: #5d6675; --line: #dde1e7;
+    --ok: #0f7b3e; --ok-bg: #e5f5ec; --bad: #b3261e; --bad-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fff4d6;
+    --info: #1f5fbf; --info-bg: #e7effb; --gray: #626a76; --gray-bg: #eef0f3; --accent: #3a3fbf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1216; --panel: #171b21; --ink: #e8ebf0; --muted: #9aa3b1; --line: #2a303a;
+      --ok: #5fd08f; --ok-bg: #11301f; --bad: #ff8a80; --bad-bg: #3a1614; --warn: #f3c56b; --warn-bg: #3a2c0c;
+      --info: #8fb5ff; --info-bg: #14233d; --gray: #a3abb8; --gray-bg: #232830; --accent: #a5a8ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  main { display: grid; gap: 16px; padding: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); max-width: 1500px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  section h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .big { font-size: 26px; font-weight: 650; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .muted { color: var(--muted); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .src { font-size: 11px; font-weight: 700; padding: 0 5px; border-radius: 4px; margin-left: 6px; vertical-align: 2px; }
+  .src.CHAIN { color: var(--info); background: var(--info-bg); } .src.LEDGER { color: var(--accent); background: var(--gray-bg); } .src.QWEN { color: var(--warn); background: var(--warn-bg); }
+  .ok { color: var(--ok); background: var(--ok-bg); } .bad { color: var(--bad); background: var(--bad-bg); } .warn { color: var(--warn); background: var(--warn-bg); }
+  .info { color: var(--info); background: var(--info-bg); } .gray { color: var(--gray); background: var(--gray-bg); }
+  .bar { display: flex; height: 18px; border-radius: 6px; overflow: hidden; background: var(--gray-bg); margin: 8px 0 4px; }
+  .bar > div { height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid currentColor; }
+  .tank { position: relative; height: 22px; border-radius: 6px; background: var(--gray-bg); overflow: hidden; margin: 6px 0; }
+  .tank > div { height: 100%; background: var(--info); }
+  .tank .line40 { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); left: 40%; }
+  button { font: inherit; font-weight: 650; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button.danger { background: var(--bad); color: #fff; border-color: var(--bad); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  a { color: var(--info); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
+  .banner { grid-column: 1 / -1; padding: 10px 14px; border-radius: 8px; font-weight: 650; }
+  .log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; max-height: 220px; overflow: auto; background: var(--gray-bg); padding: 8px; border-radius: 6px; }
+  @media (max-width: 480px) { main { grid-template-columns: 1fr; padding: 12px; } .big { font-size: 22px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>CFO Agent</h1>
+  <span id="badges"></span>
+  <span id="sync" class="badge gray">sync —</span>
+  <span id="stopState" class="badge gray">RUNNING</span>
+  <span style="flex:1"></span>
+  <button id="stopBtn" class="danger" title="founder setPaused(true) through the commit queue">STOP</button>
+  <button id="windBtn" title="founder settle -> close -> INFERENCE -> refund (idempotent)">정산·환불</button>
+</header>
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- 1. GRANT -->
+  <section>
+    <h2>① Grant — 예산과 권한</h2>
+    <div class="row"><span>예산 <span class="src CHAIN">CHAIN</span></span><span id="budget" class="num big">—</span></div>
+    <div class="bar" id="budgetBar"></div>
+    <div class="legend" id="budgetLegend"></div>
+    <div class="row"><span>호출당 상한 maxHold <span class="src CHAIN">CHAIN</span></span><span id="maxHold" class="num">—</span></div>
+    <div class="row"><span>기한 <span class="src CHAIN">CHAIN</span></span><span id="deadline" class="num">—</span></div>
+    <div class="row"><span>명세</span><span id="specId" class="mono">—</span></div>
+    <p id="purpose" class="muted" style="margin:6px 0 0"></p>
+    <table style="margin-top:8px"><thead><tr><th>벤더</th><th>Akash 가격/GPU-h</th><th>가용</th></tr></thead><tbody id="vendors"></tbody></table>
+  </section>
+
+  <!-- 2. LIVE -->
+  <section>
+    <h2>② Live — 작업과 충전 심사</h2>
+    <table><thead><tr><th>job</th><th>벤더</th><th>상태</th><th>hold 잔량</th><th>사용 <span class="src LEDGER">LEDGER</span></th></tr></thead><tbody id="jobs"></tbody></table>
+    <div id="tankWrap" style="margin-top:10px"><div class="muted">현재 hold (40% 선 = 충전 트리거)</div><div class="tank"><div id="tank"></div><span class="line40"></span></div></div>
+    <h2 style="margin-top:14px">최근 요청 카드</h2>
+    <div id="card"><div class="muted">아직 요청 없음</div></div>
+  </section>
+
+  <!-- 3. EVIDENCE -->
+  <section>
+    <h2>③ Evidence — 거절·tx·영수증</h2>
+    <div class="row"><span>게이트가 F2 전에 막아 절약한 호출</span><span id="saved" class="num">0</span></div>
+    <div class="row"><span>추론비 hold (INFERENCE, 수수료 면제)</span><span id="inference" class="num">—</span></div>
+    <h2 style="margin-top:12px">Denied</h2>
+    <table><thead><tr><th>층</th><th>코드</th><th>tx</th></tr></thead><tbody id="denied"></tbody></table>
+    <h2 style="margin-top:12px">tx 장부 (1줄 = tx 1개)</h2>
+    <table><thead><tr><th>fn</th><th>from</th><th>결과</th><th>tx</th></tr></thead><tbody id="txs"></tbody></table>
+  </section>
+
+  <section>
+    <h2>영수증 (숫자 = CHAIN, 설명 = F3)</h2>
+    <div id="receipts" class="muted">작업 종료 후 표시</div>
+  </section>
+
+  <section>
+    <h2>실행기 로그 (F1 입력)</h2>
+    <div id="plog" class="log"></div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const usd = (micro) => micro == null ? '—' : '$' + (Number(BigInt(micro)) / 1e6).toFixed(Number(BigInt(micro)) % 10000 ? 4 : 2);
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = String(text); if (cls) e.className = cls; return e; };
+  const GATE = ['PAUSED','PAST_DEADLINE','VENDOR_NOT_ALLOWED','OVER_MAX_HOLD','OVER_BUDGET_WITH_FEE','GPU_TYPE_NOT_ALLOWED','OVER_JOB_CAP','NO_CAPACITY','NAN_DETECTED','LOSS_PLATEAU'];
+  const PHASE = { RUNNING: 'ok', OPEN: 'info', AWAITING_TOPUP: 'warn', HOLD_EXHAUSTED: 'warn', STOPPED: 'bad', CLOSED: 'gray', NO_JOB: 'gray' };
+  let state = null, busy = false;
+
+  function txLink(h) {
+    if (!h) return el('span', '—', 'muted');
+    const short = h.slice(0, 10) + '…';
+    if (state && state.chain_id === 84532) { const a = el('a', short, 'mono'); a.href = 'https://sepolia.basescan.org/tx/' + h; a.target = '_blank'; a.rel = 'noopener'; return a; }
+    return el('span', short, 'mono');
+  }
+  function fill(tbody, rows) { tbody.replaceChildren(...rows); }
+  function tr(cells) { const r = document.createElement('tr'); for (const c of cells) { const td = document.createElement('td'); if (c instanceof Node) td.append(c); else td.textContent = c == null ? '—' : String(c); r.append(td); } return r; }
+
+  function cardOutcome(lr) {
+    if (!lr) return null;
+    if (lr.outcome) return lr.outcome;
+    if (lr.decision === 'APPROVE') return 'APPROVED';
+    if (lr.code === 'QWEN_UNAVAILABLE' || lr.code === 'QWEN_UNPARSEABLE') return lr.code;
+    return 'DENIED_RECORDED';
+  }
+  const OUTCOME_CLS = { APPROVED_ONCHAIN: 'ok', APPROVED: 'ok', DENIED_RECORDED: 'bad', APPROVED_BUT_DENIED_ONCHAIN: 'warn', QWEN_UNAVAILABLE: 'gray', QWEN_UNPARSEABLE: 'gray', TX_ERROR: 'bad' };
+  const OUTCOME_TXT = { APPROVED_ONCHAIN: '승인 → 체인 반영', APPROVED: '승인', DENIED_RECORDED: '거절 → 기록(Denied)', APPROVED_BUT_DENIED_ONCHAIN: '승인됨 → 체인 거절', QWEN_UNAVAILABLE: 'Qwen 응답 없음 (판단 아님, 거절 처리)', QWEN_UNPARSEABLE: 'Qwen 해석 불가 (판단 아님, 거절 처리)', TX_ERROR: 'tx 오류' };
+
+  function render(s) {
+    state = s;
+    const b = $('badges'); b.replaceChildren();
+    for (const [k, v] of Object.entries(s.badges || {})) b.append(el('span', k + ' ' + v, 'badge ' + (k === 'LLM' && v === 'STUB' ? 'warn' : k === 'PRICE' && String(v).startsWith('SNAPSHOT') ? 'warn' : 'info')), ' ');
+    const age = s.syncAgoMs == null ? null : Math.round(s.syncAgoMs / 1000);
+    $('sync').textContent = age == null ? 'sync —' : (s.stale ? 'STALE ' : 'sync ') + age + '초 전 · block ' + (s.asOfBlock ?? '—');
+    $('sync').className = 'badge ' + (s.stale ? 'bad' : 'gray');
+    const stop = s.stopState === 'NONE' ? (s.ended ? 'ENDED ' + s.ended : 'RUNNING') : s.stopState;
+    $('stopState').textContent = stop; $('stopState').className = 'badge ' + (s.stopState === 'NONE' ? (s.ended ? 'gray' : 'ok') : 'bad');
+    $('stopBtn').disabled = busy || s.stopState !== 'NONE' || !!s.ended;
+    $('windBtn').disabled = busy || !!s.ended || s.pendingTx > 0;
+    const banner = $('banner');
+    if (s.halted) { banner.hidden = false; banner.className = 'banner bad'; banner.textContent = 'HALT — ' + s.halted + ' (tx 미전송/미확정: 재서명 금지, npm run wind-down)'; }
+    else if (s.stale) { banner.hidden = false; banner.className = 'banner warn'; banner.textContent = '체인 읽기 지연 (STALE_CHAIN) — 사용량 누적 정지, 충전 보류'; }
+    else banner.hidden = true;
+
+    const c = s.chain;
+    if (c) {
+      $('budget').textContent = usd(c.budget);
+      $('maxHold').textContent = usd(c.maxHold);
+      const left = Number(c.deadline) - Number(c.blockTimestamp);
+      $('deadline').textContent = new Date(Number(c.deadline) * 1000).toLocaleString() + ' (' + (left > 0 ? left + '초 남음' : '경과') + ')' + (c.paused ? ' · PAUSED' : '');
+      const B = Number(c.budget) || 1;
+      const paid = s.jobs.reduce((a, j) => a + Number(j.paid), 0);
+      const open = s.jobs.filter(j => j.phase !== 'CLOSED').reduce((a, j) => a + Number(j.held) - Number(j.paid), 0);
+      const inf = Number(s.inference.costMicro || 0);
+      const committed = Number(c.committed);
+      const other = Math.max(0, committed - paid - open);
+      const free = Math.max(0, B - committed);
+      const parts = [['지급(벤더+수수료)', paid, 'var(--ok)'], ['열린 hold', open, 'var(--info)'], ['추론 hold', other, 'var(--warn)'], ['환불 가능', free, 'var(--gray)']];
+      $('budgetBar').replaceChildren(...parts.map(([, v, col]) => { const d = document.createElement('div'); d.style.width = (100 * v / B) + '%'; d.style.background = col; return d; }));
+      $('budgetLegend').replaceChildren(...parts.map(([n, v, col]) => { const s2 = el('span', n + ' ' + usd(v)); const i = document.createElement('i'); i.style.background = col; s2.prepend(i); return s2; }));
+      void inf;
+    }
+    $('specId').textContent = s.spec.spec_id + ' · cap $' + s.spec.job_cap_usd + ' · ' + s.spec.allowed_gpu_types.join(',');
+    $('purpose').textContent = s.spec.purpose;
+    fill($('vendors'), s.vendors.map(v => tr([v.label, usd(v.price), el('span', String(v.capacity), 'badge ' + (v.capacity > 0 ? 'ok' : 'bad'))])));
+
+    const rows = [];
+    if (s.inference.jobId != null) rows.push(tr(['#' + s.inference.jobId, 'INFERENCE', el('span', s.ended ? 'CLOSED' : 'OPEN', 'badge info'), usd(5e4 - Number(s.inference.costMicro)), s.inference.calls + '/' + s.inference.cap + ' calls']));
+    for (const j of s.jobs) rows.push(tr(['#' + j.jobId + (j.current ? ' ◀' : ''), j.vendor, el('span', j.phase + (j.latch !== 'none' ? ' · ' + j.latch : ''), 'badge ' + (PHASE[j.phase] || 'gray')), usd(Math.max(0, Number(j.remaining))), usd(j.accruedNet) + ' · ' + j.simMinutes.toFixed(0) + ' sim-min']));
+    fill($('jobs'), rows);
+    const cur = s.jobs.find(j => j.current);
+    $('tank').style.width = cur && Number(cur.holdSize) ? Math.max(0, Math.min(100, 100 * Number(cur.remaining) / Number(cur.holdSize))) + '%' : '0%';
+
+    const lr = s.lastRequest; const card = $('card'); card.replaceChildren();
+    if (lr) {
+      const o = cardOutcome(lr);
+      card.append(el('div', lr.trigger + ' · ' + lr.kind + ' · ' + lr.req_id, 'muted'));
+      const r = lr.request;
+      if (r) card.append(el('div', 'F1 요청: ' + r.vendorLabel + ' / ' + r.gpu + ' / $' + r.amount, 'num'), el('div', '근거: ' + r.reason, 'muted'));
+      const chips = el('div', null, 'chips');
+      const hit = new Set(lr.gate || []);
+      for (const g of GATE) chips.append(el('span', (hit.has(g) ? '✕ ' : '✓ ') + g, 'chip ' + (lr.gate == null ? 'gray' : hit.has(g) ? 'bad' : 'ok')));
+      card.append(el('div', 'GATE (코드 규칙 10개)'), chips);
+      card.append(el('div', 'CFO Qwen (F2): ' + (lr.f2 ? lr.f2.verdict + ' — ' + lr.f2.reason : lr.f2_called ? '응답 없음' : (lr.gate && lr.gate.length ? '호출 안 함 (게이트가 먼저 거절)' : '—'))));
+      card.append(el('div', OUTCOME_TXT[o] || o, 'badge ' + (OUTCOME_CLS[o] || 'gray')));
+      if (lr.code) card.append(el('span', ' ' + lr.code, 'mono'));
+    }
+    $('saved').textContent = s.f2SavedByGate;
+    $('inference').textContent = usd(s.inference.costMicro) + ' 사용 / $0.05 hold · ' + s.inference.calls + ' calls';
+    fill($('denied'), s.denied.slice().reverse().map(d => tr([d.layer, d.code, txLink(d.tx)])));
+    fill($('txs'), s.txs.slice().reverse().map(t => tr([t.fn, t.from, el('span', t.result + (t.code ? ' ' + t.code : ''), 'badge ' + (t.result === 'OK' ? 'ok' : 'bad')), txLink(t.tx)])));
+    const rc = $('receipts'); rc.replaceChildren();
+    for (const r of s.receipts) {
+      const box = el('div', null); box.style.marginBottom = '10px';
+      box.append(el('div', 'job #' + r.job_id + ' · 벤더 ' + r.vendor_label + ' · ' + (Number(r.sim_seconds) / 3600).toFixed(2) + ' GPU-h · 지급 ' + usd(r.net) + ' + 수수료 ' + usd(r.fee), 'num'));
+      box.append(el('div', '가격 출처 ' + r.price_source + ' · ' + r.price_hash.slice(0, 12) + '…', 'muted mono'));
+      box.append(el('div', r.text));
+      rc.append(box);
+    }
+    if (!s.receipts.length) rc.textContent = '작업 종료 후 표시';
+    $('plog').textContent = (s.progressLog || []).join('\n');
+  }
+
+  async function poll() {
+    try { const r = await fetch('/state', { cache: 'no-store' }); if (r.ok) render(await r.json()); } catch {}
+  }
+  async function act(type, extra) {
+    if (!state || busy) return;
+    busy = true; render(state);
+    try {
+      const r = await fetch('/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type, stateVersion: state.stateVersion, ...extra }) });
+      if (!r.ok) alert((await r.json()).error || r.status);
+    } finally { busy = false; poll(); }
+  }
+  $('stopBtn').onclick = () => { if (confirm('STOP: 금고를 일시정지합니다 (founder setPaused). 계속할까요?')) act('STOP', { reason: 'STOP: budget review' }); };
+  $('windBtn').onclick = () => { if (confirm('정산·환불: 실사용분 정산 → close → 추론비 정산 → refund. 계속할까요?')) act('WIND_DOWN'); };
+  poll(); setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>

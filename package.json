@@ -22,7 +22,14 @@
     "anvil": "anvil --block-time 2",
     "session": "tsx scripts/run.ts",
     "e2e:local": "tsx scripts/e2e-local.ts",
-    "audit": "tsx auditor/cli.ts"
+    "audit": "tsx auditor/cli.ts",
+    "report": "tsx scripts/report.ts",
+    "smoke:kiln": "tsx scripts/kiln-tools.ts smoke",
+    "eval:f2": "tsx scripts/kiln-tools.ts eval",
+    "nothink": "tsx scripts/kiln-tools.ts nothink",
+    "wind-down": "tsx scripts/wind-down.ts",
+    "crash:test": "tsx scripts/crash-test.ts",
+    "health": "tsx scripts/health.ts"
   },
   "dependencies": {
     "viem": "2.56.9"
