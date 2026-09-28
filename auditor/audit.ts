@@ -614,9 +614,9 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
       // operational codes re-derived from evidence (no relabeling a Qwen deny as transient)
       const f2v = b2.f2 ? verdictFromRaw(b2.f2.raw, b2.f2.attempts.at(-1)?.finish_reason ?? null) : null;
       if (b2.decision === 'DENY') {
-        if (code === 'READ_FAILED' && (b2.snapshot !== null || b2.f1 !== null)) add('FAIL', 'check11', 'RELABELED_DENY', 'READ_FAILED although a snapshot / F1 answer exists', { seq: r.seq });
+        if (code === 'READ_FAILED' && (b2.gateInput !== null || b2.f2 !== null)) add('FAIL', 'check11', 'RELABELED_DENY', 'READ_FAILED although the gate input was read / F2 ran', { seq: r.seq });
         if ((code === 'QWEN_UNAVAILABLE' || code === 'LLM_CALL_CAP') && b2.f1?.code !== code && b2.f2?.code !== code) add('FAIL', 'check11', 'RELABELED_DENY', `${code} not visible in the F1/F2 evidence`, { seq: r.seq });
-        if (code === 'TOPUP_TIMEOUT' && (!f2v || !f2v.ok)) add('FAIL', 'check11', 'RELABELED_DENY', 'TOPUP_TIMEOUT is only written after an F2 approve', { seq: r.seq });
+        // covers TOPUP_TIMEOUT too: a timeout may follow an F2 approve (slow commit), never an F2 deny
         if (f2v && !f2v.ok && f2v.code === 'QWEN_DENIED' && code !== 'QWEN_DENIED') add('FAIL', 'check11', 'RELABELED_DENY', `F2 said deny but the record says ${code}`, { seq: r.seq });
       }
       const overridden = chainDeniedFor.has(lc(r.nameHash));
@@ -756,6 +756,7 @@ export function judge(b: Bundle, chain: ChainData, o: JudgeOpts): AuditResult {
         if (!x) add('WARN', 'check12', 'UNRECORDED_ACTION', `Closed(job ${ev.jobId}) by ${who} ${from} without a record`, { tx: ev.txHash });
         else {
           if (x.kind !== 'CLOSE') add('FAIL', 'check11', 'CLOSE_RECORD', `Closed backed by ${x.kind}`, { seq: lr!.seq });
+          else if ((x as DecisionRecord<'CLOSE'>).body.unsettled_net !== '0') add('WARN', 'check11', 'UNPAID_USAGE', `job ${ev.jobId} closed with ${(x as DecisionRecord<'CLOSE'>).body.unsettled_net} micro-USD of ledger usage unsettled`, { seq: lr!.seq, tx: ev.txHash });
           checkTxIntent(x, 'close', [ev.jobId.toString()], lr!.seq, ev.txHash);
         }
         break;

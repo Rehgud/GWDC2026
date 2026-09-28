@@ -169,6 +169,26 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     migrationDisableFirst: true,
     deploy: {},
   },
+  'kiln-outage': {
+    name: 'kiln-outage',
+    description: 'Kiln returns 5xx twice on the first top-up review -> QWEN_UNAVAILABLE (transient, D4) -> one re-arm -> approved -> completed',
+    lossAt: LOSS_CURVES.normal,
+    maxCheckpoints: 8,
+    targetLoss: 1.2,
+    stub: (() => {
+      const base = contextStub();
+      let topupReviews = 0;
+      return (flow: 'F1' | 'F2' | 'F3', messages: Msg[], attempt: number): StubReply => {
+        if (flow === 'F2' && lastUser(messages).includes('REQUEST (topUp)') && topupReviews < 2) {
+          topupReviews++; // attempt 1 and its single retry both fail
+          return { content: null, http: 503 };
+        }
+        void attempt;
+        return base(flow, messages);
+      };
+    })(),
+    deploy: {},
+  },
   nan: {
     name: 'nan',
     description: 'loss becomes NaN at checkpoint 3 -> code stops the job (no Qwen) -> settle -> close -> windDown',

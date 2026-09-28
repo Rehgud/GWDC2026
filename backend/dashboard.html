@@ -150,7 +150,8 @@
     const stop = s.stopState === 'NONE' ? (s.ended ? 'ENDED ' + s.ended : 'RUNNING') : s.stopState;
     $('stopState').textContent = stop; $('stopState').className = 'badge ' + (s.stopState === 'NONE' ? (s.ended ? 'gray' : 'ok') : 'bad');
     $('stopBtn').disabled = busy || s.stopState !== 'NONE' || !!s.ended;
-    $('windBtn').disabled = busy || !!s.ended || s.pendingTx > 0;
+    const halted = s.jobs.filter(j => j.phase !== 'CLOSED').every(j => j.phase === 'STOPPED' || j.phase === 'HOLD_EXHAUSTED');
+    $('windBtn').disabled = busy || !!s.ended || s.pendingTx > 0 || !halted;
     const banner = $('banner');
     if (s.halted) { banner.hidden = false; banner.className = 'banner bad'; banner.textContent = 'HALT — ' + s.halted + ' (tx 미전송/미확정: 재서명 금지, npm run wind-down)'; }
     else if (s.stale) { banner.hidden = false; banner.className = 'banner warn'; banner.textContent = '체인 읽기 지연 (STALE_CHAIN) — 사용량 누적 정지, 충전 보류'; }

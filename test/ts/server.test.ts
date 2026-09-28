@@ -23,8 +23,9 @@ describe('B12 dashboard server', () => {
   let winds = 0;
   let stopState = 'NONE';
   let version = 100;
+  let jobs: { phase: string }[] = [];
   const fake = {
-    state: () => ({ stateVersion: version, stopState, halted: null, stale: false, pendingTx: 0, syncAgoMs: 500, badges: { LLM: 'STUB' }, inference: { calls: 3 }, ended: null }),
+    state: () => ({ stateVersion: version, stopState, halted: null, stale: false, pendingTx: 0, syncAgoMs: 500, badges: { LLM: 'STUB' }, inference: { calls: 3 }, ended: null, jobs }),
     founderStop: async () => {
       stops++;
       await new Promise((r) => setTimeout(r, 200)); // tx in flight
@@ -78,6 +79,14 @@ describe('B12 dashboard server', () => {
     // STOP again after it landed -> 409 (already stopped)
     assert.equal((await post({ type: 'STOP', stateVersion: 100 })).status, 409);
     assert.equal(stops, 1);
+  });
+
+  test('S4: WIND_DOWN is refused (409) while a job is still RUNNING; STOP first', async () => {
+    jobs = [{ phase: 'RUNNING' }, { phase: 'CLOSED' }];
+    const r = await post({ type: 'WIND_DOWN', stateVersion: 100 });
+    assert.equal(r.status, 409);
+    assert.equal(winds, 0);
+    jobs = [{ phase: 'STOPPED' }, { phase: 'CLOSED' }];
   });
 
   test('WIND_DOWN goes through the session (amounts computed server-side), unknown action -> 400', async () => {

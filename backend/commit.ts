@@ -19,6 +19,7 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   encodeFunctionData,
+  keccak256,
   getAddress,
   type Account,
   type Chain,
@@ -285,17 +286,31 @@ export class Committer {
 
     // 8-9. send, then record the hash immediately
     const real = encodeIntent(tx, REC_ARG_FNS.includes(tx.fn) ? w.hash : ZERO_HASH);
+    // sign locally so the hash is known before sending: a submit error is then checked ONCE by
+    // looking the same hash up (it may have reached the node) before any HALT. Never re-sign.
     let txHash: Hex;
+    let signed: Hex;
     try {
-      txHash = await sender.wallet.sendTransaction({
+      const prepared = await sender.wallet.prepareTransactionRequest({
         account: sender.account,
         chain: this.d.chain,
         to: this.d.vault,
         data: encodeFunctionData({ abi: vaultAbi, functionName: real.functionName as never, args: real.args as never }),
       });
+      signed = await sender.wallet.signTransaction(prepared as never);
+      txHash = keccak256(signed);
     } catch (e) {
       await this.ledger({ seq: w.seq, rec: w.hash, fn: tx.fn, status: 'send_failed', error: revertName(e) });
       this.halt('SEND_FAILED', `${tx.fn}: ${revertName(e)}`);
+    }
+    try {
+      await this.d.pc.sendRawTransaction({ serializedTransaction: signed });
+    } catch (e) {
+      const known = await this.d.pc.getTransaction({ hash: txHash }).catch(() => null);
+      if (!known) {
+        await this.ledger({ seq: w.seq, rec: w.hash, fn: tx.fn, status: 'send_failed', tx: txHash, error: revertName(e) });
+        this.halt('SEND_FAILED', `${tx.fn}: ${revertName(e)} (hash ${txHash} not known to the node)`);
+      }
     }
     await this.ledger({ seq: w.seq, rec: w.hash, fn: tx.fn, status: 'sent', tx: txHash });
 

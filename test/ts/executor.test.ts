@@ -88,6 +88,20 @@ describe('B7 next(): state x event matrix', () => {
     }
     assert.equal(canRearm(st('RUNNING', 'denied', { deniedCode: 'TOPUP_TIMEOUT' })), true);
   });
+
+  test('S1: a transient denial that ran the hold down re-arms from HOLD_EXHAUSTED -> AWAITING_TOPUP (inflight), once', () => {
+    const ex = st('HOLD_EXHAUSTED', 'denied', { deniedCode: 'QWEN_UNAVAILABLE' });
+    assert.equal(canRearm(ex), true);
+    const r = next(ex, { type: 'REARM' });
+    assert.deepEqual([r.phase, r.latch, r.rearmed], ['AWAITING_TOPUP', 'inflight', 1]);
+    // the re-armed request is denied again -> exhausted for good
+    const d = next(r, { type: 'TOPUP_DENIED', code: 'QWEN_UNAVAILABLE' });
+    assert.equal(d.phase, 'HOLD_EXHAUSTED');
+    assert.equal(canRearm(d), false, 'only once per job');
+    // or approved -> running again
+    assert.equal(next(r, { type: 'TOPPED_UP', resumeOk: true }).phase, 'RUNNING');
+    assert.equal(canRearm(st('HOLD_EXHAUSTED', 'denied', { deniedCode: 'QWEN_DENIED' })), false);
+  });
 });
 
 // ------------------------------------------------------------------------------ tick harness

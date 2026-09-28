@@ -83,8 +83,11 @@ export function next(s: JobState, e: JobEvent): JobState {
       return bad();
     case 'REARM':
       if (s.latch !== 'denied' || !s.deniedCode || !isTransient(s.deniedCode) || s.rearmed >= 1) bad();
-      if (s.phase !== 'RUNNING') bad();
-      return { ...s, latch: 'none', rearmed: s.rearmed + 1, deniedCode: null };
+      // RUNNING: the latch re-opens and the next trigger fires; HOLD_EXHAUSTED: the single re-armed
+      // request goes out at once and the job waits for it without accruing (AWAITING_TOPUP)
+      if (s.phase === 'RUNNING') return { ...s, latch: 'none', rearmed: s.rearmed + 1, deniedCode: null };
+      if (s.phase === 'HOLD_EXHAUSTED') return { ...s, phase: 'AWAITING_TOPUP', latch: 'inflight', rearmed: s.rearmed + 1, deniedCode: null };
+      return bad();
     case 'STOP':
       if (s.phase === 'STOPPED') return s;
       return LIVE.includes(s.phase) ? { ...s, phase: 'STOPPED', stopReason: e.reason } : bad();
@@ -95,7 +98,7 @@ export function next(s: JobState, e: JobEvent): JobState {
 
 /** True when a denied top-up may re-arm at the next checkpoint (transient code, once per job). */
 export function canRearm(s: JobState): boolean {
-  return s.phase === 'RUNNING' && s.latch === 'denied' && !!s.deniedCode && isTransient(s.deniedCode) && s.rearmed < 1;
+  return (s.phase === 'RUNNING' || s.phase === 'HOLD_EXHAUSTED') && s.latch === 'denied' && !!s.deniedCode && isTransient(s.deniedCode) && s.rearmed < 1;
 }
 
 // ------------------------------------------------------------------------------ meter

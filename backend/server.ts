@@ -61,7 +61,13 @@ export async function startServer(session: Session, opts: { port: number; html?:
             return json(res, 200, { ok: true });
           }
           if (type === 'WIND_DOWN') {
-            // founder settle -> close -> INFERENCE -> refund; idempotent, amounts computed server-side
+            // founder settle -> close -> INFERENCE -> refund; idempotent, amounts computed server-side.
+            // Only when every open job has halted (STOPPED / HOLD_EXHAUSTED) and no tx is pending:
+            // press STOP first to end a running job.
+            const open = (s.jobs ?? []).filter((j: { phase: string }) => j.phase !== 'CLOSED');
+            if (!s.ended && (s.pendingTx > 0 || open.some((j: { phase: string }) => j.phase !== 'STOPPED' && j.phase !== 'HOLD_EXHAUSTED'))) {
+              return json(res, 409, { error: 'jobs still running or txs pending: STOP first' });
+            }
             const reason = await session.windDown('WIND_DOWN');
             return json(res, 200, { ok: true, reason });
           }

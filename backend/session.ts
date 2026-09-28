@@ -20,7 +20,7 @@ import { ChainWatcher, ReadFailedError } from './chain.ts';
 import { NO_JOB, type DenyCode } from './codes.ts';
 import { Committer, HaltError, type CommitOutcome, type Sender } from './commit.ts';
 import type { ChainCfg, Deployment } from './config.ts';
-import { JobExecutor, JobMeter, type ChainTickView, type TickAction } from './executor.ts';
+import { canRearm, JobExecutor, JobMeter, type ChainTickView, type TickAction } from './executor.ts';
 import type { LlmClient, StubResponder } from './kiln.ts';
 import { f1FromRaw, verdictFromRaw } from './parse.ts';
 import { f1Messages, f2Messages, f3Messages, type VendorOption } from './prompts.ts';
@@ -120,7 +120,9 @@ export type SessionDeps = {
   log?: (line: string) => void;
 };
 
-type TaskJob = { jobId: bigint; label: string; vendor: Hex; gpu: string; exec: JobExecutor; closed: boolean; receipt: Promise<void> | null; qwenReasons: string[]; topUps: number; txs: Hex[] };
+type TaskJob = { jobId: bigint; label: string; vendor: Hex; gpu: string; exec: JobExecutor; closed: boolean; receipt: Promise<void> | null; qwenReasons: string[]; topUps: number; txs: Hex[]; rearmNext?: boolean };
+
+type FlowToken = { cancelled: boolean; committing: boolean };
 
 type Decision = {
   decision: 'APPROVE' | 'DENY' | 'CANCELLED';
@@ -154,6 +156,10 @@ export class Session {
   private migrationRequested = false;
   private endReason: SessionEndReason | null = null;
   private ending: Promise<void> | null = null;
+  /** a HALT raised inside an async flow: run() rethrows it (never reported as a normal end) */
+  private haltErr: Error | null = null;
+  /** the tick being processed right now (windDown waits for it) */
+  private tickRunning: Promise<void> | null = null;
   private lastUsageLog = 0;
   // observability for the dashboard / metrics
   private ui = {
@@ -359,11 +365,15 @@ export class Session {
       await this.start();
       if (!(await this.openInference())) return await this.windDown('INITIAL_OPEN_FAILED');
       if (!(await this.openVendorJob('start', []))) return await this.windDown('INITIAL_OPEN_FAILED');
-      while (!this.endReason) {
+      while (!this.endReason && !this.haltErr) {
         await this.sleep(this.d.cfg.tickMs);
-        await this.tickOnce();
+        this.tickRunning = this.tickOnce();
+        await this.tickRunning;
+        this.tickRunning = null;
       }
+      if (this.haltErr) throw this.haltErr;
       await this.ending;
+      if (this.haltErr) throw this.haltErr;
       return this.endReason!;
     } catch (e) {
       this.ui.halt = (e as Error).message;
@@ -400,13 +410,20 @@ export class Session {
   }
 
   // -------------------------------------------------------------- F1 -> gate -> F2 -> commit
-  private async decide(p: { kind: 'open' | 'topUp'; trigger: Bodies['REQUEST']['trigger']; attempt: number; exclude: string[]; job: TaskJob | null; epoch: number; t0: number }): Promise<Decision> {
+  private async decide(p: { kind: 'open' | 'topUp'; trigger: Bodies['REQUEST']['trigger']; attempt: number; exclude: string[]; job: TaskJob | null; epoch: number; t0: number; token?: FlowToken }): Promise<Decision> {
     const reqId = `req-${String(++this.reqSeq).padStart(4, '0')}`;
     const jobId = p.job ? p.job.jobId : null;
     const denyTx = (code: DenyCode): TxIntent => ({ fn: 'recordDecision', from: 'agent', args: [(jobId ?? NO_JOB).toString(), code] });
     const overrides = this.overrides.splice(0);
     const body: Bodies['REQUEST'] = { trigger: p.trigger, attempt: p.attempt, snapshot: null, f1: null, request: null, gateInput: null, gateInputHash: null, gateResult: null, f2: null, verdict: null, decision: 'DENY', code: null, overrides };
     const finish = async (code: DenyCode | null, tx: TxIntent | null, request: F1Summary | null): Promise<Decision> => {
+      // a flow abandoned by its watchdog, or any decision finishing after windDown started, writes
+      // nothing: every record must precede SESSION_END
+      if (p.token?.cancelled || this.ending) {
+        this.event('request', { req_id: reqId, job_id: jobId, ev: 'CANCELLED', reason: this.ending ? 'session ending' : 'abandoned' });
+        return { decision: 'CANCELLED', code: null, outcome: null, request };
+      }
+      if (p.token) p.token.committing = true;
       body.decision = code ? 'DENY' : 'APPROVE';
       body.code = code;
       this.ui.lastRequest = { req_id: reqId, trigger: p.trigger, kind: p.kind, request, gate: body.gateResult, f2: body.verdict, decision: body.decision, code, f2_called: body.f2 !== null };
@@ -452,10 +469,16 @@ export class Session {
 
     // [4] R = freeze(request); gate
     const R: GateRequest = Object.freeze({ kind: p.kind, vendor, vendorLabel: req.vendor, gpu: req.gpu, amount: toDec(req.amountMicro), jobId: jobId === null ? null : jobId.toString() });
+    let chainIn: ChainView;
+    try {
+      chainIn = await this.chainView(snap, vendor, jobId); // may read an unknown vendor at block N
+    } catch {
+      return finish('READ_FAILED', null, summary); // fail-closed, local record (no gate input, no F2)
+    }
     const gateInput: GateInput = {
       v: 1,
       request: R,
-      chain: await this.chainView(snap, vendor, jobId),
+      chain: chainIn,
       spec: { spec_id: this.spec.spec_id, allowed_gpu_types: this.spec.allowed_gpu_types, job_cap: specJobCap(this.spec).toString(), deadline: String(this.spec.deadline) },
       ledger: { spec_gross: this.specGrossAt(snap).toString() },
       market: this.marketView(vendor, req.gpu),
@@ -524,6 +547,7 @@ export class Session {
 
   private async openVendorJob(trigger: 'start' | 'migration', exclude: string[]): Promise<boolean> {
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (this.ending || this.haltErr) return false;
       const d = await this.decide({ kind: 'open', trigger: attempt === 0 ? trigger : 'repropose', attempt, exclude, job: null, epoch: this.epoch, t0: this.now() });
       const o = d.outcome;
       if (d.decision === 'APPROVE' && o?.status === 'MINED' && o.result.kind === 'OK' && o.result.jobId !== null && o.result.event.name === 'HoldOpened') {
@@ -564,8 +588,9 @@ export class Session {
   }
 
   async tickOnce(): Promise<void> {
-    if (this.endReason) return;
+    if (this.endReason || this.haltErr) return;
     await this.watcher.tick();
+    if (this.endReason || this.haltErr) return;
     const t = this.current;
     if (!t || t.closed) return;
     const view = this.tickView();
@@ -580,6 +605,7 @@ export class Session {
   }
 
   private async handle(t: TaskJob, a: TickAction): Promise<void> {
+    if (this.endReason || this.haltErr) return; // windDown owns the job now
     switch (a.kind) {
       case 'checkpoint':
         return this.onCheckpoint(t, a);
@@ -588,16 +614,16 @@ export class Session {
         return;
       case 'exhausted':
         this.event('job', { ev: a.awaiting ? 'AWAITING_TOPUP' : 'HOLD_EXHAUSTED', job_id: t.jobId });
-        if (!a.awaiting) await this.endAfterExhaustion(t);
+        if (!a.awaiting) await this.rearmOrEnd(t);
         return;
       case 'stop':
         this.event('job', { ev: 'stop', job_id: t.jobId, reason: a.reason });
         if (a.reason === 'NAN') {
           await this.finishJob(t, 'agent', 'NaN loss: checkpoint -> settle -> close');
-          void this.windDown('NAN');
+          this.end('NAN');
         } else {
           this.ui.stopState = 'HALTED';
-          void this.windDown(a.reason === 'PAUSED' ? 'STOP' : 'DEADLINE');
+          this.end(a.reason === 'PAUSED' ? 'STOP' : 'DEADLINE');
         }
         return;
       case 'stale':
@@ -621,7 +647,7 @@ export class Session {
       if (t.exec.state.phase !== 'STOPPED' && t.exec.state.phase !== 'CLOSED') t.exec.apply({ type: 'STOP', reason: 'NAN' });
       this.epoch++;
       await this.finishJob(t, 'agent', 'NaN loss: checkpoint -> settle -> close', this.checkpointOf(a, t));
-      void this.windDown('NAN');
+      this.end('NAN');
       return;
     }
     this.progressLog.push(`[ckpt ${a.idx}] job ${t.jobId} vendor ${t.label} sim=${(Number(a.simSeconds) / 60).toFixed(0)}min loss=${a.loss}`);
@@ -636,14 +662,14 @@ export class Session {
       return;
     }
     await this.settleJob(t, 'agent', 'checkpoint', this.checkpointOf(a, t));
-    if (t.exec.state.phase === 'RUNNING' && t.exec.state.latch === 'denied') {
-      const { canRearm } = await import('./executor.ts');
-      if (canRearm(t.exec.state)) t.exec.apply({ type: 'REARM' });
+    if (t.exec.state.phase === 'RUNNING' && canRearm(t.exec.state)) {
+      t.exec.apply({ type: 'REARM' }); // D4: next checkpoint, once
+      t.rearmNext = true;
     }
     const done = a.idx + 1 >= this.d.scenario.maxCheckpoints || (typeof a.loss === 'number' && this.d.scenario.targetLoss !== undefined && a.loss < this.d.scenario.targetLoss);
     if (done && typeof a.loss === 'number') {
       await this.finishJob(t, 'agent', 'success metric reached');
-      void this.windDown('COMPLETED');
+      this.end('COMPLETED');
     }
   }
 
@@ -668,6 +694,11 @@ export class Session {
 
   private async closeJob(t: TaskJob, by: 'agent' | 'founder', reason: string): Promise<boolean> {
     if (t.closed) return true;
+    if (t.exec.meter.unsettled() > 0n) {
+      // close is only meant for unsettled == 0; if it ever happens the usage is flagged, never lost silently
+      this.event('job', { ev: 'UNPAID_USAGE', job_id: t.jobId, unsettled_net: t.exec.meter.unsettled() });
+      this.ui.denied.push({ layer: 'LEDGER', code: 'UNPAID_USAGE', tx: null, job: t.jobId.toString() });
+    }
     const o = await this.commit({
       ...this.header('CLOSE', t.jobId, { fn: 'close', from: by, args: [t.jobId.toString()] }),
       body: { by, reason, unsettled_net: t.exec.meter.unsettled().toString(), snapshot: null },
@@ -708,15 +739,44 @@ export class Session {
   private async endAfterExhaustion(t: TaskJob): Promise<void> {
     const code = t.exec.state.deniedCode;
     await this.finishJob(t, 'agent', `hold exhausted after ${code ?? 'no top-up'}`);
-    void this.windDown(code === 'QWEN_DENIED' || code === 'QWEN_UNPARSEABLE' || code === 'QWEN_UNAVAILABLE' ? 'QWEN_FINAL_DENY' : 'TOPUP_DENIED');
+    // only a real Qwen judgment is a "final deny"; a timeout / 5xx is not a judgment
+    this.end(code === 'QWEN_DENIED' || code === 'QWEN_UNPARSEABLE' ? 'QWEN_FINAL_DENY' : 'TOPUP_DENIED');
+  }
+
+  /** D4 at exhaustion: a transient denial re-arms once (a new top-up request), otherwise the job ends. */
+  private async rearmOrEnd(t: TaskJob): Promise<void> {
+    if (this.endReason || this.haltErr) return;
+    if (canRearm(t.exec.state)) {
+      const was = t.exec.state.deniedCode;
+      t.exec.apply({ type: 'REARM' });
+      t.rearmNext = true;
+      this.progressLog.push(`[job ${t.jobId}] re-arm after ${was ?? 'a transient code'} (once, D4)`);
+      if (t.exec.state.phase === 'AWAITING_TOPUP') this.startTopUp(t);
+      return;
+    }
+    await this.endAfterExhaustion(t);
+  }
+
+  /** fire-and-forget windDown: failures are recorded by windDown itself and rethrown from run() */
+  private end(reason: SessionEndReason): void {
+    this.windDown(reason).catch(() => {});
   }
 
   // -------------------------------------------------------------- top-up flow (async, epoch-guarded)
   private startTopUp(t: TaskJob): void {
+    if (this.endReason || this.haltErr) return;
     const epoch = this.epoch;
     const t0 = this.now();
+    const token: FlowToken = { cancelled: false, committing: false };
+    let finished = false;
+    // 60 s watchdog from the trigger: a stuck flow (F1/F2/RPC) is denied with TOPUP_TIMEOUT
+    const watchdog = setTimeout(() => {
+      if (!finished) this.track(this.abandonTopUp(t, token, 'TOPUP_TIMEOUT', null));
+    }, this.d.cfg.topupTimeoutMs);
     const flow = (async () => {
-      const d = await this.decide({ kind: 'topUp', trigger: t.exec.state.rearmed > 0 ? 'rearm' : 'topup', attempt: t.exec.state.rearmed, exclude: [], job: t, epoch, t0 });
+      const trigger = t.rearmNext ? 'rearm' : 'topup'; // only the request right after a REARM
+      t.rearmNext = false;
+      const d = await this.decide({ kind: 'topUp', trigger, attempt: t.exec.state.rearmed, exclude: [], job: t, epoch, t0, token });
       if (d.decision === 'CANCELLED' || t.exec.state.phase === 'CLOSED') return;
       const o = d.outcome;
       if (d.decision === 'APPROVE' && o?.status === 'MINED' && o.result.kind === 'OK' && o.result.event.name === 'ToppedUp') {
@@ -729,17 +789,71 @@ export class Session {
         this.progressLog.push(`[job ${t.jobId}] top-up approved: +$${formatUsd(o.result.event.gross)} gross`);
         return;
       }
-      const code: DenyCode = d.code ?? (o?.status === 'MINED' && o.result.kind === 'DENIED' ? (o.result.code as DenyCode) : 'QWEN_UNAVAILABLE');
+      if (d.decision === 'APPROVE' && (o?.status === 'REVERTED' || o?.status === 'ALREADY_CLOSED')) {
+        // "reverted -> re-read the job, stop this job's actions": no transient code, no re-arm
+        this.event('flow', { ev: 'topup_' + o.status.toLowerCase(), job_id: t.jobId });
+        const ph = t.exec.state.phase as string;
+        if (ph !== 'STOPPED' && ph !== 'CLOSED' && ph !== 'NO_JOB') t.exec.apply({ type: 'STOP', reason: 'MANUAL' });
+        this.end('WIND_DOWN');
+        return;
+      }
+      const code: DenyCode = d.code ?? (o?.status === 'MINED' && o.result.kind === 'DENIED' ? (o.result.code as DenyCode) : 'OVER_HOLD');
       if (t.exec.state.latch === 'inflight') t.exec.apply({ type: 'TOPUP_DENIED', code });
       this.progressLog.push(`[job ${t.jobId}] top-up denied: ${code}`);
-      if (t.exec.state.phase === 'HOLD_EXHAUSTED' && !this.endReason) await this.endAfterExhaustion(t);
-    })().catch((e) => {
-      this.ui.halt = (e as Error).message;
-      this.event('flow', { ev: 'error', error: (e as Error).message });
-      if (e instanceof HaltError) this.endReason = 'WIND_DOWN';
+      if (t.exec.state.phase === 'HOLD_EXHAUSTED' && !this.endReason) await this.rearmOrEnd(t);
+    })()
+      .catch(async (e) => {
+        if (e instanceof HaltError) throw e;
+        this.event('flow', { ev: 'error', error: (e as Error).message.split('\n')[0] });
+        await this.abandonTopUp(t, token, 'READ_FAILED', e as Error);
+      })
+      .finally(() => {
+        finished = true;
+        clearTimeout(watchdog);
+      });
+    this.track(flow);
+  }
+
+  /** A detached async step: windDown waits for it, and a HALT inside it is rethrown by run(). */
+  private track(p: Promise<void>): void {
+    const q = p.catch((e: unknown) => {
+      if (e instanceof HaltError) {
+        this.haltErr ??= e; // the operator runs npm run wind-down
+        this.ui.halt = e.message;
+        this.event('flow', { ev: 'halt', error: e.message });
+        return;
+      }
+      this.event('flow', { ev: 'error', error: (e as Error).message.split('\n')[0] });
     });
-    this.flows.add(flow);
-    void flow.finally(() => this.flows.delete(flow));
+    this.flows.add(q);
+    void q.finally(() => this.flows.delete(q));
+  }
+
+  /**
+   * End a top-up flow that cannot finish (watchdog / unexpected error): the latch moves to denied
+   * with a transient code (one re-arm allowed, D4) and the decision is recorded. TOPUP_TIMEOUT is
+   * written on-chain; READ_FAILED stays a local record (the chain may be unreachable).
+   */
+  private async abandonTopUp(t: TaskJob, token: FlowToken, code: 'TOPUP_TIMEOUT' | 'READ_FAILED', err: Error | null): Promise<void> {
+    if (token.cancelled || token.committing || this.ending || this.haltErr) return;
+    token.cancelled = true;
+    if (t.exec.state.latch !== 'inflight') return;
+    try {
+      await this.commit({
+        ...this.header('REQUEST', t.jobId, code === 'TOPUP_TIMEOUT' ? { fn: 'recordDecision', from: 'agent', args: [t.jobId.toString(), code] } : null, `req-${String(++this.reqSeq).padStart(4, '0')}`),
+        body: { trigger: 'topup', attempt: t.exec.state.rearmed, snapshot: null, f1: null, request: null, gateInput: null, gateInputHash: null, gateResult: null, f2: null, verdict: null, decision: 'DENY', code, overrides: [] },
+      });
+    } catch (e) {
+      if (e instanceof HaltError) {
+        this.haltErr ??= e;
+        this.ui.halt = e.message;
+        return;
+      }
+      throw e;
+    }
+    this.event('flow', { ev: 'abandoned', job_id: t.jobId, code, error: err?.message.split('\n')[0] ?? null });
+    if (t.exec.state.latch === 'inflight') t.exec.apply({ type: 'TOPUP_DENIED', code });
+    if (t.exec.state.phase === 'HOLD_EXHAUSTED' && !this.endReason) await this.rearmOrEnd(t);
   }
 
   // -------------------------------------------------------------- migration
@@ -757,7 +871,7 @@ export class Session {
       await disable();
     }
     this.current = null;
-    if (!(await this.openVendorJob('migration', [t.label]))) void this.windDown('MIGRATION_OPEN_FAILED');
+    if (!(await this.openVendorJob('migration', [t.label]))) this.end('MIGRATION_OPEN_FAILED');
   }
 
   // -------------------------------------------------------------- F3 receipt (never blocks close)
@@ -889,7 +1003,8 @@ export class Session {
 
   private async doWindDown(reason: SessionEndReason): Promise<void> {
     this.event('session', { ev: 'wind_down', reason });
-    await Promise.allSettled([...this.flows]);
+    if (this.tickRunning) await this.tickRunning.catch(() => {});
+    while (this.flows.size) await Promise.allSettled([...this.flows]);
     await this.committer.drain();
     const snap = await this.snapshot();
     const ts = BigInt(snap.blockTimestamp);

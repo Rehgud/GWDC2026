@@ -72,7 +72,7 @@ async function main(): Promise<void> {
         writeFileSync(`${out}/chain.json`, JSON.stringify(chainData));
         console.log(`e2e: golden fixture -> ${out}`);
       }
-      audit = `${r.verdict}${r.warnings.length ? ` (${r.warnings.length} WARN)` : ''}`;
+      audit = `${r.verdict}${r.warnings.length ? ` (${r.warnings.length} WARN: ${[...new Set(r.warnings.map((w) => w.code))].join(',')})` : ''}`;
       if (r.verdict !== 'PASS') for (const f of r.failures.slice(0, 8)) console.log(`   FAIL ${f.check} ${f.code}${f.seq !== undefined ? ` #${f.seq}` : ''}: ${f.detail}`);
     } catch (e) {
       audit = `ERROR ${(e as Error).message.split('\n')[0]}`;

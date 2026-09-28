@@ -365,6 +365,44 @@ describe('auditor goldens', { skip: !HAVE && 'golden fixtures missing (npm run e
     assert.ok(codes(await judgeWithSig(f.b, f.c, { expectedVault: vault })).includes('RELABELED_DENY'));
   });
 
+  test('S2 a deny relabeled READ_FAILED (a local record) although the gate input was read -> RELABELED_DENY', async () => {
+    const { b, c, vault } = await golden('qwen-deny');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.code === 'QWEN_DENIED')!;
+    const f = forge(b, c, deny.seq, (x) => {
+      x.body.code = 'READ_FAILED';
+      x.body.f2 = null; // the F2 deny is dropped too, so only the gate-input evidence is left
+      x.body.verdict = null;
+      x.tx = null;
+    });
+    const newHash = f.b.records.find((r) => r.seq === deny.seq)!.nameHash.toLowerCase();
+    f.c.logs = f.c.logs.filter((l) => !(l.topics[0] === SEL.Denied && l.topics[3]?.toLowerCase() === newHash));
+    f.b.ledger = f.b.ledger.filter((l) => l.rec?.toLowerCase() !== newHash);
+    const got = codes(await judgeWithSig(f.b, f.c, { expectedVault: vault }));
+    assert.ok(got.includes('RELABELED_DENY'), got.join(','));
+  });
+
+  test('S2 a Qwen deny relabeled TOPUP_TIMEOUT (on-chain) -> RELABELED_DENY', async () => {
+    const { b, c, vault } = await golden('qwen-deny');
+    const deny = b.records.find((x) => x.record?.kind === 'REQUEST' && (x.record as DecisionRecord<'REQUEST'>).body.code === 'QWEN_DENIED')!;
+    const f = forge(b, c, deny.seq, (x) => {
+      x.body.code = 'TOPUP_TIMEOUT';
+      x.tx.args[1] = 'TOPUP_TIMEOUT';
+    });
+    const d = f.c.logs.find((l) => l.topics[0] === SEL.Denied && l.topics[3]!.toLowerCase() === f.b.records.find((r) => r.seq === deny.seq)!.nameHash.toLowerCase())!;
+    d.topics = [d.topics[0]!, d.topics[1]!, codeToBytes32('TOPUP_TIMEOUT'), d.topics[3]!];
+    const got = codes(await judgeWithSig(f.b, f.c, { expectedVault: vault }));
+    assert.ok(got.includes('RELABELED_DENY'), got.join(','));
+  });
+
+  test('S4 a vendor job closed with ledger usage unsettled -> WARN UNPAID_USAGE (not FAIL)', async () => {
+    const { b, c, vault } = await golden('normal');
+    const close = b.records.find((x) => x.record?.kind === 'CLOSE' && x.record.job_id !== '0')!;
+    const f = forge(b, c, close.seq, (x) => (x.body.unsettled_net = '1234'));
+    const r = await judgeWithSig(f.b, f.c, { expectedVault: vault });
+    assert.equal(r.verdict, 'PASS', codes(r).join(','));
+    assert.ok(codes(r, 'WARN').includes('UNPAID_USAGE'));
+  });
+
   test('F4 a gate snapshot pinned at/after its own tx block -> SNAPSHOT_ORDER', async () => {
     const { b, c, vault } = await golden('normal');
     const req = topUpReq(b, 0);
