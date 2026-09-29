@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "label": "sepolia-normal",
+  "chainId": 84532,
+  "vault": "0xb8209e529b09Ce2FFF895d33013966aA48007919",
+  "usdc": "0x50d49C382478f3a9f7cC866b9adbbb4D92B1cB06",
+  "founder": "0x92641f1a912354261bbCcf060F6d1EE2b4fc3453",
+  "agent": "0xda6Ef8cD1b997Fcd382fa764C852aeCe4e63dF13",
+  "feeTo": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+  "inferencePayee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+  "vendors": [
+    {
+      "label": "A",
+      "address": "0xB58557467B587928c0444f6d15743738Fb19BA38"
+    },
+    {
+      "label": "B",
+      "address": "0x59E64c085b6cc41a98Cf6FBF8AA0e64b9c65403C"
+    },
+    {
+      "label": "C",
+      "address": "0x9850F9CEdE2711d0bC1FC57715dF742daE81Ca8E"
+    }
+  ],
+  "budget": "20000000",
+  "maxHold": "6000000",
+  "feeBps": 300,
+  "deadline": 1790668438,
+  "deployBlock": "47444726",
+  "setupTxs": [
+    {
+      "step": "deploy MockUSDC",
+      "hash": "0x80c35b07c4464a68292bc069642fae2fca4a849aa118a54b0e09194ab67da127",
+      "block": "47444724"
+    },
+    {
+      "step": "MockUSDC.mint(address,uint256)(0x92641f1a912354261bbCcf060F6d1EE2b4fc3453, 20000000)",
+      "hash": "0x956afa9866199561744097c3626268ed2d5c2161ad8692b6d5b025c78e88e5ac",
+      "block": "47444725"
+    },
+    {
+      "step": "deploy AgentBudgetVault",
+      "hash": "0x269e877d778a41bbe0aaf9966884224a8d273a2cbd4426397cdd85f6c2667bcd",
+      "block": "47444726"
+    },
+    {
+      "step": "MockUSDC.approve(address,uint256)(0xb8209e529b09Ce2FFF895d33013966aA48007919, 20000000)",
+      "hash": "0x43544d802eab8deb18abdf7c7f3dcd229e1965a5d57b9ce8194be144c090b357",
+      "block": "47444727"
+    },
+    {
+      "step": "AgentBudgetVault.fund(uint256,uint256)(20000000, 1790668438)",
+      "hash": "0x04fd5911e302e476621532c4ec27d2e3430531dda8e01c6793a7c457f8189e57",
+      "block": "47444728"
+    },
+    {
+      "step": "AgentBudgetVault.setVendor(address,bool)(0xB58557467B587928c0444f6d15743738Fb19BA38, true)",
+      "hash": "0xfe6c881f63cbc9727c87ebf7a41fc7dad309f5f617987a55311e0ee3aa0cd97a",
+      "block": "47444729"
+    },
+    {
+      "step": "AgentBudgetVault.setVendor(address,bool)(0x59E64c085b6cc41a98Cf6FBF8AA0e64b9c65403C, true)",
+      "hash": "0x965163944b8259beb4385408381df01e3e3aaae55fe2780d5e0664f0740d3e35",
+      "block": "47444730"
+    },
+    {
+      "step": "AgentBudgetVault.setVendor(address,bool)(0x9850F9CEdE2711d0bC1FC57715dF742daE81Ca8E, true)",
+      "hash": "0x7f0bbf999ae33ede822e99b6866327d17adb750891097d65cdc2cabc08e08ffd",
+      "block": "47444731"
+    },
+    {
+      "step": "AgentBudgetVault.setVendor(address,bool)(0xb0978A57294f0fA5033e947eD48a1d439AdC36B8, true)",
+      "hash": "0x514fdf027206ce53872bea33c75bcc522f7fd4df5fdc3379aabf42c9d0c84059",
+      "block": "47444732"
+    },
+    {
+      "step": "AgentBudgetVault.setMaxHold(uint256)(6000000)",
+      "hash": "0x7ba73f54cb9bd7e011f71ffe98fc67cb80efa1b8749a78467662ddf087a7dc58",
+      "block": "47444733"
+    }
+  ],
+  "gitSha": "c241c6e2c362a190370fb4914962c35dabf36011",
+  "deployedAt": "2026-09-29T04:56:14.684Z",
+  "retired": null
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "run_id": "normal-2026-09-29T04-56-36-850Z",
+  "chain_id": 84532,
+  "vault": "0xb8209e529b09Ce2FFF895d33013966aA48007919",
+  "deploy_block": "47444726",
+  "git_sha": "c241c6e2c362a190370fb4914962c35dabf36011",
+  "scenario": "normal",
+  "flags": {
+    "LLM_MODE": "kiln",
+    "KILN_MODEL": "qwen3-32b",
+    "CLOCK_MULT": 60,
+    "TOPUP_TRIGGER": 0.4,
+    "DEADLINE_MARGIN_S": 15,
+    "LLM_CALL_CAP": 60,
+    "PRICE_SOURCE": "LIVE",
+    "KILN_HOST": "api.bricksum.com",
+    "F1_TIMEOUT_MS": 10000,
+    "F2_TIMEOUT_MS": 10000,
+    "NO_THINK": true
+  },
+  "roles": {
+    "founder": "0x92641f1a912354261bbCcf060F6d1EE2b4fc3453",
+    "agent": "0xda6Ef8cD1b997Fcd382fa764C852aeCe4e63dF13",
+    "fee_to": "0x193502baA5d98096E6681021c93eB1670640F4Bb",
+    "inference_payee": "0xb0978A57294f0fA5033e947eD48a1d439AdC36B8",
+    "usdc": "0x50d49C382478f3a9f7cC866b9adbbb4D92B1cB06"
+  },
+  "rpc_hosts": [
+    "sepolia.base.org"
+  ],
+  "last_block": "47444846",
+  "end_reason": "COMPLETED",
+  "ended_at": "2026-09-29T04:59:37.647Z"
+}
