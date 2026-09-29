@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":14,"prev":"0xb0522b965ba2717fd2917b814483e84d47ee10a51847cf4ad7c817a894a26b78","type":"CHECKPOINT","run_id":"demo-4E8E2db8","t":1790699980589,"body":{"job_id":"2","amount":"855040","signer":"agent","reason":"exhausted","accrued":"2560000","settledNet":"1704960","runningMs":"60000","loss":1.367891605976903}}

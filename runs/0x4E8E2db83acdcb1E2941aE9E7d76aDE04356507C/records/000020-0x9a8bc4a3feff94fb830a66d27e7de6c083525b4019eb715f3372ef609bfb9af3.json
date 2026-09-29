@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":20,"prev":"0x3ad1ed9b6fa89691ef65d5d9adc608d5443b125da38ea8c8e0ef2e2188c78b8e","type":"CHECKPOINT","run_id":"demo-4E8E2db8","t":1790700016886,"body":{"job_id":"0","amount":"899","signer":"founder","reason":"windDown","accrued":"0","settledNet":"0","runningMs":"0","loss":"none"}}

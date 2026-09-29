@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":3,"prev":"0x7809bbda02e2cf7acfa1cbc3deda838d727fd58604cc7efad4ced3cd3fc0754e","type":"CHECKPOINT","run_id":"demo-4E8E2db8","t":1790699871336,"body":{"job_id":"1","amount":"1432576","signer":"agent","reason":"periodic","accrued":"1432576","settledNet":"0","runningMs":"33576","loss":1.7943263314956872}}
