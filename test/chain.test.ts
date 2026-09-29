@@ -141,7 +141,7 @@ describe('chain layer on anvil', { skip: ANVIL ? false : 'anvil binary not found
     assert.equal(readFileSync(join(dir, 'deployments', 'current.json'), 'utf8'), json)
     assert.equal(dep.vendors.A, payee('vendor/A'))
     assert.equal(dep.inferencePayee, PAYEES.inferencePayee)
-    assert.equal(dep.setupTxs.length, 11) // MockUSDC, mint, vault, approve, fund, setVendor x4, setMaxHold, agent ETH
+    assert.equal(dep.setupTxs.length, 11) // MockUSDC, mint, vault, setVendor x4, setMaxHold, agent ETH, approve, fund
   })
 
   test('open -> OK with jobId; HoldOpened rec == keccak of the record file bytes', async () => {

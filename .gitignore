@@ -8,3 +8,4 @@ dist/
 broadcast/*/31337/
 .DS_Store
 deployments/31337-*
+deployments/current.json

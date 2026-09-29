@@ -25,10 +25,12 @@ export const PAYEES = {
   inferencePayee: payee('inference'),
 }
 
-/** ETH for ~200 txs at the current gas price, never below the error registry's 0.005 ETH start gate
- *  (at Base Sepolia's ~0.001 gwei the estimate alone is ~4e-5 ETH: one gas spike and every send fails). */
+/** ETH for ~200 txs at the current gas price, never below the error registry's 0.0005 ETH start gate. A demo take is
+ *  ~5.2M gas, ~0.00003 ETH at Base Sepolia's 0.006 gwei incl. the L1 fee (the agent spent 0.0000089 of it on a fork):
+ *  the agent's 3x (0.0015 ETH) still leaves ~50x headroom for a gas spike, and one 0.01 ETH faucet claim funds ~6 vaults
+ *  (at 0.005, not even one). Above ~0.0125 gwei the 200-tx estimate takes over from the floor. */
 const GAS_PER_TX = 200_000n
-const ETH_FLOOR = parseEther('0.005')
+const ETH_FLOOR = parseEther('0.0005')
 export const minEth = async (client: PublicClient) => {
   const est = (await client.getGasPrice()) * GAS_PER_TX * 200n
   return est > ETH_FLOOR ? est : ETH_FLOOR

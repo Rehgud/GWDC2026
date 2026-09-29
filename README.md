@@ -175,7 +175,7 @@ graph TD
 | — | *TBD (녹화 run 후 [`docs/demo-script.md`](docs/demo-script.md)의 표 생성 명령으로 채움)* | | | | |
 
 **매칭 규칙**
-- 준비 tx(MockUSDC 배포, mint, 금고 배포, approve, `fund`, `setVendor` ×4, `setMaxHold`, agent 가스)는 기록 파일이 없고 tx 해시로 매칭한다(`run.json`의 `setupTxs`, `deployments/84532-<vault>.json`).
+- 준비 tx(보낸 순서대로 MockUSDC 배포, mint, 금고 배포, `setVendor` ×4, `setMaxHold`, agent 가스, approve, `fund`)는 기록 파일이 없고 tx 해시로 매칭한다(`run.json`의 `setupTxs`, `deployments/84532-<vault>.json`).
 - 백엔드가 보낸 `open`/`topUp`/`settle`/`close`/`refund`/`recordDecision`/`setPaused`는 마지막 인자 `rec`(indexed topic)가 기록 파일 `records/<seq6>-<recHash>.json`의 keccak 해시다.
 - 자기 tx가 없는 기록(SESSION_START, RECEIPT)은 다음 기록의 `prev` 해시로 묶이고, 마지막 기록은 `refund`의 `rec`로 체인에 고정된다.
 - 탈취 키 tx는 1:1 표에 넣지 않고 감사자가 `UNRECORDED_ATTEMPT`로 따로 나열한다.

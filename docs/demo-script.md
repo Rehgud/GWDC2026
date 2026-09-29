@@ -64,7 +64,7 @@ anvil·stub 리허설(2026-09-29)에서 1)은 `AUDIT PASS (exit 0) (0 FAIL, 3 WA
 
 ### T-60
 1. `forge test`와 `npm test`가 초록이다. 녹화는 대시보드가 새 금고와 새 agent 키로 배포하고, 배포 직후 preflight(역할 주소, `feeBps == 300`, 허용 목록, `maxHold`, 예산, 기한, ETH)를 통과해야 시작한다.
-2. founder의 Base Sepolia ETH를 확인한다. 배포가 agent에게 가스(최소 0.005 ETH)를 보낸다.
+2. founder의 Base Sepolia ETH를 확인한다. 배포가 agent에게 가스(최소 0.0015 ETH = 바닥값 0.0005 ETH × 3)를 보내고, preflight는 배포 뒤 founder와 agent가 각각 0.0005 ETH 이상이어야 통과한다. 0.006 gwei 기준으로 금고 하나에 founder ETH 약 0.00152가 들어서 0.01 ETH면 금고 6개(리허설, demo, budget, deadline, 재녹화 2회)까지 된다. preflight는 배포(setup tx 11개와 agent 가스)를 마친 뒤에 돌므로, founder가 0.0021 ETH 미만이면 새 금고를 만들기 전에 먼저 충전한다.
 3. `npm run smoke:kiln`(파싱, usage, 지연 10초 미만), `.env`의 `LLM_MODE=kiln` 확인, **팀 전원에게 Kiln 사용 중지 공지**(공유 키, 60 RPM), `npm run eval:f2` PASS.
 4. Akash 가격: 배지가 `PRICE LIVE`인지, `SNAPSHOT:<사유>`라면 `prices/akash-snapshot.json`이 커밋되어 있는지.
 5. RPC 응답, 블록 나이 10초 미만, `|now − block.ts| < 5s`.
@@ -94,7 +94,7 @@ node -e '
 const fs = require("fs"), d = process.argv[1], run = JSON.parse(fs.readFileSync(d + "/run.json"))
 const recs = Object.fromEntries(fs.readdirSync(d + "/records").map((f) => [f.slice(7, 73), f]))
 const tx = (h) => run.chainId === 84532 ? `[${h.slice(0, 10)}…](https://sepolia.basescan.org/tx/${h})` : "`" + h.slice(0, 10) + "…`"
-const SETUP = ["MockUSDC deploy", "mint", "AgentBudgetVault deploy", "approve", "fund", "setVendor A", "setVendor B", "setVendor C", "setVendor INFERENCE", "setMaxHold", "agent gas"]
+const SETUP = ["MockUSDC deploy", "mint", "AgentBudgetVault deploy", "setVendor A", "setVendor B", "setVendor C", "setVendor INFERENCE", "setMaxHold", "agent gas", "approve", "fund"]
 const rows = run.setupTxs.map((h, i) => [SETUP[i] ?? "setup", "founder", tx(h), "deployments/" + run.chainId + "-" + run.vault + ".json", "OK"])
 let signer = "-"
 for (const e of fs.readFileSync(d + "/events.jsonl", "utf8").trim().split("\n").map(JSON.parse)) {

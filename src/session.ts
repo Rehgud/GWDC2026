@@ -723,7 +723,11 @@ export class Session {
   }
 
   private async stolenKeyAttack() {
-    while (this.committer.pending > 0) await sleep(20) // idle queue only, so nonces never collide (a collision HALTs REPLACED)
+    // drain(), not just an idle queue: a top-up flow waiting on Kiln or a snapshot has pending == 0, then sends an
+    // agent-key tx on the attacker's nonce. Base Sepolia's 'pending' nonce (a flashblock) trails a send by ~200 ms, and a
+    // same-nonce collision HALTs the Committer (SEND_FAILED or REPLACED): the take is lost. The loop is blocked in
+    // fireIntervention meanwhile, so no new flow starts during the attack.
+    await this.drain()
     const attacker = makeWallet(this.o.chain, this.o.rpcUrls, this.o.agentPk)
     const bad = getAddress('0xbad0000000000000000000000000000000000bad') // valid checksum so viem sends it; not allowlisted -> Denied
     const rec = keccak256(Buffer.from('attacker'))

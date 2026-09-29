@@ -410,6 +410,26 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     assert.ok(unrecorded.some((l) => fromBytes32(l.args.code as Hex) === 'VENDOR_NOT_ALLOWED' || fromBytes32(l.args.code as Hex) === 'OVER_MAX_HOLD'))
   })
 
+  test('stolen key: the attack waits for every in-flight flow, not just an idle Committer queue (no agent nonce race)', async () => {
+    // injection's first top-up F1 (~36 sim-min) is held until the stolenKey step (90) fired, then 500 ms more: the queue is
+    // idle (pending 0) the whole time, yet the flow still has its agent-signed recordDecision to send.
+    const { session, dep } = await build('injection')
+    const s = session as any, orig = s.callLlm.bind(s)
+    let held = false, atAttack: unknown = null
+    s.callLlm = async (req: any) => {
+      if (!held && req.flow === 'F1' && /action: topUp/.test(req.messages.map((m: any) => m.content).join('\n'))) {
+        held = true
+        while (!s.firedSteps.has(1)) await sleep(5)
+        await sleep(500)
+      }
+      return orig(req)
+    }
+    s.o = { ...s.o, onEvent: (e: any) => { if (e.ev === 'stolen_key' && !atAttack) atAttack = { held, inflight: s.inflight.size } } }
+    await session.run()
+    assert.deepEqual(atAttack, { held: true, inflight: 0 }, 'a flow started before the attack and had resolved before the attacker sent')
+    await assertClean('stolen-drain', session, dep, session.dir)
+  })
+
   test('deadline: an agent tx is Denied(PAST_DEADLINE) on chain', async () => {
     const { session, dep, dir } = await runScenario('deadline')
     const { logs } = await assertClean('deadline', session, dep, dir)

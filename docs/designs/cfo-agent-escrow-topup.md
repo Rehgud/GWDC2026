@@ -874,7 +874,7 @@ make deploy
 | StaleChain | watcher 10초 초과 | 누적 정지, 버튼 비활성 | 빨간 STALE 배너 | S1-3, S8-6 |
 | InconsistentSnapshot | 개별 readContract | 예방: multicall@N 1회 | – | S2-17, S7-3 |
 | NonceConflict | 동시 전송, 공격 스크립트 | 예방: commit 큐. 발생 시 1회 재조회 | events 경고 | S2-6, S7-1 |
-| InsufficientGas | send | 시작 전 잔액 게이트(0.005 ETH 미만이면 기동 거부) | 배너 "ETH 부족" | S2-16, S3-13 |
+| InsufficientGas | send | 시작 전 잔액 게이트(0.0005 ETH 미만이면 기동 거부; 2026-09-29: lowered from 0.005) | 배너 "ETH 부족" | S2-16, S3-13 |
 | ReceiptTimeout | 60초 | 해시 재조회 → HALT UNCONFIRMED, 재서명 금지 | 배너 "tx 미확정 0x…" | S2-16, S6-10 |
 | PreSendRevert(JobClosed) | estimateGas | closed이면 ALREADY_CLOSED | 회색 "이미 닫힌 작업" | S2-9 |
 | PreSendRevert(Unauthorized/Panic) | estimateGas | HALT (Panic은 S2-10으로 원인 제거) | 빨간 배너 | S2-9, S2-10 |
@@ -1029,7 +1029,7 @@ make deploy
 |---|---|---|---|
 | Kiln 429 또는 타임아웃 빨강 | fail-closed 거절, 일시 코드 1회 재무장 | 팀 Kiln 사용 확인, 키 분리 | 중단 후 재녹화. stub으로 바꾸지 않음 |
 | RPC 오류, STALE_CHAIN | 누적 정지, fallback transport | 두 번째 공급자 URL 확인 | 10초 넘게 지속되면 run 폐기 |
-| ETH 0.005 미만 | 기동 거부 또는 경고 | faucet이나 팀 지갑으로 충전 | run 폐기 |
+| ETH 0.0005 미만 (2026-09-29: lowered from 0.005) | 기동 거부 또는 경고 | faucet이나 팀 지갑으로 충전 | run 폐기 |
 | tx UNCONFIRMED | HALT | Basescan 확인, 필요하면 같은 nonce로 수동 교체 | run 폐기 |
 | Akash 실패 | SNAPSHOT 사용 | 없음(배지 확인) | 계속 |
 | 백엔드 크래시 | 기동 가드 | wind-down → 새 금고 | run 폐기 |
