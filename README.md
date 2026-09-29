@@ -16,7 +16,7 @@
 
 **How it works** ([diagram](#4-작동-흐름))
 1. **Agent (Qwen F1)** requests a per-job GPU hold (vendor, GPU, amount, rationale). Each checkpoint settles actual usage plus a 3% fee; when a hold drops below 40% of its size, the agent requests a top-up mid-flight, reviewed the same way.
-2. **Code gate:** 10 deterministic rules (vendor allowlist, budget incl. fee, per-hold cap, deadline, STOP, GPU type, job cap, capacity, NaN, loss plateau) on a chain snapshot pinned to one block. A gate denial means 0 CFO Qwen (F2) calls; only the agent's F1 request was made.
+2. **Code gate:** 10 deterministic rules (vendor allowlist, budget incl. fee, per-request cap, deadline, STOP, GPU type, job cap, capacity, NaN, loss plateau) on a chain snapshot pinned to one block. A gate denial means 0 CFO Qwen (F2) calls; only the agent's F1 request was made.
 3. **CFO Qwen (F2)** checks purpose fit, rationale and scope creep against the USER-signed job spec. Only an exact `approve` passes; deny, unparseable output or a timeout all deny (fail-closed). F2 can only block: it cannot override the gate or change the amount.
 4. **Escrow vault** (Base Sepolia) enforces vendor, budget, cap, deadline and STOP again as the last line, even against a stolen agent key: a violation emits `Denied` and moves no money. Every decision is a hash-chained record whose hash goes on chain as the tx argument `rec`.
 
@@ -178,13 +178,13 @@ LLM_MODE=kiln npm run demo                  # 실제 Qwen3-32B on Kiln (.env의 
 npm run audit -- runs/<vault> [--rpc URL]   # exit 0 PASS / 1 FAIL / 2 CANNOT_VERIFY
 
 # 4) USER 대시보드: 새 금고를 배포하고 같은 시나리오를 화면으로 돌린다
-npm run dashboard -- --scenario demo        # http://127.0.0.1:8787/
+LLM_MODE=stub npm run dashboard -- --scenario demo   # http://127.0.0.1:8787/ (Kiln은 LLM_MODE=kiln + KILN_API_KEY)
 
 # 5) 흐름별 토큰·비용·에너지 표 6개
 npm run report -- runs/<vault>              # runs/<vault>/report.md 도 쓴다 (세션 종료 때 자동 생성도 됨)
 ```
 
-- `<vault>`는 2)의 마지막 요약 줄 `bundle runs/0x…`에 찍힌다. RPC를 생략하면 사후 검증 명령은 `run.json`에 적힌 공개 RPC를 쓴다.
+- `<vault>`는 2)가 끝에 찍는 요약의 `bundle runs/0x…` 줄에 있다. RPC를 생략하면 사후 검증 명령은 `run.json`에 적힌 공개 RPC를 쓴다.
 - `LLM_MODE`는 기본값이 없다. 빠지면 기동을 거부하고, stub에서 kiln으로 자동 전환하지 않는다. 셸 변수가 `.env`보다 우선한다.
 - 테스트: `forge test`(컨트랙트, fuzz 불변식 포함), `npm test`(`node --test`, anvil 통합 테스트는 anvil을 직접 띄운다).
 - 다른 시나리오: `LLM_MODE=stub npm run session -- --scenario <이름>`. 이름은 `normal`, `qwen-deny`, `injection`, `stop`, `deadline`, `migrate`, `nan`, `budget`, `plateau`, `demo`다([§10](#10-대본-개입)).
@@ -540,7 +540,7 @@ node -e "import('./src/scenarios.ts').then(m => console.log(m.interventionTable(
 ## 15. 사전 작업·AI 도구·출처 선언 (Pre-built work, AI tools, credits)
 
 - **사전 작업:** 참가 안내서 기준 코딩 시작(2026-09-28 19:00 KST) 전의 커밋은 `036f4d9`(09-14 00:47 KST, "Add hackathon track notes") 하나다. 트랙 설명 메모 1개이고 코드는 없다. 설계 문서는 `4e4bc83`(09-28 19:15 KST)부터, 첫 코드 커밋은 09-29 00:55 KST의 `773152b`(gitignore, 비밀 검사 스크립트)와 `9b181fd`(금고 컨트랙트와 Foundry 테스트)다. git 이력은 고쳐 쓰지 않는다(force-push 없음).
-- **AI 도구:** 구현은 팀의 설계와 지시에 따라 Claude Code(Anthropic의 AI 코딩 에이전트)로 했다. `036f4d9`를 뺀 커밋에는 `Co-Authored-By: Claude` 줄이 있다. 모듈마다 구현, 적대적 리뷰와 수정, 종단 검증을 거쳤고 `forge test`·`npm test`·사후 검증 골든 테스트가 동작을 고정한다. 팀은 코드를 검토했고 설명할 수 있다. 제품 안의 LLM 호출(F1/F2/F3)은 모두 Kiln의 Qwen3-32B다.
+- **AI 도구:** 구현은 팀의 설계와 지시에 따라 Claude Code(Anthropic의 AI 코딩 에이전트)로 했다. main 브랜치에서 `036f4d9`를 뺀 커밋에는 `Co-Authored-By: Claude` 줄이 있다. 모듈마다 구현, 적대적 리뷰와 수정, 종단 검증을 거쳤고 `forge test`·`npm test`·사후 검증 골든 테스트가 동작을 고정한다. 팀은 코드를 검토했고 설명할 수 있다. 제품 안의 LLM 호출(F1/F2/F3)은 모두 Kiln의 Qwen3-32B다.
 - **서드파티와 출처:**
   - [viem](https://github.com/wevm/viem)(MIT): 체인 읽기·쓰기, 유일한 직접 npm 의존성
   - [Foundry](https://github.com/foundry-rs/foundry)와 [forge-std](https://github.com/foundry-rs/forge-std)(`lib/forge-std`, MIT/Apache-2.0): 컨트랙트 빌드·테스트, anvil. 그 밖에는 Node.js 내장 모듈만 쓴다
