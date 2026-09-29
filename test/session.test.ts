@@ -587,6 +587,11 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     // a pre-send revert (the agent may not refund) HALTs the Committer for good
     await s.send({ signer: 'agent', fn: 'refund', args: [1n], expect: ['Refunded'], req_id: null, job_id: null, record: { type: 'SESSION_END', body: {} } })
     await assert.rejects(runP, /HALTED \(PRESEND_REVERT:Unauthorized\)/)
+    // nothing can be sent any more, so STOP is refused instead of reporting success from SENDING
+    assert.equal(session.state().can.stop, false)
+    const res = await session.action({ type: 'STOP', reason: 'MANUAL', stateVersion: session.state().version })
+    assert.equal(res.ok, false)
+    assert.equal(session.state().stop, 'RUNNING')
   })
 
   test('dashboard sync age is real time: it grows (and rpcOk drops) while the RPC is down, at any speed', async () => {

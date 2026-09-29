@@ -760,6 +760,8 @@ export class Session {
       // stale, and STOP only ever makes things safer. A second STOP, or one once windDown has begun, is refused:
       // a pause landing between windDown's plan and its agent-signed txs would get them Denied mid-session-end.
       if (this.stopStage !== 'RUNNING' || this.stopping) return { ok: false, status: 409, reason: 'STOP already pending or the session is winding down' }
+      // A HALTed Committer sends nothing, so the STOP would sit in SENDING while the dashboard reports success.
+      if (this.committer.halted) return { ok: false, status: 409, reason: `nothing can be sent: the Committer HALTed (${this.committer.haltReason}); run npm run wind-down` }
       this.stopping = true
       this.stopStage = 'SENDING'
       this.bump()
@@ -931,7 +933,7 @@ export class Session {
     return {
       version: this.version, run_id: this.runId, scenario: this.scenario.name, vault: this.dep.vault, chainId: this.dep.chainId,
       explorer: this.dep.chainId === 84532 ? 'https://sepolia.basescan.org/tx/' : null,
-      asOfBlock: s ? s.block.toString() : '0', blockTs: s ? Number(s.blockTs) : 0, syncAgeMs: s ? Math.max(0, Date.now() - s.readAt) : 0,
+      asOfBlock: s ? s.block.toString() : '0', blockTs: s ? Number(s.blockTs) : 0, syncAgeMs: s ? Math.max(0, Date.now() - s.readAt) : 0, ended: this.ended,
       badges: { llm: this.o.llm.mode, price: this.prices?.source ?? '?', scenario: this.scenario.name },
       grant: {
         purpose: this.spec?.purpose ?? '', success_metric: this.spec?.success_metric ?? '', allowed_gpu_types: this.spec?.allowed_gpu_types ?? [],
@@ -954,7 +956,7 @@ export class Session {
         rpcOk: this.rpcOk, kiln: { mode: this.o.llm.mode, calls: this.kilnCosts.length, lastLatencyMs: this.kilnLastMs, errors: this.kilnErrors },
         akash: this.prices?.source ?? '?', pendingTx: this.committer.pending, halted: this.committer.haltReason, ethAgent: this.eth.agent, ethFounder: this.eth.founder,
       },
-      can: { stop: this.stopStage === 'RUNNING' && !this.stopping, windDown: this.canWindDown() },
+      can: { stop: this.stopStage === 'RUNNING' && !this.stopping && !this.committer.halted, windDown: this.canWindDown() },
     }
   }
 

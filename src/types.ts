@@ -105,6 +105,7 @@ export type StateView = {
   asOfBlock: string
   blockTs: number
   syncAgeMs: number // > 10_000 => STALE banner
+  ended: boolean // the session wound down (SESSION_END sent): the chain is no longer read, so syncAgeMs only grows
   badges: { llm: 'kiln' | 'stub'; price: string; scenario: string }
   grant: {
     purpose: string; success_metric: string; allowed_gpu_types: string[]; job_cap: string; deadline: number
