@@ -1,0 +1,1 @@
+{"spec_id":"spec-demo-6372558F","vault":"0x6372558F859935DF9364F0c822e703310d160772","chain_id":84532,"issued_at":"2026-09-29T04:12:22.000Z","purpose":"LoRA fine-tune Llama-3.1-8B on our 40k customer-support transcripts and evaluate on the held-out support set","success_metric":"held-out eval loss <= 1.80","allowed_gpu_types":["h100"],"job_cap_usd":"20","deadline":1790784742}

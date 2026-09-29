@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":22,"prev":"0xd785a8ad4623b873f5f9aa548d4dc44be4c29afd7551df1ee0bf178da8c86fde","type":"SESSION_END","run_id":"demo-6372558F","t":1790655332868,"body":{"refund":"14725568","inference_usage":"834","kiln_calls":12,"kiln_cost_unknown":0,"jobs":["1","2","3"]}}
