@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":9,"prev":"0x4d2d32bea8c10c6f365e2fccb45dd603e8ff716b49798975658356210f467d3c","type":"CHECKPOINT","run_id":"budget-7C813285","t":1790647152615,"body":{"job_id":"0","amount":"302","signer":"agent","reason":"windDown","accrued":"0","settledNet":"0","runningMs":"0","loss":"none"}}

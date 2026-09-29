@@ -1,0 +1,41 @@
+{
+  "run_id": "budget-7C813285",
+  "scenario": "budget",
+  "chain": "base-sepolia",
+  "chainId": 84532,
+  "vault": "0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb",
+  "usdc": "0xEf146647d31BDED3b0F10C7D37e279212B51c82A",
+  "founder": "0x87e3866c97b7aE307b9d030581111D076AAaDB58",
+  "agent": "0x7BDd559B31f473A1b8eda13B0252b92287a68dca",
+  "feeTo": "0x980f2F641AcEEb9eA7e3f2497182B5DE38121c8d",
+  "inferencePayee": "0xc849C3595f7CfEE4Bc35B6bE0C013e6111810F4E",
+  "vendors": {
+    "A": "0x689e8312F30c78CDbc0408E64163442dD6306640",
+    "B": "0x96E22b96d1bA2f186d0eF81c2128cA80b25001dF",
+    "C": "0x5291684850D12FB4ED519E389128eba90Da3B78A"
+  },
+  "deployBlock": 47439368,
+  "lastBlock": 47439440,
+  "rpc": "https://sepolia.base.org",
+  "gitSha": "e140dd83e94bd1eb902ecc0cc4a1966b019312d7",
+  "flags": {
+    "LLM_MODE": "kiln",
+    "SCENARIO": "budget",
+    "CLOCK": "3",
+    "DEADLINE_MARGIN_S": "15",
+    "LLM_CALL_CAP": "60"
+  },
+  "setupTxs": [
+    "0x4145667db78da1276c6882a3fc87f14a65acf5c087aef597cf74f6c00670f073",
+    "0xb52bce3994f8ac9e4f9878ce81402acdb4faac56e1688016d7f4c68a37749387",
+    "0x35496fef16ff2e41d099e6ef567adba050f32b89851f5dcfe3b51baa4f1f0474",
+    "0xd5ab7ab9640506988a44e9e6bc826280981c72618cb8892dd50fe05c561e5c48",
+    "0x659178ed5bb0dc87caffcf22115604fc38ed925864a4417b686cf700e917e7b5",
+    "0x7cf5275bac2cde55f1ce0725f8dbcb0780ee569d2d1175c63640a60d900a38f0",
+    "0x216e44a8061b10a717028df53eacae1e8969048a4981aa70f49488ed05cde3bb",
+    "0xbfe2672cc1f8dea76a2495b5e1ea20ffc86dfb3809f8aa2dc148d0e5e2c0c166",
+    "0xffa26d47e2a0fd511c294a8e2ed8dc1a6a091466c3c5a0fad3464bf146370d9e",
+    "0x36a2d73884f9397debb0e46623cdadbe4b355a964b00d3c290415af0de9c89e6",
+    "0xdbaf751cbdee1ef9d84013c603347ee3f3070bd430fd2a012e7601d3a341b541"
+  ]
+}

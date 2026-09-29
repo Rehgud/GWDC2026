@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":10,"prev":"0xa8c8c479c7330b82b6c50184209e70845090112bd48c9783bd4fa7924b136ee0","type":"CLOSE","run_id":"budget-7C813285","t":1790647156402,"body":{"job_id":"0","signer":"agent","reason":"windDown","accrued":"0","settledNet":"0"}}

@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":11,"prev":"0x0dd34da6a227b5c543fb02ad996f2e208d6575898c05f58faed29af53ce42bc8","type":"SESSION_END","run_id":"budget-7C813285","t":1790647164591,"body":{"refund":"2652899","inference_usage":"302","kiln_calls":4,"kiln_cost_unknown":0,"jobs":["1"]}}
