@@ -136,6 +136,9 @@ td.mono .pill { font-family: var(--sans); }
 .tree .f1 > b::before { left: 17px; }
 .tree .f1::before { content: ""; position: absolute; left: 4px; top: -9px; width: 10px; height: 22px; border: solid var(--tree); border-width: 0 0 1px 1px; }
 #bypass { margin-top: 6px; }
+#score { line-height: 26px; } /* scoreboard: one line above the tree; in video mode level with the EVIDENCE title */
+#score .deny { color: var(--crit-text); }
+#score .muted { margin-left: 8px; }
 
 .cards { display: grid; gap: 10px; }
 .card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
@@ -205,7 +208,7 @@ td.mono .pill { font-family: var(--sans); }
 .video .z-live > .scroll, .video .z-evi { overflow: hidden; }
 .video .z-live > .scroll { grid-area: jobs; padding: 0 12px 0 0; }
 .video section.z-evi { grid-area: evi; border-left: 1px solid var(--line); padding-left: 16px; }
-.video .z-evi h2 { font-size: 16px; line-height: 26px; margin: 0; padding-left: 8px; } /* same line as the CFO node */
+.video .z-evi h2 { font-size: 16px; line-height: 26px; margin: 0; padding-left: 8px; } /* same line as the scoreboard */
 .video .scroll { overflow: hidden; }
 .video table { table-layout: auto; }
 .video colgroup, .video .z-live :is(th, td):nth-child(3), .video .z-live :is(th, td):nth-child(n+5), .video .z-live th .src,
@@ -216,7 +219,7 @@ td.mono .pill { font-family: var(--sans); }
 .video .z-live table, .video .z-live tbody { display: block; }
 .video .z-live thead { display: none; }
 .video #jobs tr { position: relative; display: grid; grid-template-columns: 120px auto minmax(0, 1fr); grid-template-areas: "label state pct" "tank tank tank";
-  gap: 4px 12px; align-items: center; padding: 4px 0 6px 34px; }
+  gap: 4px 12px; align-items: center; padding: 4px 0 4px 34px; }
 .video #jobs td { padding: 0; border: 0; white-space: nowrap; }
 .video #jobs td:first-child { grid-area: label; }
 .video #jobs td:nth-child(2) { grid-area: state; }
@@ -231,6 +234,7 @@ td.mono .pill { font-family: var(--sans); }
 .video #jobs tr::before { content: ""; position: absolute; left: 21px; top: 0; bottom: 0; border-left: 1px solid var(--tree); }
 .video #jobs tr::after { content: ""; position: absolute; left: 21px; top: 16px; width: 9px; border-top: 1px solid var(--tree); }
 .video #jobs tr:not(.closed):not(:has(~ tr:not(.closed)))::before { bottom: auto; height: 17px; } /* the last shown leaf ends in an elbow */
+.video #bypass { margin-top: 2px; } /* with the scoreboard line: 3 leaves + this line + a one-line banner still fit 1280x720 */
 </style>
 </head>
 <body>
@@ -284,6 +288,7 @@ td.mono .pill { font-family: var(--sans); }
   <section class="zone z-live" aria-labelledby="h-live">
     <h2 id="h-live">LIVE <small>CFO 트리 &middot; hold 탱크 &middot; 충전 판단</small></h2>
     <div class="scroll">
+      <div id="score"></div>
       <div id="cfo" class="tree"></div>
       <table>
         <colgroup><col style="width:9em"><col style="width:11em"><col style="width:6.5em"><col><col style="width:7em"><col style="width:7em"><col style="width:7em"><col style="width:7em"><col style="width:5em"></colgroup>
@@ -595,10 +600,19 @@ function renderTree(s) {
     : busy ? ['', (cur.action === 'open' ? '새 작업 hold 요청' : '#' + cur.job_id + ' 충전 요청') + STAGE_KO[cur.stage]]
     : ['', running ? 'GPU 작업 ' + running + '개 실행 중' : '대기']
   const count = (f) => tops.filter(f).length
+  const ok = count((t) => t.result === 'APPROVED_ONCHAIN'), no = count((t) => t.result === 'DENIED_RECORDED' || t.result === 'QWEN_NOT_A_JUDGEMENT')
+  // scoreboard. 차단 = the CFO's denials split by stage + every tx the vault itself Denied (stolen key, agent settle after STOP,
+  // an approved tx the chain refused: that APPROVED_BUT_DENIED_ONCHAIN card is not counted again). CFO Qwen needs F2 to have
+  // run (an F1 answer that never parsed is 기타); 코드 게이트 = the code is one of the card's 10 rule chips. TX_ERROR: neither.
+  const qwen = count((t) => (t.result === 'DENIED_RECORDED' && /^QWEN_/.test(t.code)) || (t.result === 'QWEN_NOT_A_JUDGEMENT' && !!t.qwen))
+  const gate = count((t) => t.result === 'DENIED_RECORDED' && (t.gate || []).some((c) => c.code === t.code))
+  const vault = led.filter((l) => l.status === 'DENIED').length // ponytail: the 50-line ledger tail, like `paused` above
+  const parts = [['CFO Qwen', qwen], ['코드 게이트', gate], ['금고', vault], ['기타', no - qwen - gate]].filter(([, n]) => n > 0)
+  $('score').replaceChildren(h('b', null, '성공 ' + ok), ' · ', h('b', { class: no + vault ? 'deny' : null }, '차단 ' + (no + vault)),
+    ...(parts.length ? [' ', h('span', { class: 'muted' }, parts.map(([l, n]) => l + ' ' + n).join(' · '))] : []))
   const node = (cls, label, desc, stat) => h('div', { class: 'node ' + cls }, h('b', null, label), h('span', { class: 'desc' }, desc), h('span', { class: 'stat' }, stat))
   $('cfo').replaceChildren(
-    node('root' + (busy && (cur.stage === 'GATE' || cur.stage === 'F2') ? ' cur' : ''), 'CFO', '코드 게이트 10규칙 → CFO Qwen (F2)',
-      '승인 ' + count((t) => t.result === 'APPROVED_ONCHAIN') + ' · 거절 ' + count((t) => t.result === 'DENIED_RECORDED' || t.result === 'QWEN_NOT_A_JUDGEMENT')),
+    node('root' + (busy && (cur.stage === 'GATE' || cur.stage === 'F2') ? ' cur' : ''), 'CFO', '코드 게이트 10규칙 → CFO Qwen (F2)', '승인 ' + ok + ' · 거절 ' + no),
     node('f1' + (busy && cur.stage === 'F1' ? ' cur' : '') + (kind ? ' ' + kind : ''), 'F1', '작업 에이전트', now))
   const atk = led.filter((l) => l.signer === 'attacker')
   const den = atk.filter((l) => l.status === 'DENIED')

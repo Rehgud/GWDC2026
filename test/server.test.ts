@@ -533,6 +533,58 @@ test('index.html CFO tree: decisions counted at the CFO, F1 shows its request, j
   assert.equal($('sync').textContent, 'sync 30 s ago')
 })
 
+test('index.html scoreboard: 성공 = on chain; 차단 = CFO Qwen · 코드 게이트 · 금고 (each vault Denied once) · 기타', async () => {
+  const env = boot({ ...structuredClone(FIXTURE), topups: [], ledger: [] })
+  await settle()
+  const { $ } = env
+  const score = () => $('score').textContent
+  assert.equal(score(), '성공 0 · 차단 0') // shown from the start, no breakdown
+  assert.equal($('score').all((e) => e.className === 'deny').length, 0) // red only once something was blocked
+
+  // the base run's mix: 3 approved; r4 QWEN_DENIED; r6 gate VENDOR_NOT_ALLOWED; the vault Denied the stolen-key open and topUp
+  // and the agent's settle after STOP. A TX_ERROR card is neither a success nor a block.
+  const atk = FIXTURE.ledger.find((l) => l.signer === 'attacker')!
+  const ledger = [...FIXTURE.ledger, { ...atk, fn: 'open', code: 'VENDOR_NOT_ALLOWED', job_id: null }, { ...FIXTURE.ledger[6], status: 'DENIED', code: 'PAUSED', job_id: '2' }]
+  const txError = { ...FIXTURE.topups[1], req_id: 'demo-5fc8d326-r7', result: 'TX_ERROR' as const, code: 'SEND_FAILED:timeout' }
+  env.current = { ...env.current, version: 58, topups: [...FIXTURE.topups, txError], ledger }
+  await tick(env)
+  assert.equal(score(), '성공 3 · 차단 5 CFO Qwen 1 · 코드 게이트 1 · 금고 3')
+  assert.equal($('score').all((e) => e.className === 'deny')[0].textContent, '차단 5')
+  assert.match($('cfo').textContent, /승인 3 · 거절 2F1/) // the CFO line keeps its own counts
+  assert.match($('bypass').textContent, /금고 거절 2건/)
+
+  // the chain refused an approved open: its APPROVED_BUT_DENIED_ONCHAIN card and its DENIED line are one block, under 금고
+  const refused = { ...FIXTURE.topups[3], req_id: 'demo-5fc8d326-r8', result: 'APPROVED_BUT_DENIED_ONCHAIN' as const, code: 'OVER_BUDGET_WITH_FEE' }
+  env.current = { ...env.current, version: 59, topups: [...env.current.topups, refused], ledger: [...ledger, { ...FIXTURE.ledger[8], status: 'DENIED', code: 'OVER_BUDGET_WITH_FEE' }] }
+  await tick(env)
+  assert.equal(score(), '성공 3 · 차단 6 CFO Qwen 1 · 코드 게이트 1 · 금고 4')
+
+  // any other denial is 기타
+  const timedOut = { ...FIXTURE.topups[2], req_id: 'demo-5fc8d326-r9', code: 'TOPUP_TIMEOUT', qwen: null }
+  env.current = { ...env.current, version: 60, topups: [...env.current.topups, timedOut] }
+  await tick(env)
+  assert.equal(score(), '성공 3 · 차단 7 CFO Qwen 1 · 코드 게이트 1 · 금고 4 · 기타 1')
+
+  // fail-closed: an F2 answer that is not a judgement is CFO Qwen; an F1 answer that never parsed never reached the CFO: 기타
+  const notJudged = { ...FIXTURE.topups[2], result: 'QWEN_NOT_A_JUDGEMENT' as const, code: 'QWEN_UNAVAILABLE' }
+  env.current = { ...env.current, version: 61, topups: [...env.current.topups,
+    { ...notJudged, req_id: 'demo-5fc8d326-r10', qwen: { verdict: null, reason: 'timeout 10s' } },
+    { ...notJudged, req_id: 'demo-5fc8d326-r11', code: 'QWEN_UNPARSEABLE', request: null, qwen: null }] }
+  await tick(env)
+  assert.equal(score(), '성공 3 · 차단 9 CFO Qwen 2 · 코드 게이트 1 · 금고 4 · 기타 2')
+
+  // the budget run's OVER_BUDGET_WITH_FEE is a gate rule. No block: a CANCELLED card, and ledger lines the vault did not
+  // Deny (a stolen-key REVERTED or ERROR, a HALT with a ':' reason, a CANCELLED send)
+  const overBudget = { ...FIXTURE.topups[4], req_id: 'demo-5fc8d326-r12', code: 'OVER_BUDGET_WITH_FEE', gate: FIXTURE.topups[4].gate.map((c) => ({ ...c, pass: c.code !== 'OVER_BUDGET_WITH_FEE' })) }
+  const cancelled = { ...FIXTURE.topups[3], req_id: 'demo-5fc8d326-r13', result: null, code: 'CANCELLED', txHash: null, recHash: null }
+  env.current = { ...env.current, version: 62, topups: [...env.current.topups, overBudget, cancelled], ledger: [...env.current.ledger,
+    { ...atk, status: 'REVERTED', code: null }, { ...atk, status: 'ERROR', code: 'TimeoutError', txHash: null },
+    { ...FIXTURE.ledger[9], status: 'HALT', code: 'SEND_FAILED:nonce too low' }, { ...FIXTURE.ledger[9], status: 'CANCELLED', code: 'stale', txHash: null }] }
+  await tick(env)
+  assert.equal(score(), '성공 3 · 차단 10 CFO Qwen 2 · 코드 게이트 2 · 금고 4 · 기타 2')
+  assert.match(HTML, /<div id="score"><\/div>\s*<div id="cfo" class="tree">/) // the line right above the tree, in both views
+})
+
 test('index.html glosses: every code keeps its bytes; plain Korean sits under the card code and in titles (failing gate chips only)', async () => {
   const s = structuredClone(FIXTURE) as StateView
   s.topups.push({ ...s.topups[1], req_id: 'demo-5fc8d326-r7', result: 'TX_ERROR', code: 'SEND_FAILED:timeout' }) // HALT reasons carry a ':' suffix
