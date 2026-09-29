@@ -120,7 +120,7 @@
 | F. Blockscout: budget run tx | `0x205f73a2…` Logs, Topics [2] `Text` | 언제든 (고정 URL) | 브라우저 1280×720 | 14 |
 | G. report.md | `runs/<vault>/report.md` Markdown 미리보기, §1b → §4 → §5b → §5c | A 뒤 | 편집기 1280×720 | 15 |
 | H. README | 머리글, "온체인 증빙" 표 | 언제든 | 브라우저(GitHub)나 편집기 미리보기 1280×720 | 1, 16 |
-| I. 가로형 흐름도 | `diagrams/cfo-agent-escrow-topup-lr.png`(1950×631)를 화면 폭에 맞춰. 가로형은 1280 폭에서 글자가 약 12px이다. README §4의 세로형 PNG(1950×3112)는 720 높이에 맞추면 글자가 약 8px라 읽히지 않는다 | 언제든 | 이미지 뷰어 1280×720 | 1 |
+| I. 가로형 흐름도 | `diagrams/cfo-agent-escrow-topup-lr.png`(1950×598)를 화면 폭에 맞춰. 가로형은 1280 폭에서 글자가 약 11px이다. README §4의 세로형 PNG(1950×3112)는 720 높이에 맞추면 글자가 약 8px라 읽히지 않는다 | 언제든 | 이미지 뷰어 1280×720 | 1 |
 
 ## 7. 녹화 런북
 
