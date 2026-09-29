@@ -9,20 +9,19 @@
 <style>
 :root {
   color-scheme: light;
-  --page: #f6f5f1; --surface: #fcfcfb; --surface-2: #f0efec; --ink: #14213d; --ink-2: #52514e; --muted: #6b6a66;
-  --line: #e1e0d9; --ring: rgba(11, 11, 11, .12);
-  --s1: #2f5bd3; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --rest: #e1e0d9;
-  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --grey: #898781; --info: #2f5bd3;
-  --qwen: #4a3aa7; --link: #1c5cab;
+  --page: #f8f9fa; --surface: #ffffff; --surface-2: #f1f3f5; --ink: #16181d; --ink-2: #4a4f57; --muted: #696e77;
+  --line: #e4e7eb; --line-strong: #cdd1d8; --tree: #a3a9b3; --ring: rgba(22, 24, 29, .10);
+  --accent: #2f5bd3; /* the one accent (deck blue): live, held, current */
+  --s1: var(--ink); --s2: #6b7079; --s3: #a3a9b2; --s4: var(--accent); --rest: #e6e8ec;
+  --good: #1a9a3c; --warn: #f0a300; --serious: #dd6b33; --crit: #d03b3b; --crit-text: var(--crit); --grey: #8a8f98; --info: var(--accent);
   --sans: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #262624; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #a3a29a;
-    --line: #2c2c2a; --ring: rgba(255, 255, 255, .14);
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --rest: #383835; --info: #3987e5;
-    --qwen: #9085e9; --link: #86b6ef;
+    --page: #0c0d0f; --surface: #141518; --surface-2: #1c1e22; --ink: #f2f3f5; --ink-2: #b9bdc5; --muted: #8e939c;
+    --line: #26292e; --line-strong: #3a3e45; --tree: #4a4f57; --ring: rgba(255, 255, 255, .12);
+    --accent: #6b8ff0; --s2: #8e939c; --s3: #5b6069; --rest: #2a2d33; --crit-text: #f2706b;
   }
 }
 * { box-sizing: border-box; }
@@ -31,44 +30,48 @@ body {
   margin: 0; background: var(--page); color: var(--ink);
   font: 16px/1.45 var(--sans); font-variant-numeric: tabular-nums;
 }
+b, strong { font-weight: 600; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
 .muted { color: var(--muted); }
-a { color: var(--link); }
-:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+a:hover { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 header.top { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 16px; }
 @media (min-height: 900px) { header.top { position: sticky; top: 0; z-index: 5; } }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-h1 { font-size: 20px; margin: 0; }
-h2 { font-size: 20px; margin: 0 0 10px; letter-spacing: .02em; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; }
+h2 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
 h2 small, h3 small { font-weight: 400; color: var(--ink-2); font-size: 16px; }
-h3 { font-size: 17px; margin: 14px 0 8px; }
-.badge { display: inline-block; border: 2px solid var(--c, var(--grey)); border-radius: 4px; padding: 1px 8px; font-weight: 600; font-size: 15px; }
-.badge.warn { background: var(--warn); color: #0b0b0b; }
+h3 { font-size: 17px; font-weight: 600; margin: 14px 0 8px; }
+.badge { display: inline-block; border: 1px solid var(--c, var(--line-strong)); border-radius: 6px; padding: 1px 8px; font-weight: 500; font-size: 15px; }
+.badge.ok { background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+.badge.warn { background: var(--warn); color: #16181d; }
 #b-pending.warn { background: color-mix(in srgb, var(--warn) 22%, var(--surface)); color: var(--ink); }
+#b-scn, #b-pending.grey { border-color: transparent; } /* neutral values: no box (the padding stays, so warn does not shift) */
 .health { color: var(--ink-2); font-size: 15px; }
-.stale { color: #fff; background: var(--crit); padding: 0 6px; border-radius: 4px; font-weight: 700; }
-.banner { margin-top: 8px; padding: 8px 12px; border-radius: 8px; font-weight: 700; overflow-wrap: anywhere; }
+.stale { color: #fff; background: var(--crit); padding: 0 6px; border-radius: 6px; font-weight: 600; }
+.banner { margin-top: 8px; padding: 8px 12px; border-radius: 8px; font-weight: 600; overflow-wrap: anywhere; }
 .banner.bad { background: var(--crit); color: #fff; }
-.banner.info { background: var(--surface-2); color: var(--ink); border: 2px solid var(--info); }
+.banner.info { background: var(--surface-2); color: var(--ink); border: 1px solid var(--accent); }
 
 .controls { margin-top: 10px; display: grid; gap: 8px; }
-.btn { font: inherit; font-weight: 700; min-height: 40px; padding: 6px 14px; border-radius: 8px; cursor: pointer;
-  border: 2px solid var(--ink-2); background: var(--surface); color: var(--ink); }
+.btn { font: inherit; font-weight: 600; min-height: 40px; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
 .btn.danger { border-color: var(--crit); background: var(--crit); color: #fff; }
 .btn:disabled { cursor: not-allowed; opacity: .45; }
-.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border: 2px solid var(--crit); border-radius: 8px; background: var(--surface-2); }
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border: 1px solid var(--crit); border-radius: 8px; background: var(--surface-2); }
 .stages { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 0; padding: 0; align-items: center; }
-.stages li { position: relative; padding: 2px 8px; border-radius: 4px; border: 2px solid transparent; color: var(--muted); }
-.stages li + li::before { content: "\2192"; position: absolute; right: calc(100% + 2px); width: 22px; text-align: center; color: var(--ink-2); } /* fills the 22px gap, centred */
+.stages li { position: relative; padding: 2px 8px; border-radius: 6px; border: 1px solid transparent; color: var(--muted); }
+.stages li + li::before { content: "\2192"; position: absolute; right: calc(100% + 1px); width: 22px; text-align: center; color: var(--ink-2); } /* fills the 22px gap, centred */
 .stages li.done { color: var(--ink-2); }
-.stages li.cur { color: var(--ink); border-color: var(--crit); font-weight: 700; }
-#stop-stages li.cur:first-child { border-color: var(--info); }
+.stages li.cur { color: var(--ink); border-color: var(--crit); font-weight: 600; }
+#stop-stages li.cur:first-child { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 #stop-stages li.cur:not(:first-child, :last-child) { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, var(--surface)); }
 #stop-stages li.cur:last-child { background: var(--crit); border-color: var(--crit); color: #fff; }
 .stages li.skip { text-decoration: line-through; }
 .msg { margin: 0; min-height: 1.45em; font-weight: 600; }
-.msg.bad { color: var(--crit); }
+.msg.bad { color: var(--crit-text); }
 
 main { padding: 12px 16px 40px; max-width: 1880px; margin: 0 auto; display: grid; gap: 16px; }
 section.zone { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 12px 16px; min-width: 0; }
@@ -76,64 +79,84 @@ section.zone { background: var(--surface); border: 1px solid var(--ring); border
 @media (min-width: 1200px) { .cols.grant { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr); } }
 @media (min-width: 1500px) { .cols.evi { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
 
-.src { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 0 4px; border-radius: 4px;
-  border: 1px solid; line-height: 16px; vertical-align: 2px; font-variant-numeric: normal; white-space: nowrap; }
-.src.chain { color: var(--link); border-color: var(--s1); }
-.src.ledger { color: var(--ink-2); border-color: var(--grey); }
-.src.qwen { color: var(--qwen); border-color: var(--qwen); }
+.src { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; padding: 0 4px; border-radius: 3px;
+  border: 1px solid var(--line-strong); color: var(--ink-2); line-height: 16px; vertical-align: 2px; font-variant-numeric: normal; white-space: nowrap; }
 .kv { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr); gap: 4px 10px; margin: 0; }
 .kv dt { color: var(--ink-2); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
-.big { font-size: 19px; font-weight: 700; }
+.big { font-size: 20px; font-weight: 600; line-height: 1.2; }
 
-.pill { display: inline-block; padding: 0 8px; border-radius: 999px; border: 2px solid var(--c, var(--grey));
-  background: color-mix(in srgb, var(--c, var(--grey)) 16%, var(--surface)); color: var(--ink); font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.pill { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1px solid var(--c, var(--grey));
+  background: color-mix(in srgb, var(--c, var(--grey)) 16%, var(--surface)); color: var(--ink); font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
 .ok { --c: var(--good); } .bad { --c: var(--crit); } .warn { --c: var(--warn); } .ser { --c: var(--serious); }
 .grey { --c: var(--grey); } .info { --c: var(--info); }
 
-.bar { display: flex; gap: 2px; height: 28px; margin: 6px 0 10px; }
+/* budget: three KPIs (small label over a big number), then the bar and the minor segments */
+.kpis { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.kpi .lbl { font-size: 15px; font-weight: 500; line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
+.kpi .kn { font-size: 24px; font-weight: 600; line-height: 1.15; white-space: nowrap; }
+.kpi .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.bar { display: flex; gap: 2px; height: 28px; margin: 8px 0 10px; }
 .bar > div { flex: 0 1 0; min-width: 3px; }
-.bar > div:first-child { border-radius: 4px 0 0 4px; }
-.bar > div:last-child { border-radius: 0 4px 4px 0; }
+.bar > div:first-child { border-radius: 3px 0 0 3px; }
+.bar > div:last-child { border-radius: 0 3px 3px 0; }
 .sw-s1 { background: var(--s1); } .sw-s2 { background: var(--s2); } .sw-s3 { background: var(--s3); } .sw-s4 { background: var(--s4); }
-.sw-rest { background: var(--rest); box-shadow: inset 0 0 0 1px var(--ring); }
+.sw-rest { background: var(--rest); box-shadow: inset 0 0 0 1px var(--line-strong); } /* the remaining track keeps a visible edge */
 .legend { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 4em; gap: 3px 10px; align-items: center; }
-.legend .sw { width: 14px; height: 14px; border-radius: 4px; }
+.legend .sw { width: 14px; height: 14px; border-radius: 3px; }
 .legend .r { text-align: right; }
 
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 th { font-size: 15px; color: var(--muted); font-weight: 500; }
-tr.pin td { background: var(--surface-2); }
 tr.denied td { background: color-mix(in srgb, var(--crit) 14%, var(--surface)); }
-tr.denied td:first-child { box-shadow: inset 3px 0 var(--crit); }
-#ledger .pill.ok { border-color: transparent; }
+#ledger .pill.ok { background: none; border-color: transparent; padding: 0; font-weight: 500; }
 td.mono .pill { font-family: var(--sans); }
-.tank { position: relative; height: 22px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); margin-top: 3px; }
-.tank .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--s1); border-radius: 3px; }
+.tank { position: relative; height: 22px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--line); margin-top: 3px; }
+.tank .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 2px; }
 .tank .fill.low { background: var(--serious); }
 .tank .trig { position: absolute; left: 40%; top: -4px; bottom: -4px; border-left: 2px dashed var(--ink); }
 .tanktxt { font-size: 15px; color: var(--ink-2); }
+.tanktxt b { color: var(--ink); }
+
+/* CFO tree: CFO -> F1 -> jobs. Dots and elbows are CSS only; x: CFO dot 0-9, text 17; F1 dot 17-26, text 34 */
+.tree { max-width: 760px; } /* default view: keeps each count near its label */
+.tree .node { position: relative; display: flex; align-items: center; gap: 8px; min-height: 26px; padding-left: 17px; }
+.tree .node > b { white-space: nowrap; }
+.tree .node > b::before { content: ""; position: absolute; left: 0; top: 8.5px; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-2); }
+.tree .node.cur > b { color: var(--accent); } /* the node holding the in-flight request, like the card's blue step */
+.tree .node.cur > b::before { background: var(--accent); }
+.tree .halt > b::before { background: var(--crit); }
+.tree .desc { color: var(--ink-2); }
+.tree .stat { margin-left: auto; font-weight: 500; white-space: nowrap; }
+.tree .halt .stat, .tree .bypass > b, .tree .bypass .stat { color: var(--crit-text); }
+.tree .bypass > b::before { content: "\2715"; top: 0; height: 26px; line-height: 26px; text-align: center; font-size: 13px; background: none; border-radius: 0; }
+.tree .f1 { padding-left: 34px; }
+.tree .f1 > b::before { left: 17px; }
+.tree .f1::before { content: ""; position: absolute; left: 4px; top: -9px; width: 10px; height: 22px; border: solid var(--tree); border-width: 0 0 1px 1px; }
+#bypass { margin-top: 6px; }
 
 .cards { display: grid; gap: 10px; }
-.card { border: 1px solid var(--ring); border-left: 6px solid var(--c, var(--grey)); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
-.card .hd { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.card .hd { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; min-height: 26px; }
 .card .hd b.mono { font-weight: 500; color: var(--ink-2); }
-.card:is(.ok, .bad) > .hd > .pill { background: color-mix(in srgb, var(--c) 80%, #000); border-color: transparent; color: #fff; font-weight: 700; font-size: 18px; line-height: 1.2; }
+.card:is(.ok, .bad) > .hd > .pill { background: color-mix(in srgb, var(--c) 80%, #000); border-color: transparent; color: #fff; font-weight: 600; font-size: 20px; line-height: 1.2; }
 .pipe { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); margin-top: 8px; }
-@media (min-width: 1100px) { .pipe { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.5fr) minmax(0, 1.15fr) minmax(0, 1fr); } }
-.step { background: var(--surface-2); border-radius: 4px; padding: 8px 10px; min-width: 0; }
-.step.cur { outline: 3px solid var(--info); }
-.step.cur ~ .step { background: none; outline: 2px dashed var(--line); outline-offset: -2px; } /* not reached yet: hollow, text keeps AA contrast */
+@media (min-width: 1100px) {
+  .pipe { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.5fr) minmax(0, 1.15fr) minmax(0, 1fr); }
+  .step + .step::before { content: ""; position: absolute; left: -6px; top: 4px; bottom: 4px; border-left: 1px solid var(--line); } /* hairline centred in the 10px gap */
+}
+.step { position: relative; border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.step.cur { outline: 2px solid var(--accent); outline-offset: 0; }
 .step h4 { margin: 0 0 6px; font-size: 15px; color: var(--ink-2); font-weight: 600; }
-.step h4::first-letter { color: var(--ink); font-weight: 700; }
+.step h4::first-letter { color: var(--ink); }
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; padding: 0; }
-.chip { font-size: 14px; font-weight: 500; padding: 0 6px; border-radius: 4px; border: 1px solid transparent; background: var(--surface); color: var(--ink-2); }
-.chip.fail { border: 2px solid var(--crit); color: var(--ink); font-weight: 700; background: color-mix(in srgb, var(--crit) 18%, var(--surface)); }
-.quote { border-left: 3px solid var(--line); padding-left: 8px; margin: 4px 0 0; overflow-wrap: anywhere; }
+.chip { font-size: 14px; font-weight: 400; padding: 0 4px; border-radius: 6px; border: 1px solid transparent; color: var(--ink-2); }
+.chip.fail { border-color: var(--crit); color: var(--ink); font-weight: 600; background: color-mix(in srgb, var(--crit) 14%, var(--surface)); }
+.quote { border-left: 2px solid var(--line-strong); padding-left: 8px; margin: 4px 0 0; overflow-wrap: anywhere; }
 .w-3 { width: 3.5em; } .w-5 { width: 5em; } .w-6 { width: 5.5em; }
-.receipt { border: 1px solid var(--ring); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.receipt { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .btn.small { min-height: 0; padding: 1px 10px; font-size: 15px; font-weight: 600; }
 @media (prefers-reduced-motion: no-preference) {
   .badge { transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
@@ -142,15 +165,15 @@ td.mono .pill { font-family: var(--sans); }
 }
 
 /* ---- video mode (?video=1 or the 영상 모드 button): one screen, no scroll, laid out for 1280x720 and zoomed
-   x1.25 / x1.5 for 1600x900 / 1920x1080. budget strip / LATEST top-up card / live jobs + last 6 ledger lines. ---- */
-.video body { height: 100vh; display: flex; flex-direction: column; line-height: 1.35; }
+   x1.25 / x1.5 for 1600x900 / 1920x1080. One white canvas: KPI band / LATEST top-up card / CFO tree + last 6 ledger lines. ---- */
+.video body { height: 100vh; display: flex; flex-direction: column; line-height: 1.35; background: var(--surface); }
 @media (min-width: 1600px) and (min-height: 900px) { html.video { zoom: 1.25; } .video body { height: calc(100vh / 1.25); } } /* zoom scales vh too */
 @media (min-width: 1920px) and (min-height: 1080px) { html.video { zoom: 1.5; } .video body { height: calc(100vh / 1.5); } }
 .video .novid, .video .z-grant > h2, .video #spec, .video #vendors, .video .z-live > h2, .video .z-live > h3,
 .video #topups > :nth-child(n+2), .video #receipts, .video #ledger tr:nth-child(n+7),
 .video #jobs:has(tr:not(.closed)) tr.closed { display: none; }
 .video header.top { position: static; padding: 6px 16px; }
-.video h1 { font-size: 22px; line-height: 1.2; }
+.video h1 { font-size: 20px; line-height: 1.2; }
 .video .badge, .video .pill, .video th, .video .step h4, .video .tanktxt { font-size: 16px; }
 .video .controls { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .video .controls .row { gap: 6px 8px; }
@@ -162,15 +185,16 @@ td.mono .pill { font-family: var(--sans); }
 .video main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 6px 16px; gap: 6px;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas: "budget budget" "card card" "jobs evi"; }
-.video section.zone { padding: 4px 12px; }
-.video .z-grant { grid-area: budget; }
+.video section.zone { background: none; border: 0; border-radius: 0; padding: 0; }
+.video section.z-grant { grid-area: budget; padding: 4px 0 7px; border-bottom: 1px solid var(--line); }
 .video .cols.grant, .video .cols.evi { display: block; }
-.video #budget { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 14px; }
-.video .bar { margin: 0; height: 18px; }
-.video .legend { grid-column: 1 / -1; grid-template-columns: repeat(5, auto auto auto auto); justify-content: start; gap: 0 6px; }
-.video .legend .sw:not(:first-child) { margin-left: 12px; }
-.video .legend .src, .video .tanktxt .src, .video .step div > .src { display: none; }
-.video .tanktxt { word-break: keep-all; text-wrap: balance; }
+.video #budget { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 4px 28px; }
+.video .kpis { grid-row: 1 / 3; display: grid; grid-template-columns: 88px 148px 148px; gap: 0 28px; }
+.video .bar { margin: 0; height: 12px; align-self: end; }
+.video .legend { display: flex; align-items: center; gap: 0 6px; }
+.video .legend .num.muted { display: none; }
+.video .legend .sw:not(:first-child) { margin-left: 14px; }
+.video .kpi .src, .video .legend .src, .video .tanktxt .src, .video .step div > .src { display: none; }
 .video .z-live { display: contents; }
 .video #topups { grid-area: card; min-width: 0; }
 .video .card { padding: 8px 14px; }
@@ -178,15 +202,35 @@ td.mono .pill { font-family: var(--sans); }
 .video .chip { font-size: 15px; line-height: 1.3; }
 .video .pill { white-space: nowrap; }
 .video .quote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
-.video .z-live > .scroll, .video .z-evi { overflow: hidden; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; }
-.video .z-live > .scroll { grid-area: jobs; padding: 2px 10px; }
-.video .z-evi { grid-area: evi; }
-.video .z-evi h2 { font-size: 16px; margin: 0; padding-left: 8px; }
+.video .z-live > .scroll, .video .z-evi { overflow: hidden; }
+.video .z-live > .scroll { grid-area: jobs; padding: 0 12px 0 0; }
+.video section.z-evi { grid-area: evi; border-left: 1px solid var(--line); padding-left: 16px; }
+.video .z-evi h2 { font-size: 16px; line-height: 26px; margin: 0; padding-left: 8px; } /* same line as the CFO node */
 .video .scroll { overflow: hidden; }
 .video table { table-layout: auto; }
 .video colgroup, .video .z-live :is(th, td):nth-child(3), .video .z-live :is(th, td):nth-child(n+5), .video .z-live th .src,
 .video .z-evi :is(th, td):nth-child(7) { display: none; }
 .video th, .video td { padding: 3px 8px; }
+/* the tree's leaves: each #jobs row is one grid row under F1 (label, state, hold %), its tank on a second line */
+.video #cfo .f1::after { content: ""; position: absolute; left: 21px; top: 18px; bottom: 0; border-left: 1px solid var(--tree); } /* trunk to the leaves */
+.video .z-live table, .video .z-live tbody { display: block; }
+.video .z-live thead { display: none; }
+.video #jobs tr { position: relative; display: grid; grid-template-columns: 120px auto minmax(0, 1fr); grid-template-areas: "label state pct" "tank tank tank";
+  gap: 4px 12px; align-items: center; padding: 4px 0 6px 34px; }
+.video #jobs td { padding: 0; border: 0; white-space: nowrap; }
+.video #jobs td:first-child { grid-area: label; }
+.video #jobs td:nth-child(2) { grid-area: state; }
+.video #jobs td:nth-child(2) > div { display: inline; margin-left: 8px; color: var(--ink-2); } /* stopReason on the same line */
+.video #jobs td:nth-child(4) { display: contents; } /* .tank and .tanktxt become grid items */
+.video #jobs .tank { grid-area: tank; height: 10px; margin: 0; }
+.video #jobs tr.pin .tank { display: none; } /* INFERENCE is never ticked or topped up: a static full bar whose 40% line never applies */
+.video #jobs .tanktxt { grid-area: pct; justify-self: end; }
+.video #jobs .tanktxt b { font-size: 20px; line-height: 1.2; }
+.video #jobs td:nth-child(4) > .muted { grid-area: tank; }
+.video #jobs td[colspan] { grid-column: 1 / -1; }
+.video #jobs tr::before { content: ""; position: absolute; left: 21px; top: 0; bottom: 0; border-left: 1px solid var(--tree); }
+.video #jobs tr::after { content: ""; position: absolute; left: 21px; top: 16px; width: 9px; border-top: 1px solid var(--tree); }
+.video #jobs tr:not(.closed):not(:has(~ tr:not(.closed)))::before { bottom: auto; height: 17px; } /* the last shown leaf ends in an elbow */
 </style>
 </head>
 <body>
@@ -199,9 +243,9 @@ td.mono .pill { font-family: var(--sans); }
     <span id="sync" class="num">sync &mdash;</span>
     <span id="b-llm" class="badge">LLM</span>
     <span id="b-price" class="badge">PRICE</span>
-    <span id="b-scn" class="badge info">SCENARIO</span>
+    <span id="b-scn" class="badge">SCENARIO</span>
     <span id="b-pending" class="badge">pending tx</span>
-    <button id="video-btn" class="btn small" type="button" aria-pressed="false" title="1280&times;720 / 1920&times;1080 녹화용 한 화면 보기 (?video=1)">영상 모드</button>
+    <button id="video-btn" class="btn small" type="button" aria-pressed="false" title="영상 모드(녹화용 한 화면, 1280&times;720·1920&times;1080)와 기본 보기를 오가요 (?video=1)">영상 모드</button>
   </div>
   <div class="row health novid">
     <span id="health">&mdash;</span>
@@ -215,11 +259,11 @@ td.mono .pill { font-family: var(--sans); }
       <button id="stop-BUDGET_CONCERN" class="btn danger" type="button" disabled><span class="novid">STOP &middot; </span>BUDGET_CONCERN</button>
       <button id="stop-MANUAL" class="btn danger" type="button" disabled><span class="novid">STOP &middot; </span>MANUAL</button>
       <button id="wind-btn" class="btn" type="button" disabled>정산&middot;환불<span class="novid"> (wind-down)</span></button>
-      <span class="muted novid">재개(resume) 버튼 없음 &middot; 정지는 되돌리지 않는다</span>
+      <span class="muted novid">STOP을 되돌리는 버튼은 없어요</span>
     </div>
     <div id="confirm" class="confirm" hidden>
       <span id="confirm-text"></span>
-      <button id="confirm-yes" class="btn danger" type="button">확인 &middot; 전송</button>
+      <button id="confirm-yes" class="btn danger" type="button">보내기</button>
       <button id="confirm-no" class="btn" type="button">취소</button>
     </div>
     <div class="row"><span class="novid">정지 단계</span><ol id="stop-stages" class="stages"></ol></div>
@@ -238,8 +282,9 @@ td.mono .pill { font-family: var(--sans); }
   </section>
 
   <section class="zone z-live" aria-labelledby="h-live">
-    <h2 id="h-live">LIVE <small>작업 &middot; hold 탱크 &middot; 충전 판단</small></h2>
+    <h2 id="h-live">LIVE <small>CFO 트리 &middot; hold 탱크 &middot; 충전 판단</small></h2>
     <div class="scroll">
+      <div id="cfo" class="tree"></div>
       <table>
         <colgroup><col style="width:9em"><col style="width:11em"><col style="width:6.5em"><col><col style="width:7em"><col style="width:7em"><col style="width:7em"><col style="width:7em"><col style="width:5em"></colgroup>
         <thead><tr>
@@ -251,6 +296,7 @@ td.mono .pill { font-family: var(--sans); }
         </tr></thead>
         <tbody id="jobs"></tbody>
       </table>
+      <div id="bypass" class="tree" hidden></div>
     </div>
     <h3>충전 요청 <small>F1 요청 &rarr; GATE 10규칙 &rarr; F2 판정 &rarr; CHAIN 결과 (최신순)</small></h3>
     <div id="topups" class="cards"></div>
@@ -284,13 +330,73 @@ const JOB_KIND = { NO_JOB: 'grey', OPEN: 'info', RUNNING: 'info', AWAITING_TOPUP
 const TX_KIND = { OK: ['ok', '✓ '], DENIED: ['bad', '✕ '], HALT: ['bad', '! '], CANCELLED: ['grey', ''], ALREADY_CLOSED: ['grey', ''] }
 const RESULT = {
   APPROVED_ONCHAIN: ['ok', '✓ APPROVED_ONCHAIN', '승인 · 체인 반영'],
-  DENIED_RECORDED: ['bad', '✕ DENIED_RECORDED', '거절 · 기록 앵커'],
+  DENIED_RECORDED: ['bad', '✕ DENIED_RECORDED', '거절 · 체인에 고정'],
   APPROVED_BUT_DENIED_ONCHAIN: ['ser', '⚠ APPROVED_BUT_DENIED_ONCHAIN', '승인됨 → 체인이 거절'],
-  QWEN_NOT_A_JUDGEMENT: ['grey', '— QWEN_NOT_A_JUDGEMENT', '판단 아님'],
+  QWEN_NOT_A_JUDGEMENT: ['grey', '— QWEN_NOT_A_JUDGEMENT', '판단 아님 → 거절'],
   TX_ERROR: ['bad', '! TX_ERROR', 'tx 오류'],
 }
 const CANCELLED = ['grey', '— CANCELLED', '취소됨 (tx/기록 없음)'] // epoch changed before send: no tx, no record
-const SRC_TITLE = { CHAIN: '체인 이벤트/스냅샷', LEDGER: '백엔드 장부·기록', QWEN: 'LLM 출력 (신뢰하지 않음)' }
+const SRC_TITLE = { CHAIN: '체인에서 읽은 값이에요 (이벤트·스냅샷)', LEDGER: '백엔드가 계산하고 기록한 값이에요', QWEN: 'Qwen 쪽 글이에요 (대본 개입 포함) · 틀릴 수 있어 그대로 믿지 않아요' }
+const GLOSS = Object.assign(Object.create(null), { // code token -> plain Korean (the token itself is never changed)
+  // gate · contract (src/rules.ts check, AgentBudgetVault.sol)
+  PAUSED: 'STOP으로 금고가 멈췄어요',
+  PAST_DEADLINE: '기한이 지났거나 시간이 모자라요',
+  VENDOR_NOT_ALLOWED: '허용되지 않은 벤더예요',
+  GPU_TYPE_NOT_ALLOWED: '명세에 없는 GPU 종류예요',
+  NO_CAPACITY: '벤더에 빈 GPU가 없어요',
+  OVER_MAX_HOLD: '1회 상한 maxHold를 넘어요',
+  OVER_BUDGET_WITH_FEE: '수수료를 더하면 남은 예산을 넘어요',
+  OVER_JOB_CAP: '명세의 누적 작업 상한을 넘어요',
+  NAN_DETECTED: '학습 loss가 NaN이에요',
+  LOSS_PLATEAU: 'loss가 거의 줄지 않아요',
+  OVER_HOLD: '정산액이 hold 잔액을 넘어요',
+  // Qwen · ops
+  QWEN_DENIED: 'CFO Qwen이 거절했어요',
+  QWEN_UNAVAILABLE: 'Qwen 답을 받지 못했어요',
+  QWEN_UNPARSEABLE: 'Qwen 답의 형식이 맞지 않아요',
+  READ_FAILED: '체인을 읽지 못했어요',
+  TOPUP_TIMEOUT: '충전 처리가 60초를 넘었어요',
+  LLM_CALL_CAP: 'LLM 호출 한도를 다 썼어요',
+  // stop stages (li title) · job states · stopReason · latch
+  SENDING: 'STOP tx를 보내는 단계예요',
+  PAUSED_ON_CHAIN: '금고가 체인에서 멈춘 단계예요',
+  HALTING: '작업을 멈추는 단계예요',
+  HALTED: '모든 작업이 멈춘 단계예요',
+  RUNNING: '실행 중이에요',
+  NO_JOB: '아직 hold가 없어요',
+  OPEN: 'hold가 열려 있어요',
+  AWAITING_TOPUP: 'hold가 바닥나 충전을 기다려요',
+  HOLD_EXHAUSTED: 'hold를 다 써서 멈췄어요',
+  STOPPED: '작업이 멈췄어요',
+  CLOSED: '닫혀서 hold가 풀렸어요',
+  END: '세션을 끝내며 멈췄어요',
+  MIGRATE: '다른 벤더로 옮기며 멈췄어요',
+  none: '처리 중인 충전 요청이 없어요',
+  inflight: '충전 요청을 처리하는 중이에요',
+  denied: '충전이 거절됐어요',
+  // ledger status · Committer HALT reasons (prefix before ":")
+  OK: 'tx가 성공했어요',
+  DENIED: '컨트랙트가 거절해 돈은 그대로예요',
+  HALT: '오류로 tx를 더 보내지 않아요',
+  CANCELLED: '보내기 전에 취소했어요',
+  ALREADY_CLOSED: '이미 닫힌 작업이에요',
+  REVERTED: 'tx가 실패했어요 (revert)',
+  ERROR: '예상 못 한 오류예요',
+  UNEXPECTED: '와야 할 이벤트가 없어요',
+  UNCONFIRMED: '60초 안에 확정되지 않았어요',
+  REPLACED: 'nonce를 다른 tx가 썼어요',
+  SEND_FAILED: 'tx를 보내지 못했어요',
+  PRESEND_REVERT: '보내기 전 시뮬레이션에서 막혔어요',
+  RECORD_WRITE: '기록 파일을 쓰지 못했어요',
+  RECORD_MISMATCH: '기록과 tx 짝이 맞지 않아요',
+  halted: '이미 멈춰서 보내지 않았어요',
+  stale: '상태가 바뀌어 보내지 않았어요',
+  // STOP reasons (STOP button title only)
+  SCOPE_DRIFT: '범위를 벗어나서 멈출 때 눌러요',
+  BUDGET_CONCERN: '예산이 걱정돼서 멈출 때 눌러요',
+  MANUAL: '다른 이유로 멈출 때 눌러요',
+})
+const gloss = (c) => (c == null ? null : GLOSS[c] || GLOSS[String(c).split(':')[0]] || null) // 'SEND_FAILED:x' -> SEND_FAILED
 
 let S = null          // last StateView
 let lastOk = 0        // Date.now() of the last good /state
@@ -343,7 +449,9 @@ function txLink(hash) {
   return h('span', { class: 'mono', title: hash }, short(hash))
 }
 const connected = () => lastOk > 0 && Date.now() - lastOk < 3500
-const stale = (s) => !!s && s.syncAgeMs > 10000
+// HALTED: no job accrues and STOP is spent; the session then reads the chain only between wind-down passes, and never
+// once it ended (ended implies HALTED), so an old snapshot there is expected, not STALE
+const stale = (s) => !!s && s.stop !== 'HALTED' && s.syncAgeMs > 10000
 
 // ---- header ----
 function renderHeader(s) {
@@ -370,13 +478,13 @@ function renderHeader(s) {
 }
 
 function renderBanners(s, errs = []) {
-  const out = errs.map((e) => ['bad', '렌더 오류 · ' + e])
+  const out = errs.map((e) => ['bad', '화면 일부를 그리지 못했어요 · ' + e + ' · 다른 영역과 버튼은 계속 갱신돼요'])
   if (!lastOk) out.push(['info', '서버에 연결하는 중…'])
-  else if (!connected()) out.push(['bad', '서버 연결 끊김 · 마지막 수신 ' + Math.round((Date.now() - lastOk) / 1000) + '초 전 · 아래 값은 오래된 값'])
+  else if (!connected()) out.push(['bad', '서버와 연결이 끊겼어요 · 아래는 ' + Math.round((Date.now() - lastOk) / 1000) + '초 전 값이에요 · 다시 연결될 때까지 STOP과 정산·환불 버튼을 누를 수 없어요'])
   if (s) {
-    if (s.health.halted) out.push(['bad', 'HALTED · ' + s.health.halted])
-    if (stale(s)) out.push(['bad', 'STALE · 체인 동기화 ' + Math.round(s.syncAgeMs / 1000) + '초 지연 · 사용량 누적 정지, STOP·정산 버튼 비활성'])
-    if (!s.health.rpcOk) out.push(['bad', '체인 읽기 실패 · 충전 보류'])
+    if (s.health.halted) out.push(['bad', 'HALTED · ' + s.health.halted + ' · 이 서버는 tx를 더 보내지 않아요 · 서버를 끄고 npm run wind-down으로 정리해 주세요'])
+    if (stale(s)) out.push(['bad', 'STALE · 체인을 마지막으로 읽은 지 ' + Math.round(s.syncAgeMs / 1000) + '초 지났어요 · 지금은 STOP과 정산·환불 버튼을 누를 수 없어요'])
+    if (!s.health.rpcOk) out.push(['bad', '체인을 읽지 못했어요 · 다시 읽을 때까지 쓴 GPU 시간은 과금하지 않고, 새 요청은 READ_FAILED로 막혀요'])
   }
   $('banners').replaceChildren(...out.map(([k, t]) => h('div', { class: 'banner ' + k, role: 'alert' }, t)))
 }
@@ -399,6 +507,7 @@ function renderGrant(s) {
     ['s4', '열린 hold', g.open_holds], ['rest', '환불 가능', g.refundable],
   ]
   const total = micro(g.budget) || 1
+  const pct = (v) => (micro(v) * 100 / total).toFixed(1) + '%'
   const bar = h('div', { class: 'bar', role: 'img', 'aria-label': segs.map(([, l, v]) => l + ' ' + money(v)).join(', ') })
   for (const [c, , v] of segs) {
     if (micro(v) <= 0) continue
@@ -406,12 +515,17 @@ function renderGrant(s) {
     d.style.flexGrow = String(micro(v))
     bar.append(d)
   }
+  // KPIs: a small label over a big number for 예산, 열린 hold and 환불 가능; the three minor segments go to the legend
+  const kpi = (label, v, sw) => h('div', { class: 'kpi' },
+    h('div', { class: 'lbl' }, sw ? h('span', { class: 'sw sw-' + sw }) : null, label, ' ', src('CHAIN')),
+    h('div', { class: 'num kn' }, money(v)),
+    sw ? h('div', { class: 'num muted novid' }, pct(v)) : null)
   $('budget').replaceChildren(
-    h('div', null, '예산 ', h('span', { class: 'num big' }, money(g.budget)), ' ', src('CHAIN')),
+    h('div', { class: 'kpis' }, kpi('예산', g.budget), kpi('열린 hold', g.open_holds, 's4'), kpi('환불 가능', g.refundable, 'rest')),
     bar,
-    h('div', { class: 'legend' }, segs.map(([c, l, v]) => [
+    h('div', { class: 'legend' }, segs.slice(0, 3).map(([c, l, v]) => [
       h('span', { class: 'sw sw-' + c }), h('span', null, l, ' ', src('CHAIN')),
-      h('span', { class: 'num r' }, money(v)), h('span', { class: 'num r muted' }, (micro(v) * 100 / total).toFixed(1) + '%'),
+      h('span', { class: 'num r' }, money(v)), h('span', { class: 'num r muted' }, pct(v)),
     ])),
   )
 
@@ -438,24 +552,61 @@ function tank(j) {
   const fill = h('div', { class: 'fill' + (pct < 40 ? ' low' : '') })
   fill.style.width = pct + '%'
   return [
-    h('div', { class: 'tank', role: 'img', 'aria-label': 'hold 잔여 ' + raw + '%, 충전 트리거 40%' }, fill, h('div', { class: 'trig' })),
-    h('div', { class: 'tanktxt num' }, raw + '% 잔여 / hold ' + money(j.holdSize) + (raw < 40 ? ' · 40% 미만' : ''), ' ', src('LEDGER')),
+    h('div', { class: 'tank', role: 'img', 'aria-label': 'hold ' + raw + '% 남음, 충전선 40%' }, fill, h('div', { class: 'trig' })),
+    h('div', { class: 'tanktxt num' }, h('b', null, raw + '%'), h('span', { class: 'novid' }, ' 잔여 / hold ' + money(j.holdSize)),
+      raw < 40 ? ' · 40% 미만' : null, ' ', src('LEDGER')),
   ]
 }
 
 function renderJobs(s) {
   const jobs = [...(s.jobs || [])].sort((a, b) => (b.inference ? 1 : 0) - (a.inference ? 1 : 0) || Number(a.id) - Number(b.id))
+  // the gate opens a GPU job only for an allowed GPU type (rules.ts GPU_TYPE_NOT_ALLOWED): with one allowed type, that is its GPU
+  const types = s.grant?.allowed_gpu_types || []
+  const gpu = types.length === 1 ? ' · ' + types[0] : ''
   $('jobs').replaceChildren(...(jobs.length ? jobs.map((j) => h('tr', { class: j.inference ? 'pin' : j.state === 'CLOSED' ? 'closed' : null }, // video mode hides closed rows
-    h('td', null, h('b', null, '#' + j.id), ' ', j.inference ? 'INFERENCE' : '· ' + j.vendorLabel, j.inference ? h('div', { class: 'muted novid' }, '상단 고정') : null),
-    h('td', null, pill(JOB_KIND[j.state] || 'grey', j.state), j.stopReason ? h('div', { class: 'muted' }, j.stopReason) : null),
-    h('td', null, j.latch === 'none' ? j.latch : pill(j.latch === 'inflight' ? 'warn' : 'ser', j.latch)),
+    h('td', null, h('b', null, '#' + j.id), ' ', j.inference ? 'INFERENCE' : '· ' + j.vendorLabel + gpu, j.inference ? h('div', { class: 'muted novid' }, 'Kiln 추론비') : null),
+    h('td', { title: gloss(j.state) }, pill(JOB_KIND[j.state] || 'grey', j.state), j.stopReason ? h('div', { class: 'muted', title: gloss(j.stopReason) }, j.stopReason) : null),
+    h('td', { title: gloss(j.latch) }, j.latch === 'none' ? j.latch : pill(j.latch === 'inflight' ? 'warn' : 'ser', j.latch)),
     h('td', null, j.state === 'CLOSED' ? h('span', { class: 'muted' }, '종료됨 (hold 해제)') : tank(j)),
     h('td', { class: 'num' }, money(j.held)),
     h('td', { class: 'num' }, money(j.accrued)),
     h('td', { class: 'num' }, money(j.settled)),
     h('td', { class: 'num' }, money(j.unsettled)),
     h('td', { class: 'num' }, String(j.pendingTx)),
-  )) : [h('tr', null, h('td', { colspan: 9, class: 'muted' }, '아직 열린 작업 없음'))]))
+  )) : [h('tr', null, h('td', { colspan: 9, class: 'muted' }, '아직 작업이 없어요 · hold가 열리면 여기에 보여요'))]))
+}
+
+// ---- CFO tree: CFO (code gate + CFO Qwen F2) -> the ONE agent (F1) -> its jobs (the #jobs rows are the leaves).
+// A stolen agent key calls the vault directly: it is drawn outside the CFO, and the CFO counts never include it.
+// in flight: the card's own loading words (F1 / F2 / CHAIN step), so the tree and the card say the same thing
+const STAGE_KO = { F1: '을 쓰는 중…', GATE: ' · 코드 게이트가 검사하는 중…', F2: ' · CFO Qwen이 판정하는 중…', CHAIN: ' · tx 확정을 기다리는 중…' }
+function renderTree(s) {
+  const tops = s.topups || [], led = s.ledger || []
+  const cur = tops.at(-1)
+  const busy = s.stop === 'RUNNING' && !!cur && cur.stage !== 'DONE' && cur.result == null // the card is in flight (topupCard's `done` is false)
+  // ponytail: reads the 50-line ledger tail like renderControls; a far longer session could drop the setPaused line
+  // the tick can see the paused vault (jobs STOPPED/PAUSED, stop HALTING) before the setPaused receipt comes back
+  const paused = led.some((l) => l.fn === 'setPaused' && l.status === 'OK') || (s.jobs || []).some((j) => j.stopReason === 'PAUSED')
+  const running = (s.jobs || []).filter((j) => !j.inference && j.state === 'RUNNING').length // AWAITING_TOPUP accrues nothing
+  const [kind, now] =
+    s.stop === 'SENDING' ? ['', 'USER가 STOP을 보내는 중…']
+    : s.stop !== 'RUNNING' && paused ? ['halt', '금고 정지 · agent 키 차단']
+    : s.stop !== 'RUNNING' ? ['', s.ended ? '세션 종료' : '작업 정지'] // no STOP: a wind-down, or the deadline stopped the jobs
+    : busy ? ['', (cur.action === 'open' ? '새 작업 hold 요청' : '#' + cur.job_id + ' 충전 요청') + STAGE_KO[cur.stage]]
+    : ['', running ? 'GPU 작업 ' + running + '개 실행 중' : '대기']
+  const count = (f) => tops.filter(f).length
+  const node = (cls, label, desc, stat) => h('div', { class: 'node ' + cls }, h('b', null, label), h('span', { class: 'desc' }, desc), h('span', { class: 'stat' }, stat))
+  $('cfo').replaceChildren(
+    node('root' + (busy && (cur.stage === 'GATE' || cur.stage === 'F2') ? ' cur' : ''), 'CFO', '코드 게이트 10규칙 → CFO Qwen (F2)',
+      '승인 ' + count((t) => t.result === 'APPROVED_ONCHAIN') + ' · 거절 ' + count((t) => t.result === 'DENIED_RECORDED' || t.result === 'QWEN_NOT_A_JUDGEMENT')),
+    node('f1' + (busy && cur.stage === 'F1' ? ' cur' : '') + (kind ? ' ' + kind : ''), 'F1', '작업 에이전트', now))
+  const atk = led.filter((l) => l.signer === 'attacker')
+  const den = atk.filter((l) => l.status === 'DENIED')
+  const other = atk.filter((l) => l.status !== 'DENIED').map((l) => l.status) // OK / REVERTED / ERROR, named verbatim
+  $('bypass').hidden = !atk.length
+  $('bypass').replaceChildren(...(atk.length ? [node('bypass', '탈취 키', 'agent 키 사본 · CFO 건너뜀', [
+    '금고 거절 ' + den.length + '건' + [...new Set(other)].map((st) => ' · ' + st + ' ' + other.filter((x) => x === st).length + '건').join(''),
+    h('span', { class: 'mono novid' }, ' ' + [...new Set(den.map((l) => l.code).filter(Boolean))].join(' · '))])] : []))
 }
 
 function topupCard(t, purpose) {
@@ -468,9 +619,9 @@ function topupCard(t, purpose) {
   const f1 = t.request
     ? [h('div', { class: 'big num' }, t.request.vendorLabel.length > 3 ? short(t.request.vendorLabel) : t.request.vendorLabel, ' · ', t.request.gpu, ' · ', money(t.request.amount)),
        h('div', { class: 'muted' }, 'rationale (신뢰하지 않음)'), h('p', { class: 'quote' }, t.request.rationale)]
-    : h('span', { class: 'muted' }, done ? '요청 없음 (해석 실패/읽기 실패)' : t.stage === 'F1' ? 'F1 요청 생성 중…' : '—')
+    : h('span', { class: 'muted' }, done ? '요청을 받지 못했어요 · 이유는 4 CHAIN 결과에 있어요' : t.stage === 'F1' ? '에이전트가 요청을 쓰는 중…' : '—')
   const gate = gateRan
-    ? [h('ul', { class: 'chips' }, (t.gate || []).map((c) => h('li', { class: 'chip' + (c.pass ? '' : ' fail') }, (c.pass ? '✓ ' : '✕ ') + c.code))),
+    ? [h('ul', { class: 'chips' }, (t.gate || []).map((c) => h('li', { class: 'chip' + (c.pass ? '' : ' fail'), title: c.pass ? null : gloss(c.code) }, (c.pass ? '✓ ' : '✕ ') + c.code))),
        fails.length ? h('b', null, '✕ ' + fails.length + '건 위반 → 거절') : h('b', null, '✓ ' + (t.gate || []).length + '/' + (t.gate || []).length + ' PASS')]
     : h('span', { class: 'muted' }, done ? '실행 안 함' : '대기')
   const q = t.qwen
@@ -479,11 +630,11 @@ function topupCard(t, purpose) {
        h('p', { class: 'quote' }, q.reason),
        q.verdict === 'deny' ? h('div', { class: 'muted' }, '명세 purpose: ', purpose) : null] // IA: Qwen 사유 vs purpose 나란히
     : fails.length ? h('b', null, 'F2 호출 0회 (게이트에서 차단)')
-    : h('span', { class: 'muted' }, done ? '—' : t.stage === 'F2' ? 'Qwen 판정 대기…' : '대기')
+    : h('span', { class: 'muted' }, done ? '—' : t.stage === 'F2' ? 'CFO Qwen이 판정하는 중…' : '대기')
   const chain = done
-    ? [t.code && t.code !== 'CANCELLED' ? h('div', null, 'code ', h('b', { class: 'mono' }, t.code)) : h('div', null, r[2]),
+    ? [t.code && t.code !== 'CANCELLED' ? h('div', null, 'code ', h('b', { class: 'mono' }, t.code), gloss(t.code) && h('div', { class: 'muted' }, gloss(t.code))) : h('div', null, r[2]),
        h('div', null, 'tx ', txLink(t.txHash)), h('div', null, 'rec ', h('span', { class: 'mono', title: t.recHash || '' }, short(t.recHash)), ' ', src('LEDGER'))]
-    : h('span', { class: 'muted' }, t.stage === 'CHAIN' ? 'tx 전송·확정 대기…' : '대기')
+    : h('span', { class: 'muted' }, t.stage === 'CHAIN' ? 'tx 확정을 기다리는 중…' : '대기')
 
   return h('article', { class: 'card ' + r[0] },
     h('div', { class: 'hd' },
@@ -500,8 +651,8 @@ function renderTopups(s) {
   const list = [...(s.topups || [])].reverse()
   const shown = list.slice(0, 6)
   const more = list.length - shown.length
-  $('topups').replaceChildren(...(list.length ? shown.map((t) => topupCard(t, s.grant.purpose)) : [h('p', { class: 'muted' }, '아직 충전 요청 없음')]),
-    ...(more > 0 ? [h('p', { class: 'muted' }, '+ 이전 요청 ' + more + '건 (장부 피드 참고)')] : []))
+  $('topups').replaceChildren(...(list.length ? shown.map((t) => topupCard(t, s.grant.purpose)) : [h('p', { class: 'muted' }, '아직 요청이 없어요 · 에이전트가 hold나 충전을 요청하면 여기에 보여요')]),
+    ...(more > 0 ? [h('p', { class: 'muted' }, '+ 이전 요청 ' + more + '건은 장부 피드에서 확인해 보세요')] : []))
 }
 
 // ---- EVIDENCE ----
@@ -512,12 +663,12 @@ function renderLedger(s) {
     return h('tr', { class: l.status === 'DENIED' ? 'denied' : null },
       h('td', { class: 'num' }, clock(l.ts)),
       h('td', { class: 'mono' }, l.fn, l.signer === 'attacker' ? [' ', pill('bad', '탈취 키')] : null), // stolen agent key, outside the backend
-      h('td', null, pill(kind, icon + l.status)),
-      h('td', { class: 'mono' }, l.code || '—'),
+      h('td', { title: gloss(l.status) }, pill(kind, icon + l.status)),
+      h('td', { class: 'mono', title: gloss(l.code) }, l.code || '—'),
       h('td', { class: 'num' }, l.job_id == null ? '—' : '#' + l.job_id),
       h('td', null, txLink(l.txHash)),
       h('td', { class: 'mono', title: l.recHash || '' }, short(l.recHash)))
-  }) : [h('tr', null, h('td', { colspan: 7, class: 'muted' }, '아직 tx 없음'))]))
+  }) : [h('tr', null, h('td', { colspan: 7, class: 'muted' }, '아직 tx가 없어요 · tx 결과가 나오면 한 줄씩 쌓여요'))]))
 }
 
 function renderReceipts(s) {
@@ -534,7 +685,7 @@ function renderReceipts(s) {
         ['Qwen 사유', r.qwenReason || '—', 'QWEN'],
         ['F3 설명', r.f3 || '설명 없음', 'QWEN'],
         ['tx', (r.txHashes || []).map((x) => [txLink(x), ' ']), null],
-      ]))) : [h('p', { class: 'muted' }, '아직 영수증 없음')]))
+      ]))) : [h('p', { class: 'muted' }, '아직 영수증이 없어요 · GPU 작업이 닫히면 F3 설명과 함께 생겨요')]))
 }
 
 // ---- founder controls ----
@@ -544,15 +695,16 @@ function renderControls() {
   const canWind = live && !!s.can && s.can.windDown && !lock
   for (const r of REASONS) {
     $('stop-' + r).disabled = !canStop || !!confirmFor
-    $('stop-' + r).title = stale(s) ? '체인 스냅샷 STALE (>10s) · 비활성' : ''
+    $('stop-' + r).title = stale(s) ? '체인을 읽은 지 10초가 넘어 지금은 누를 수 없어요 (STALE)' : gloss(r) || '' // a DOM title of null would read "null"
   }
   $('wind-btn').disabled = !canWind || !!confirmFor
-  $('wind-btn').title = canWind ? '' : '모든 작업이 STOPPED/HOLD_EXHAUSTED이고 pending tx가 0일 때 활성 (STALE이면 비활성)'
+  $('wind-btn').title = canWind ? '' : 'STOP이나 기한으로 멈춘 뒤, INFERENCE를 뺀 모든 작업이 STOPPED·HOLD_EXHAUSTED·CLOSED이고 그 작업들의 pending tx가 0이면 누를 수 있어요 · 세션이 끝났거나 연결이 끊겼거나 STALE이면 누를 수 없어요'
   $('confirm').hidden = !confirmFor
   if (confirmFor) {
     $('confirm-text').textContent = confirmFor.type === 'STOP'
-      ? 'STOP (' + confirmFor.reason + '): 금고를 일시정지(setPaused)합니다. 재개 버튼은 없습니다.'
-      : '정산·환불: 작업별 settle → close → 추론비 정산 → refund. 금액은 서버가 계산합니다.'
+      ? 'STOP (' + confirmFor.reason + '): setPaused로 금고를 멈춰요. 그 뒤로 agent 키로는 돈이 나가지 않고 정산·환불은 USER만 할 수 있어요. 되돌리는 버튼은 없어요.'
+      : '정산·환불: 작업마다 settle과 close를 하고 추론비를 정산한 뒤, refund로 남은 예산을 USER에게 돌려줘요. 금액은 서버가 계산해요.'
+    $('confirm-yes').textContent = confirmFor.type === 'STOP' ? 'STOP 보내기' : '정산·환불 시작'
     $('confirm-yes').disabled = !(confirmFor.type === 'STOP' ? canStop : canWind)
   }
   const cur = s ? STAGES.indexOf(s.stop) : -1
@@ -560,10 +712,10 @@ function renderControls() {
   // through, not ticked. ponytail: reads the 50-line ledger tail; after a STOP only its few wind-down txs follow setPaused.
   const skipped = !!s && s.stop === 'HALTED' && !(s.ledger || []).some((l) => l.fn === 'setPaused')
   $('stop-stages').replaceChildren(
-    h('li', { class: cur < 0 ? 'cur' : 'done', 'aria-current': cur < 0 ? 'step' : null }, (cur < 0 ? '● ' : '✓ ') + 'RUNNING'),
+    h('li', { class: cur < 0 ? 'cur' : 'done', 'aria-current': cur < 0 ? 'step' : null, title: '멈추기 전 실행 단계예요' }, (cur < 0 ? '● ' : '✓ ') + 'RUNNING'),
     ...STAGES.map((st, i) => {
       const skip = skipped && i < cur
-      return h('li', { class: skip ? 'skip' : i < cur ? 'done' : i === cur ? 'cur' : 'todo', 'aria-current': i === cur ? 'step' : null, title: skip ? 'STOP 없이 정산·환불로 종료' : null },
+      return h('li', { class: skip ? 'skip' : i < cur ? 'done' : i === cur ? 'cur' : 'todo', 'aria-current': i === cur ? 'step' : null, title: skip ? 'STOP(setPaused) 없이 끝났어요' : gloss(st) },
         (skip ? '' : i < cur ? '✓ ' : i === cur ? '● ' : '') + st)
     }))
 }
@@ -584,16 +736,16 @@ async function act(a) {
   // WIND_DOWN: guarded by can.windDown), so a version that moved on since the click never blocks the kill switch.
   const body = a.type === 'STOP' ? { type: 'STOP', reason: a.reason, stateVersion: S.version } : { type: 'WIND_DOWN', stateVersion: S.version }
   lock = { version: S.version, accepted: false }
-  say('전송 중…')
+  say('보내는 중… tx가 끝날 때까지 시간이 걸려요')
   renderControls()
   try {
     const r = await fetch('/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const d = await r.json().catch(() => ({}))
-    if (r.ok) { lock.accepted = true; say('접수됨 · 다음 상태 버전에서 반영 확인 중…') }
-    else { lock = null; say(r.status + ' · ' + (d.reason || '거절됨'), 'bad') }
+    if (r.ok) { lock.accepted = true; say('서버가 처리했어요 · 화면에 반영되는지 확인하는 중…') }
+    else { lock = null; say('완료되지 않았어요 (' + r.status + ' · ' + (d.reason || '사유 없음') + ')', 'bad') }
   } catch (e) {
     lock = null
-    say('전송 실패 · 서버 연결을 확인하세요', 'bad')
+    say('응답을 받지 못했어요 · 서버 연결을 확인하고 다시 눌러 주세요', 'bad')
   }
   unlockIfShown()
   renderControls()
@@ -602,7 +754,7 @@ async function act(a) {
 function unlockIfShown() {
   if (lock && lock.accepted && S && S.version > lock.version) {
     lock = null
-    say('반영됨 (state v' + S.version + ')')
+    say('화면에 반영됐어요 (state v' + S.version + ')')
   }
 }
 
@@ -627,7 +779,7 @@ $('video-btn').addEventListener('click', () => {
 // ---- poll ----
 function render(s) {
   const errs = [] // one broken zone must not freeze the rest, and the controls always follow the newest state
-  for (const f of [renderHeader, renderGrant, renderJobs, renderTopups, renderLedger, renderReceipts]) {
+  for (const f of [renderHeader, renderGrant, renderJobs, renderTree, renderTopups, renderLedger, renderReceipts]) {
     try { f(s) } catch (e) { errs.push(f.name + ': ' + (e && e.message)) }
   }
   renderBanners(s, errs)
@@ -644,7 +796,7 @@ async function poll() {
     S = s
     lastOk = Date.now()
     unlockIfShown()
-    try { render(s) } catch (e) { $('banners').append(h('div', { class: 'banner bad', role: 'alert' }, '렌더 오류: ' + (e && e.message))) }
+    try { render(s) } catch (e) { $('banners').append(h('div', { class: 'banner bad', role: 'alert' }, '화면을 그리지 못했어요 · ' + (e && e.message) + ' · 다음 갱신 때 다시 시도해요')) }
   } else {
     renderBanners(S)
     renderControls()

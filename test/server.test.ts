@@ -352,7 +352,7 @@ test('index.html renders the demo fixture (three zones, terminal states, links, 
   assert.equal($('stop-SCOPE_DRIFT').disabled, true)
   env.current = { ...env.current, version: 58, stop: 'SENDING', can: { stop: false, windDown: false } }
   await tick(env)
-  assert.match($('action-msg').textContent, /반영됨/)
+  assert.match($('action-msg').textContent, /반영됐어요/)
   assert.equal($('stop-MANUAL').disabled, true) // can.stop is now false
   const cur = $('stop-stages').all((e) => e.className === 'cur')
   assert.equal(cur.length, 1)
@@ -413,10 +413,10 @@ test('index.html shows STUB, STALE, HALTED and snapshot pricing', async () => {
   assert.equal($('b-price').textContent, 'PRICE SNAPSHOT:timeout')
   assert.match($('sync').textContent, /STALE/)
   assert.match($('banners').textContent, /HALTED · UNCONFIRMED 0xabc/)
-  assert.match($('banners').textContent, /STALE · 체인 동기화 15초 지연/)
+  assert.match($('banners').textContent, /STALE · 체인을 마지막으로 읽은 지 15초 지났어요/)
   assert.equal($('wind-btn').disabled, true) // no wind-down on a stale snapshot
   assert.equal($('stop-MANUAL').disabled, true) // StaleChain: 버튼 비활성 (design error table)
-  assert.match($('banners').textContent, /STOP·정산 버튼 비활성/)
+  assert.match($('banners').textContent, /STOP과 정산·환불 버튼을 누를 수 없어요/)
 })
 
 test('index.html: INFERENCE pinned whatever its id, only https explorers link, a broken zone does not freeze the controls, /state has a timeout', async () => {
@@ -434,7 +434,7 @@ test('index.html: INFERENCE pinned whatever its id, only https explorers link, a
   // next state: receipts malformed (renderReceipts throws) and STOP no longer allowed -> button must still lock
   env.current = { ...env.current, version: 58, can: { stop: false, windDown: false }, receipts: [{ ...env.current.receipts[0], txHashes: 'oops' as never }] }
   await tick(env)
-  assert.match($('banners').textContent, /렌더 오류 · renderReceipts/)
+  assert.match($('banners').textContent, /그리지 못했어요 · renderReceipts/)
   assert.equal($('stop-MANUAL').disabled, true)
   assert.match($('run').textContent, /demo-5fc8d326/) // other zones still rendered
 })
@@ -473,4 +473,79 @@ test('index.html video mode: ?video=1 hook and toggle, CSS-only layout, closed j
   assert.deepEqual($('jobs').all((e) => e.tagName === 'TR').map((r) => r.className), ['pin', 'closed', ''])
   assert.match($('ledger').all((e) => e.tagName === 'TR')[0].textContent, /탈취 키/)
   assert.equal($('topups').all((e) => e.tagName === 'ARTICLE').length, FIXTURE.topups.length) // DOM keeps every card; CSS shows the first
+})
+
+test('index.html CFO tree: decisions counted at the CFO, F1 shows its request, jobs are the leaves, a stolen key sits outside the CFO, STOP halts F1', async () => {
+  const env = boot(FIXTURE)
+  await settle()
+  const { $ } = env
+  const nodes = () => $('cfo').all((e) => /^node /.test(e.className))
+  assert.deepEqual(nodes().map((n) => n.className), ['node root', 'node f1'])
+  assert.match(nodes()[0].textContent, /^CFO.*승인 3 · 거절 2$/) // r2 r3 r5 APPROVED_ONCHAIN, r4 r6 DENIED_RECORDED
+  assert.match(nodes()[1].textContent, /^F1.*GPU 작업 1개 실행 중$/) // job 2 RUNNING; job 1 CLOSED; INFERENCE not counted
+  assert.match($('jobs').all((e) => e.tagName === 'TR')[2].textContent, /^#2 · B · h100/) // one allowed GPU type
+  assert.equal($('bypass').hidden, false)
+  assert.match($('bypass').textContent, /^탈취 키.*CFO 건너뜀.*금고 거절 1건/)
+  assert.doesNotMatch($('cfo').textContent, /탈취/) // the stolen key is not under the CFO
+  assert.equal($('banners').textContent, '')
+
+  const inFlight = { ...FIXTURE.topups[1], req_id: 'demo-5fc8d326-r7', stage: 'F2' as const, result: null, qwen: null, code: null, txHash: null, recHash: null }
+  env.current = { ...env.current, version: 58, topups: [...FIXTURE.topups, inFlight] }
+  await tick(env)
+  assert.deepEqual(nodes().map((n) => n.className), ['node root cur', 'node f1'])
+  assert.match(nodes()[1].textContent, /#1 충전 요청 · CFO Qwen이 판정하는 중…$/)
+
+  env.current = { ...env.current, version: 59, stop: 'HALTED', ledger: [...FIXTURE.ledger.filter((l) => l.signer !== 'attacker'),
+    { ts: 2, fn: 'setPaused', status: 'OK', code: null, txHash: null, recHash: null, job_id: null, signer: 'founder' }] }
+  await tick(env)
+  assert.equal(nodes()[0].className, 'node root') // no live marker after STOP
+  assert.match(nodes()[1].textContent, /금고 정지 · agent 키 차단/)
+  assert.equal($('bypass').hidden, true)
+  assert.equal(nodes()[1].className, 'node f1 halt') // red dot and text
+
+  env.current = { ...structuredClone(FIXTURE), version: 60, topups: [...FIXTURE.topups, { ...inFlight, stage: 'F1' as const, request: null }] }
+  await tick(env)
+  assert.deepEqual(nodes().map((n) => n.className), ['node root', 'node f1 cur']) // F1 writes the request
+  assert.match(nodes()[1].textContent, /#1 충전 요청을 쓰는 중…$/)
+
+  env.current = { ...env.current, version: 61, stop: 'SENDING' }
+  await tick(env)
+  assert.deepEqual(nodes().map((n) => n.className), ['node root', 'node f1'])
+  assert.match(nodes()[1].textContent, /USER가 STOP을 보내는 중…$/)
+
+  // the tick saw the paused vault before the setPaused receipt came back: HALTING, no setPaused line yet
+  env.current = { ...env.current, version: 62, stop: 'HALTING', jobs: env.current.jobs.map((j) => (j.inference || j.state === 'CLOSED' ? j : { ...j, state: 'STOPPED', stopReason: 'PAUSED' })) }
+  await tick(env)
+  assert.equal(nodes()[1].className, 'node f1 halt')
+
+  // a stolen-key tx the vault did not deny is named by its status, never counted as 금고 거절
+  const atk = FIXTURE.ledger.find((l) => l.signer === 'attacker')!
+  env.current = { ...env.current, version: 63, ledger: [...FIXTURE.ledger, { ...atk, fn: 'open', status: 'ERROR', code: 'TimeoutError', txHash: null, job_id: null }] }
+  await tick(env)
+  assert.match($('bypass').textContent, /금고 거절 1건 · ERROR 1건/)
+
+  // a wind-down without a STOP ended the session: the chain is no longer read, so an old snapshot is not STALE
+  env.current = { ...structuredClone(FIXTURE), version: 64, stop: 'HALTED', ended: true, syncAgeMs: 30_000 }
+  await tick(env)
+  assert.equal(nodes()[1].className, 'node f1')
+  assert.match(nodes()[1].textContent, /세션 종료$/)
+  assert.equal($('banners').textContent, '')
+  assert.equal($('sync').textContent, 'sync 30 s ago')
+})
+
+test('index.html glosses: every code keeps its bytes; plain Korean sits under the card code and in titles (failing gate chips only)', async () => {
+  const s = structuredClone(FIXTURE) as StateView
+  s.topups.push({ ...s.topups[1], req_id: 'demo-5fc8d326-r7', result: 'TX_ERROR', code: 'SEND_FAILED:timeout' }) // HALT reasons carry a ':' suffix
+  const env = boot(s)
+  await settle()
+  const { $ } = env
+  const cards = $('topups').all((e) => e.tagName === 'ARTICLE')
+  assert.match(cards[0].textContent, /code SEND_FAILED:timeouttx를 보내지 못했어요/)
+  assert.match(cards[1].textContent, /code VENDOR_NOT_ALLOWED허용되지 않은 벤더예요/)
+  assert.match(cards[3].textContent, /✕ DENIED_RECORDED · 거절 · 체인에 고정/)
+  const chips = cards[1].all((e) => e.tagName === 'LI')
+  assert.deepEqual(chips.filter((c) => c.attrs.title).map((c) => c.textContent), ['✕ VENDOR_NOT_ALLOWED', '✕ GPU_TYPE_NOT_ALLOWED']) // a passing ✓ PAUSED gets no "paused" title
+  const cells = $('ledger').all((e) => e.tagName === 'TR')[0].all((e) => e.tagName === 'TD')
+  assert.deepEqual([cells[2].attrs.title, cells[3].attrs.title], ['컨트랙트가 거절해 돈은 그대로예요', '1회 상한 maxHold를 넘어요'])
+  assert.equal($('stop-MANUAL').title, '다른 이유로 멈출 때 눌러요')
 })

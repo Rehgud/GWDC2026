@@ -31,14 +31,14 @@
 | # | 영상 | 길이 | 화면 라벨 | 소스 (t0 기준) · 속도 | 편집 기준 신호 (화면) |
 |---|---|---|---|---|---|
 | 1 | 0:00–0:12 | 12초 | `CFO Agent · Challenge B: Controls & records` | README 머리글 (촬영 H) + 가로형 흐름도 (촬영 I) · 1x | – |
-| 2 | 0:12–0:20 | 8초 | `SCOPE` USER가 정한 범위 | `기본 보기` GRANT: t0−1 → t0+3 1x (4초) + 마지막 프레임 `정지 화면` 4초 | 시작: 벤더 A/B/C가 `✓ 허용`(첫 체인 스냅샷, t0 직전), purpose가 보임. 끝: 4초 뒤 `영상 모드`를 누르기 직전. 예산 막대의 `열린 hold $0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다 |
-| 3 | 0:20–0:36 | 16초 | `RUN` 범위 안 → 허락 | 영상 모드. t0+4 → t0+8 `2x` (2초), t0+8 → t0+16 1x (8초), t0+16 → t0+40 `4x` (6초) | 2x 구간: 카드 `…-r2 · open · job (신규)`의 `F1 요청 생성 중…`, 장부 첫 줄 `open ✓ OK`, 예산 막대 `열린 hold $0.05`(t0+7쯤). 1x 구간: F1 `B · h100 · $…`(t0+9) → `✓ 10/10 PASS` → `✓ approve`(t0+10) → `✓ APPROVED_ONCHAIN`(t0+14), 장부 `open ✓ OK`. 4x 구간: 작업 #1 탱크가 40% 선 아래로, 새 카드 `topUp · job #1`(`F1 요청 생성 중…`, t0+34쯤). 끝: 그 카드의 F1 결과가 뜨기 직전 |
-| 4 | 0:36–0:54 | 18초 | `PUSH #1` 범위 밖: 목적 밖 충전 → CFO Qwen 거절 → 기록 · `대본 개입` | t0+40 → t0+49 1x (9초), t0+49 → t0+61 `4x` (3초), t0+61 → t0+67 1x (6초) | 장부 첫 `settle ✓ OK #1`(t0+42) → F1 rationale "…pretraining a new 7B base model…"(t0+43) → `✓ 10/10 PASS` → `✕ deny` + 사유 + `명세 purpose`(t0+44) → (`tx 전송·확정 대기…`, 4x) → `✕ DENIED_RECORDED`(t0+63), code `QWEN_DENIED`, 장부 `recordDecision ✓ OK QWEN_DENIED #1` |
-| 5 | 0:54–1:00 | 6초 | `RUN` 작업 2 → 허락 | t0+67 → t0+83 `4x` (4초), t0+83 → t0+99 `8x` (2초) | 작업 #1의 마지막 `settle ✓ OK #1`(t0+72), 카드 `…-r4 · open` → `✓ APPROVED_ONCHAIN`(t0+82), 작업 #2 RUNNING → (8x) 장부 `close ✓ OK #1`(t0+91, `HOLD_EXHAUSTED`였던 작업 #1 행이 사라진다). 끝: 카드 `topUp · job #2`가 뜨기 직전 |
-| 6 | 1:00–1:14 | 14초 | `PUSH #2` 범위 밖: 허용 안 된 벤더 → 코드 게이트 거절 (CFO Qwen 0회) → 기록 · `대본 개입` | t0+99 → t0+105 `2x` (3초), t0+105 → t0+116 1x (11초) | 카드 `topUp · job #2`(`F1 요청 생성 중…`, t0+100) → F1 `0xBADb…BAD0 · h200 · $…`(t0+109) → 칩 `✕ VENDOR_NOT_ALLOWED` `✕ GPU_TYPE_NOT_ALLOWED` `✕ NO_CAPACITY`, `✕ 3건 위반 → 거절`, `F2 호출 0회 (게이트에서 차단)` → `✕ DENIED_RECORDED`(t0+114), code `VENDOR_NOT_ALLOWED`. 끝: 장부에 탈취 키 줄이 뜨기 직전 |
-| 7 | 1:14–1:22 | 8초 | `PUSH #3` 범위 밖: 탈취 키 → 컨트랙트 Denied (체인) · `대본 개입` | t0+116 → t0+124 `2x` (4초), t0+124 → t0+128 1x (4초) | 장부 맨 위 빨간 줄 2개: `open 탈취 키 ✕ DENIED VENDOR_NOT_ALLOWED`(t0+116), `topUp 탈취 키 ✕ DENIED OVER_MAX_HOLD #0`(t0+120). 예산 막대는 그대로. 카드는 작업 3의 `…-r6 · open`으로 바뀐다(`✓ approve`, t0+126) |
+| 2 | 0:12–0:20 | 8초 | `SCOPE` USER가 정한 범위 | `기본 보기` GRANT: t0−1 → t0+3 1x (4초) + 마지막 프레임 `정지 화면` 4초 | 시작: 벤더 A/B/C가 `✓ 허용`(첫 체인 스냅샷, t0 직전), purpose가 보임. 끝: 4초 뒤 `영상 모드`를 누르기 직전. 예산 줄의 `열린 hold` `$0.05`(큰 숫자와 막대의 파란 칸)는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다 |
+| 3 | 0:20–0:36 | 16초 | `RUN` 범위 안 → 허락 | 영상 모드. t0+4 → t0+8 `2x` (2초), t0+8 → t0+16 1x (8초), t0+16 → t0+40 `4x` (6초) | 2x 구간: 카드 `…-r2 · open · job (신규)`의 `에이전트가 요청을 쓰는 중…`, 장부 첫 줄 `open ✓ OK`, 예산 줄 `열린 hold` `$0.05`(t0+7쯤). 1x 구간: F1 `B · h100 · $…`(t0+9) → `✓ 10/10 PASS` → `✓ approve`(t0+10) → `✓ APPROVED_ONCHAIN`(t0+14), 장부 `open ✓ OK`. CFO 트리: F1 `새 작업 hold 요청…` → `GPU 작업 1개 실행 중`, CFO `승인 1`. 4x 구간: 작업 #1 탱크가 40% 선 아래로, 새 카드 `topUp · job #1`(`에이전트가 요청을 쓰는 중…`, t0+34쯤). 끝: 그 카드의 F1 결과가 뜨기 직전 |
+| 4 | 0:36–0:54 | 18초 | `PUSH #1` 범위 밖: 목적 밖 충전 → CFO Qwen 거절 → 기록 · `대본 개입` | t0+40 → t0+49 1x (9초), t0+49 → t0+61 `4x` (3초), t0+61 → t0+67 1x (6초) | 장부 첫 `settle ✓ OK #1`(t0+42) → F1 rationale "…pretraining a new 7B base model…"(t0+43) → `✓ 10/10 PASS` → `✕ deny` + 사유 + `명세 purpose`(t0+44) → (`tx 확정을 기다리는 중…`, 4x) → `✕ DENIED_RECORDED · 거절 · 체인에 고정`(t0+63), code `QWEN_DENIED`와 아래 줄 `CFO Qwen이 거절했어요`, CFO 트리 `거절 1`, 장부 `recordDecision ✓ OK QWEN_DENIED #1` |
+| 5 | 0:54–1:00 | 6초 | `RUN` 작업 2 → 허락 | t0+67 → t0+83 `4x` (4초), t0+83 → t0+99 `8x` (2초) | 작업 #1의 마지막 `settle ✓ OK #1`(t0+72), 카드 `…-r4 · open` → `✓ APPROVED_ONCHAIN`(t0+82), 작업 #2 RUNNING → (8x) 장부 `close ✓ OK #1`(t0+91, CFO 트리에서 `HOLD_EXHAUSTED`였던 작업 #1 줄이 사라진다). 끝: 카드 `topUp · job #2`가 뜨기 직전 |
+| 6 | 1:00–1:14 | 14초 | `PUSH #2` 범위 밖: 허용 안 된 벤더 → 코드 게이트 거절 (CFO Qwen 0회) → 기록 · `대본 개입` | t0+99 → t0+105 `2x` (3초), t0+105 → t0+116 1x (11초) | 카드 `topUp · job #2`(`에이전트가 요청을 쓰는 중…`, t0+100) → F1 `0xBADb…BAD0 · h200 · $…`(t0+109) → 칩 `✕ VENDOR_NOT_ALLOWED` `✕ GPU_TYPE_NOT_ALLOWED` `✕ NO_CAPACITY`, `✕ 3건 위반 → 거절`, `F2 호출 0회 (게이트에서 차단)` → `✕ DENIED_RECORDED`(t0+114), code `VENDOR_NOT_ALLOWED`와 아래 줄 `허용되지 않은 벤더예요`, CFO 트리 `거절 2`. 끝: 장부에 탈취 키 줄이 뜨기 직전 |
+| 7 | 1:14–1:22 | 8초 | `PUSH #3` 범위 밖: 탈취 키 → 컨트랙트 Denied (체인) · `대본 개입` | t0+116 → t0+124 `2x` (4초), t0+124 → t0+128 1x (4초) | 장부 맨 위 빨간 줄 2개: `open 탈취 키 ✕ DENIED VENDOR_NOT_ALLOWED`(t0+116), `topUp 탈취 키 ✕ DENIED OVER_MAX_HOLD #0`(t0+120). CFO 트리 맨 아래 빨간 `✕ 탈취 키` 줄(`agent 키 사본 · CFO 건너뜀`, `금고 거절 1건` → `2건`), CFO의 승인·거절 수는 그대로. 예산 줄도 그대로. 카드는 작업 3의 `…-r6 · open`으로 바뀐다(`✓ approve`, t0+126). 공격 tx를 기다리는 동안 백엔드가 체인을 읽지 않아 빨간 `STALE` 배너가 1\~3초 뜰 수 있다. 뜨면 그 구간을 자르거나 속도를 올린다 |
 | 8 | 1:22–1:25 | 3초 | `RUN` 작업 3 → 허락 | t0+128 → t0+134 `2x` (3초) | 카드 `…-r6 · open` → `✓ APPROVED_ONCHAIN`(t0+130.0 확정), 장부 `open ✓ OK`. 끝: 정지 단계가 `SENDING`으로 바뀌기 직전 |
-| 9 | 1:25–1:39 | 14초 | `STOP` USER 정지 → 정산·환불 · `대본 개입` | t0+134 → t0+140 1x (6초), t0+140 → t0+188 `16x` (3초), t0+188 → t0+193 1x (5초) | 정지 단계 `● SENDING`(t0+134) → `● PAUSED_ON_CHAIN`, 장부 `setPaused ✓ OK`(t0+138) → (16x) `● HALTED`(정지 뒤 첫 체인 스냅샷에서. `HALTING`은 같은 순간에 지나가 `✓`로만 보일 수 있다), 빨간 줄 `settle ✕ DENIED PAUSED #2`(t0+147), USER `settle #2`, `close #2`, `close #3`, `settle #0`, `close #0` → `refund ✓ OK`(t0+190). 끝 1x 구간에서 빨간 줄은 장부 6줄의 맨 아래에 있다가 `refund`에 밀려난다 |
+| 9 | 1:25–1:39 | 14초 | `STOP` USER 정지 → 정산·환불 · `대본 개입` | t0+134 → t0+140 1x (6초), t0+140 → t0+188 `16x` (3초), t0+188 → t0+193 1x (5초) | 정지 단계 `● SENDING`(t0+134) → `● PAUSED_ON_CHAIN`, 장부 `setPaused ✓ OK`(t0+138), CFO 트리 F1 `USER가 STOP을 보내는 중…` → `금고 정지 · agent 키 차단`(빨강) → (16x) `● HALTED`(정지 뒤 첫 체인 스냅샷에서. `HALTING`은 같은 순간에 지나가 `✓`로만 보일 수 있다), 빨간 줄 `settle ✕ DENIED PAUSED #2`(t0+147), USER `settle #2`, `close #2`, `close #3`, `settle #0`, `close #0` → `refund ✓ OK`(t0+190). 끝 1x 구간에서 빨간 줄은 장부 6줄의 맨 아래에 있다가 `refund`에 밀려난다 |
 | 10 | 1:39–1:51 | 12초 | `EVIDENCE` 체인: Blockscout | 촬영 B · 1x | `called recordDecision on AgentBudgetVault` → Logs의 `Denied(uint256 indexed jobId, bytes32 indexed code, bytes32 indexed rec, bool enforced)`, `enforced false` → Topics [2]를 `Hex`에서 `Text`로 = `QWEN_DENIED`, [3] = rec |
 | 11 | 1:51–1:59 | 8초 | `EVIDENCE` 기록 파일 | 촬영 C · 1x | 파일 이름 `0000xx-0x<rec>.json` = Topics [3]의 해시, rationale, `gate: []`, `f2_calls: 1`, `QWEN_DENIED`, `f1.rationale by scenario:demo` |
 | 12 | 1:59–2:09 | 10초 | `EVIDENCE` USER가 사후 검증 → PASS | 촬영 D · 1x, 출력 전 대기 `✂ 약 19초` | `[PASS] check 1 … anchored up to #22 / 23`(기준 run), `[WARN] … UNRECORDED_ATTEMPT` 2줄, `AUDIT PASS (exit 0)` |
@@ -89,21 +89,22 @@
 2026-09-29 anvil·stub 리허설에서 1280×720 스크린샷으로 확인했다.
 
 - 영상 모드는 한 화면에 스크롤 없이 들어간다. 위에서부터:
-  - 머리줄: `CFO Agent`, run id, 금고 주소(줄임), sync, 배지 `LLM KILN`(초록), `PRICE LIVE`, `SCENARIO demo`, `pending tx n`, `기본 보기` 버튼. 둘째 줄은 STOP 버튼 3개, `정산·환불`, 정지 단계.
-  - 예산 줄: 예산 $20.00과 막대(지급, 수수료 3%, 추론비(Kiln), 열린 hold, 환불 가능).
-  - 최신 충전 카드 1장: `1 F1 요청` → `2 GATE 10규칙` → `3 F2 판정` → `4 CHAIN 결과`. 진행 중인 단계에 파란 테두리.
-  - 왼쪽 아래 작업 표(작업, 상태, hold 탱크와 40% 충전선). INFERENCE 행은 맨 위에 고정되고, 닫힌 작업 행은 숨는다(CSS는 "닫히지 않은 행이 있으면"인데 INFERENCE 행이 늘 그 조건을 채운다). 작업 #1이 `HOLD_EXHAUSTED`인 채 작업 #2가 열린 동안(기준 run t0+82 → t0+91)은 행이 3개라 표 아래 빈 곳이 없다.
+  - 머리줄: `CFO Agent`, run id, 금고 주소(줄임), sync, 배지 `LLM KILN`(초록), `PRICE LIVE`, `SCENARIO demo`, `pending tx n`, `기본 보기` 버튼. `LLM KILN`과 `PRICE LIVE`는 상자가 있고, `SCENARIO demo`와 `pending tx 0`은 상자 없는 글자다. `pending tx n`(n>0)은 호박색 상자다. 둘째 줄은 STOP 버튼 3개(빨간 바탕), `정산·환불`, 정지 단계. 정지 단계는 지금 단계에 `●`가 붙고, RUNNING은 파란 바탕, SENDING·PAUSED_ON_CHAIN·HALTING은 호박색 바탕, HALTED는 빨간 바탕이다.
+  - 예산 줄: 큰 숫자 셋(예산 $20.00, 열린 hold, 환불 가능)과 막대(지급, 수수료 3%, 추론비(Kiln), 열린 hold, 환불 가능). 열린 hold는 막대의 파란 칸이다.
+  - 최신 충전 카드 1장: `1 F1 요청` → `2 GATE 10규칙` → `3 F2 판정` → `4 CHAIN 결과`. 진행 중인 단계에 파란 테두리. 기다리는 단계에는 `에이전트가 요청을 쓰는 중…`, `CFO Qwen이 판정하는 중…`, `tx 확정을 기다리는 중…`이 뜬다. 끝난 거절 카드는 `4 CHAIN 결과`의 code 아래에 쉬운 말 풀이가 한 줄 붙는다(`QWEN_DENIED` → `CFO Qwen이 거절했어요`, `VENDOR_NOT_ALLOWED` → `허용되지 않은 벤더예요`).
+  - 왼쪽 아래 CFO 트리: `CFO`(승인·거절 수) → `F1 작업 에이전트`(지금 하는 일) → 작업 줄. 작업 줄은 `#n · B · h100`, 상태, 잔여 %이고, GPU 작업 줄만 hold 탱크와 40% 충전선이 있다. INFERENCE 줄은 탱크 없이 한 줄(`#0 INFERENCE`, 상태, 잔여 %)로 맨 위에 고정되고, 닫힌 작업 줄은 숨는다(CSS는 "닫히지 않은 줄이 있으면"인데 INFERENCE 줄이 늘 그 조건을 채운다). 요청이 도는 동안 F1 줄은 카드와 같은 말(`… 요청을 쓰는 중…`, `… · CFO Qwen이 판정하는 중…`, `… · tx 확정을 기다리는 중…`)을 보인다. F1이 요청을 쓰는 동안은 F1 점이, 코드 게이트와 CFO Qwen이 보는 동안은 CFO 점이 파래진다. 탈취 키 tx가 있으면 맨 아래에 CFO 밖으로 빨간 `✕ 탈취 키` 줄(`금고 거절 n건`)이 붙는다. 거절되지 않은 탈취 키 tx는 `· ERROR n건`처럼 상태 코드 그대로 붙는다(데모 경로에는 없다). 영상 모드에서는 표 머리줄(작업, 상태, hold 탱크)이 없다. 작업 줄 3개와 탈취 키 줄이 함께일 때(기준 run 장면 8·9) 트리가 가장 길다.
   - 오른쪽 아래 EVIDENCE: 장부 최신 6줄(시각, fn, 상태, code, job, tx). 최신 줄이 맨 위.
 - 영상 모드에서 숨는 것: 서명된 명세와 벤더 표(그래서 장면 2는 `기본 보기`로 찍는다), 영수증, latch·금액 열, rec 열, 이전 카드들. 1280×720 `기본 보기`에서는 GRANT 구역(purpose, 허용 GPU, job cap, 기한, maxHold, 예산, 벤더 A/B/C와 Akash 가격, `✓ 허용`)이 첫 화면에 다 들어간다.
 - 세션 시작 직후 몇 초 동안 벤더가 `✕ 차단`, 가격이 `$0`으로 보인다. 첫 체인 스냅샷과 가격을 읽기 전이라서다. 이 구간은 쓰지 않는다.
-- `recordDecision` 줄은 `✓ OK`에 code(`QWEN_DENIED`, `VENDOR_NOT_ALLOWED`)가 붙어 나온다. tx 자체는 성공했고, 그 안의 `Denied(enforced=false)` 이벤트가 거절 기록을 체인에 고정한다. 빨간 `✕ DENIED` 줄은 컨트랙트가 직접 거절한 tx다(탈취 키, 또는 정지 뒤 agent `settle`).
+- `recordDecision` 줄은 `✓ OK`에 code(`QWEN_DENIED`, `VENDOR_NOT_ALLOWED`)가 붙어 나온다. tx 자체는 성공했고, 그 안의 `Denied(enforced=false)` 이벤트가 거절 기록을 체인에 고정한다. 빨간 `✕ DENIED` 줄(줄 전체가 옅은 빨강 바탕)은 컨트랙트가 직접 거절한 tx다(탈취 키, 또는 정지 뒤 agent `settle`).
+- `STALE` 배너(`STALE · 체인을 마지막으로 읽은 지 n초 지났어요 · …`)는 정지 단계가 HALTED가 되기 전에만 뜬다. HALTED 뒤(정산·환불 중, 세션 끝 뒤)에는 `sync n s ago` 글자만 늘어난다.
 - 거절 카드는 `4 CHAIN 결과`에서 5\~19초 기다린다(기준 run: 범위 확대 19초, 로그 주입 5초). 모든 tx가 대기열 하나(Committer)를 차례로 지나고 각 tx가 영수증을 기다리기 때문이다(기준 run에서 tx 하나에 3\~13초). 범위 확대의 대기는 4x로 줄이고, 로그 주입의 5초는 1x로 둔다. F1·F2 자체는 1\~2초다(기준 run p50/p95).
 - 장부와 카드의 tx 링크는 Basescan으로 간다. 소스 검증은 Blockscout·Sourcify에 했고(두 금고 모두 Sourcify `exact_match`) Basescan은 이 금고의 로그를 디코딩해 보여 주지 않으므로, 디코딩된 이벤트는 Blockscout에서 연다(§8 명령 (1)이 링크를 만든다).
 
 ## 5. 편집 규칙
 
 - 캡션: [`demo-captions.srt`](demo-captions.srt) 32개 cue, 위 줄 영어, 아래 줄 한국어, 장면표 시각에 맞췄다. tx 해시나 비용처럼 run마다 달라지는 값은 넣지 않았다. 편집에서 장면 길이가 바뀌면 그 장면의 cue를 같이 옮긴다.
-- 화면 라벨(`RUN`, `PUSH #1 · 대본 개입`처럼 장면표 라벨 열의 앞부분만)과 속도 배지는 대시보드 장면(3\~9)에서 EVIDENCE 제목 줄의 오른쪽 빈 곳에 둔다. 영상 모드에서 그 줄은 `EVIDENCE` 뒤가 늘 비어 있다. 작업 표 아래는 쓰지 않는다: 행이 3개인 동안(장면 5) 비지 않고, 맨 아래 2줄 캡션과 겹친다. 장면 2와 10\~16은 캡션과 겹치지 않는 위쪽 빈 곳에 둔다. 머리줄(금고 주소, `LLM KILN` 배지)과 카드는 가리지 않는다. 캡션은 맨 아래 가운데에 두고, 오래된 장부 줄 한두 개는 가려도 된다.
+- 화면 라벨(`RUN`, `PUSH #1 · 대본 개입`처럼 장면표 라벨 열의 앞부분만)과 속도 배지는 대시보드 장면(3\~9)에서 EVIDENCE 제목 줄의 오른쪽 빈 곳에 둔다. 영상 모드에서 그 줄은 `EVIDENCE` 뒤가 늘 비어 있다. CFO 트리 아래는 쓰지 않는다. 장면 8\~9(작업 #3 open부터 USER `close #2`까지)는 작업 줄 3개와 탈취 키 줄이 함께 보여 트리가 y 646(1920×1080에서 969)까지 찬다. 이 구간의 캡션 2줄은 y 650(975) 아래에 둔다. 장면 2와 10\~16은 캡션과 겹치지 않는 위쪽 빈 곳에 둔다. 머리줄(금고 주소, `LLM KILN` 배지)과 카드는 가리지 않는다. 캡션은 맨 아래 가운데에 두고, 오래된 장부 줄 한두 개는 가려도 된다.
 - 1x가 아닌 구간에는 모두 배지를 단다. `2x`·`4x`·`8x`·`16x`는 속도 변경, `✂ 19초`는 화면 변화 없는 대기를 잘라낸 곳, `정지 화면`은 한 프레임을 멈춘 곳이다.
 - `대본 개입 / scripted`: 장면 4, 6, 7, 9의 라벨과 캡션에 붙인다.
 - 터미널 장면(11\~13)은 `clear` 뒤에 실행해서 출력이 화면 위쪽에 오게 한다. 캡션이 맨 아래를 가린다.
@@ -130,7 +131,7 @@
    ```sh
    export PATH="$HOME/.foundry/bin:$PATH"
    forge --version && cast --version
-   forge test && npm test      # 2026-09-29: forge test 38 pass, npm test 284 pass, 0 fail, 0 skipped (약 115초)
+   forge test && npm test      # 2026-09-29: forge test 38 pass, npm test 286 pass, 0 fail, 0 skipped (약 115초)
    ```
    `npm test`의 skipped가 0보다 크면 anvil을 못 찾은 것이다(PATH 확인).
 2. USER ETH가 0.0021 이상인지 본다. 주소는 공개값이라 키가 필요 없다.
@@ -145,7 +146,7 @@
    `FOUNDER_PK`, `KILN_API_KEY`는 `set`이어야 한다. `RPC_URL`이 `MISSING`이면 공개 RPC `https://sepolia.base.org`를 쓴다(기준 run 두 개도 이것). `.env`에 `LLM_MODE`가 없으므로 명령 앞에 `LLM_MODE=kiln`을 꼭 붙인다. 셸 값이 `--env-file`보다 우선한다.
 4. Kiln. `LLM_MODE=kiln npm run smoke:kiln`이 예열이다(Kiln 5회: F1, F2, 주입 F1 2회, F3. 모두 HTTP 200, 지연 10초 미만, 파싱 성공을 눈으로 본다). `.env`에 `LLM_MODE`가 없어서 앞에 붙이지 않으면 호출 없이 `LLM_MODE must be "kiln" or "stub"`으로 끝난다. 이 스크립트는 추적 중인 `test/fixtures/kiln/*.json`을 새 응답으로 덮어쓰고 `runs/eval/kiln.jsonl`에 줄을 더하므로, 끝나면 `git checkout -- test/fixtures/kiln runs/eval/kiln.jsonl`로 되돌린다. 공유 키(60 RPM)이므로 팀에 "HH:MM\~HH:MM Kiln 사용 중지"를 공지한다. 본 녹화는 약 4분이고, 증거 촬영에는 Kiln을 쓰지 않는다. `LLM_MODE=kiln npm run eval:f2`(25회)는 프롬프트를 바꾼 경우에만 다시 돌린다(마지막 PASS는 README §9).
 5. `npm run check-secrets` PASS, `git check-ignore .env keys/`가 두 줄을 출력한다.
-6. 화면: 알림 끄기(집중 모드). `.env`, `keys/`, 셸 기록이 보이는 터미널은 닫는다. 사후 검증용 터미널은 새 창으로 열고 글꼴을 16pt 이상으로 한다.
+6. 화면: 알림 끄기(집중 모드). macOS 외관은 라이트로 둔다. 대시보드는 OS 다크 모드를 따르고, 검토한 화면은 모두 라이트다. `.env`, `keys/`, 셸 기록이 보이는 터미널은 닫는다. 사후 검증용 터미널은 새 창으로 열고 글꼴을 16pt 이상으로 한다.
 7. 가격: 녹화 때 배지가 `PRICE LIVE`인지 본다. `PRICE SNAPSHOT:<사유>`면 커밋된 `prices/akash-snapshot.json` 가격을 쓴 것이다. 녹화는 계속하고 README에 적는다. 오늘 LIVE 가격은 A $2.04, B $2.56, C $3.16이었다(녹화 시점에 다를 수 있다).
 8. (선택) 새 clone에서 기존 번들 재현: `git -c core.autocrlf=true clone` → `npm ci` → `npm run audit -- runs/0x6372558F859935DF9364F0c822e703310d160772 --submission`이 PASS.
 
@@ -170,10 +171,10 @@
    ```
    창 크기에는 제목 줄이 들어가므로, DevTools 콘솔에서 `innerWidth + "x" + innerHeight`가 `1280x720`이 되게 높이를 맞춘다. 1920×1080 전체 화면도 된다. 영상 모드 CSS가 같은 배치를 1.5배로 키운다.
 3. 화면 녹화를 시작한다(뷰포트 1280×720 영역). 세션이 시작되기 전까지는 `서버에 연결하는 중…` 배너가 보인다.
-4. 머리줄에 run id가 뜨면 `기본 보기`를 누른다. 벤더 A/B/C가 `✓ 허용`으로 바뀌고 purpose가 보이면(첫 체인 스냅샷, t0 직전) 장면 2다. 4초 세고 `영상 모드`를 누른다. 예산 막대의 `열린 hold $0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다. 첫 카드의 F1 결과(t0+9초쯤)는 그 뒤에 온다. 늦게 눌러도 끝난 RUN 카드가 t0+33초까지 화면에 남는다.
+4. 머리줄에 run id가 뜨면 `기본 보기`를 누른다. 벤더 A/B/C가 `✓ 허용`으로 바뀌고 purpose가 보이면(첫 체인 스냅샷, t0 직전) 장면 2다. 4초 세고 `영상 모드`를 누른다. 예산 줄의 `열린 hold` `$0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다. 첫 카드의 F1 결과(t0+9초쯤)는 그 뒤에 온다. 늦게 눌러도 끝난 RUN 카드가 t0+33초까지 화면에 남는다.
 5. 배지를 확인한다: `LLM KILN`(초록). `LLM STUB`이면 바로 중단한다(`--submission` 사후 검증에서 FAIL).
 6. 그 뒤로는 아무것도 누르지 않는다. 모든 장면이 대본(sim 45·170·200·260·270·300분)으로 돈다. STOP을 일찍 누르면 작업 3이 취소되고, 탈취 키 tx가 이미 멈춘 금고를 두드려 `VENDOR_NOT_ALLOWED`·`OVER_MAX_HOLD` 대신 `PAUSED`로 거절된다(컨트랙트는 `PAUSED`를 먼저 검사한다).
-7. 끝: 정지 단계 `HALTED`, 장부 맨 위 `refund ✓ OK`, 터미널 `session finished; the dashboard stays up (Ctrl+C to exit)`. 5초 더 찍고 멈춘다. 명령 실행부터 약 4분 걸린다. `runs/<vault>/report.md`는 자동으로 생긴다.
+7. 끝: 정지 단계 `HALTED`, 장부 맨 위 `refund ✓ OK`, 터미널 `session finished; the dashboard stays up (Ctrl+C to exit)`. 5초 더 찍고 멈춘다. HALTED 뒤에는 `sync n s ago`가 늘어나도 STALE이 뜨지 않는다. 명령 실행부터 약 4분 걸린다. `runs/<vault>/report.md`는 자동으로 생긴다.
 
 ### 증거 촬영 (촬영 B\~G, 본 녹화 직후)
 
@@ -193,7 +194,7 @@
 | 감지 신호 | 자동 동작 | 사람 조치 | 녹화 중이면 |
 |---|---|---|---|
 | Kiln 429·타임아웃 (카드 `— QWEN_NOT_A_JUDGEMENT`, `기본 보기` health 줄의 errors 증가) | fail-closed 거절, 일시 코드는 job당 1회 재시도. 세션은 스스로 끝난다 | 팀 Kiln 사용 확인 | 그 take는 버리고 새 금고로 다시. **stub으로 바꾸지 않는다** |
-| RPC 오류, `STALE` 배너 | 사용량 누적 정지, 버튼 비활성 | RPC 확인 | 10초 넘게 계속되면 take 폐기 |
+| RPC 오류(`체인을 읽지 못했어요` 배너), HALTED 전 `STALE` 배너 | 읽기 실패 동안 쓴 GPU 시간은 과금하지 않고 새 요청은 `READ_FAILED`로 막힌다. STALE이면 STOP·정산·환불 버튼이 잠긴다 | RPC 확인 | 10초 넘게 계속되면 take 폐기 |
 | ETH 부족 | 기동 거부(preflight `founderEth`·`agentEth`) | faucet으로 충전 | take 폐기 |
 | `HALTED · <사유>` 빨간 배너 (`UNCONFIRMED`, `REPLACED`, `SEND_FAILED:…`, `PRESEND_REVERT:…`, 예상 밖 `REVERTED`·`UNEXPECTED`) | Committer 정지(재서명·새 nonce·수수료 인상 없음) | Blockscout에서 tx 확인, `events.jsonl`에서 `req_id` 역추적 → 아래 HALT 절차 | take 폐기 |
 | 백엔드 크래시 (터미널 종료) | 복구 없음(금고 1개 = 세션 1개) | 아래 HALT 절차 | take 폐기 |
@@ -214,7 +215,7 @@ npm run wind-down -- runs/<vault> --chain base-sepolia
 
 - 버린 take의 번들(`runs/<vault>/`)은 제출물이 아니다. 커밋하지 않는다.
 - 머리줄에 run id가 뜨기 전(배포·preflight)에 실패했다면 `run.json`이 없어서 정리할 것도 없다. MockUSDC는 금고마다 새로 찍으므로 잃는 것은 ETH뿐이다. 바로 새 take를 한다.
-- 대시보드 `정산·환불` 버튼은 백엔드가 살아 있을 때의 탈출구다(STOP 뒤, 모든 작업이 STOPPED나 HOLD_EXHAUSTED이고 대기 tx가 0일 때 활성). 백엔드 없이 도는 탈출구는 위 `npm run wind-down`이다.
+- 대시보드 `정산·환불` 버튼은 백엔드가 살아 있을 때의 탈출구다(STOP이나 기한으로 멈춘 뒤, INFERENCE를 뺀 모든 작업이 STOPPED·HOLD_EXHAUSTED·CLOSED이고 그 작업들의 대기 tx가 0일 때 누를 수 있다). 백엔드 없이 도는 탈출구는 위 `npm run wind-down`이다.
 
 ### 녹화 뒤
 
