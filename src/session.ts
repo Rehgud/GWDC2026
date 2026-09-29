@@ -526,6 +526,10 @@ export class Session {
   // ---- executor loop ----
   private async loopStep() {
     const now = this.virtNow()
+    // Only a job RUNNING at this clock read ticks with it. One that starts running during the awaits below (opened by a
+    // scripted open or a migration, or resumed by a top-up landing) would accrue from `now`, billing time before it ran:
+    // the open flow before its hold existed, or its wait for funds. It ticks from the next step's clock instead.
+    const wasRunning = new Map(this.slots.map((s) => [s, s.job.state === 'RUNNING']))
     const read = await this.freshSnapshot()
     // tick() judges staleness on the virtual clock; lastSnapshot keeps the real readAt for the dashboard's sync age.
     const snap = read && { ...read, readAt: now }
@@ -535,8 +539,8 @@ export class Session {
     if (this.deadlineMarginS === 0n && !this.deadlineDemoDone && this.inference && !this.stopping && Date.now() / 1000 >= this.dep.deadline) {
       await this.deadlineDemo()
     }
-    for (const slot of this.slots) {
-      if (slot.job.state === 'CLOSED' || slot.job.state === 'STOPPED') continue
+    for (const [slot, running] of wasRunning) {
+      if (slot.job.state === 'CLOSED' || slot.job.state === 'STOPPED' || (slot.job.state === 'RUNNING' && !running)) continue
       // TOPUP_TIMEOUT is a real-time budget (60 s for F1 + F2 + tx, D4) but tick() runs on the virtual clock, where 60 s
       // is 1 real second at speed 60: rebase the in-flight flow's start so tick() measures its real elapsed time.
       if (slot.job.latch === 'inflight' && slot.job.topupAtMs !== null && slot.topupRealAt !== null) slot.job = { ...slot.job, topupAtMs: now - (Date.now() - slot.topupRealAt) }

@@ -21,7 +21,7 @@
 | 창업자 정지 | 9 `STOP` | `SENDING → PAUSED_ON_CHAIN → HALTING → HALTED`, `setPaused`, founder 정산·환불 |
 | 멈출 때마다 기록 | 10~13 `EVIDENCE` | Blockscout의 `rec` = 기록 파일 이름의 해시 → 감사 PASS → 1바이트 변조 FAIL |
 
-범위 밖 번호는 녹화에서 일어나는 순서다(범위 확대 sim 45분, 로그 주입 200분, 탈취 키 260분). README "조건이 바뀔 때" 표는 ① 허용 안 된 벤더, ② 목적 밖 충전 순서라 #1·#2가 뒤바뀌어 있다. 영상은 시간 순서를 바꿀 수 없으니, 맞추려면 README 두 행의 순서를 바꾼다(미정).
+범위 밖 번호는 녹화에서 일어나는 순서다(범위 확대 sim 45분, 로그 주입 200분, 탈취 키 260분). README "조건이 바뀔 때" 표의 범위 밖 ①~④도 이 번호와 같다.
 
 영상 밖: 벤더 이동(`migrate`), NaN, loss 정체(`plateau`)는 README §10 표와 anvil 테스트(`test/session.test.ts`)로 보여 준다. 기한 경과(`PAST_DEADLINE`)는 공개 체인에서 돌리지 않았다(README §7 2c).
 
@@ -51,6 +51,7 @@
 녹화가 기준 run과 다르게 흘러갈 때:
 - **A (기대값).** 작업 1의 첫 충전 요청이 곧 범위 확대다. 공개 RPC(`https://sepolia.base.org`, `.env`에 `RPC_URL`이 없으면 이것)에서는 체인 읽기와 tx 확정이 느려서, 첫 충전의 F1이 작업 시작 뒤 약 25~28초(시뮬 약 76~83분)에 시작한다. 그 전에 sim 45분의 rationale 교체가 걸린다. demo run은 25.5초(시뮬 76분)였고, budget run(rationale 교체 없음)도 첫 충전 F1이 27.6초(시뮬 83분)에 시작했다.
 - **B (빠른 RPC나 anvil).** 첫 충전이 그대로 승인되고(`topUp ✓ APPROVED_ONCHAIN`), 범위 확대는 약 20초 뒤 다음 충전에 걸린다. 2026-09-29 anvil·stub 리허설이 이 순서였다. 그러면 승인된 충전 4초를 장면 3에 1x로 넣고(범위 안 두 번째 예), 장면 5·8을 `8x`로 줄여 합계를 맞춘다.
+- **작업 2의 open이 약 17초보다 오래 걸리면**(기준 run은 `openJob`부터 `open` 확정까지 9.2초) 탈취 키(sim 260분)가 작업 2의 첫 충전 요청보다 먼저 와서 PUSH #3이 PUSH #2보다 앞선다. 작업 2는 hold가 열린 뒤부터 사용량이 쌓이므로, 주입이 걸리는 첫 충전 요청은 open 확정 약 12초(sim 36분) 뒤에 나온다. 이 순서가 되면 장면표·캡션과 맞지 않으니 새 금고로 다시 찍는다.
 - **STOP 때 작업 3에 사용량이 있으면** agent의 `settle`이 `✕ DENIED PAUSED`(빨간 줄)로 하나 더 남는다. 기준 run에서는 작업 3을 연 직후 STOP이 걸려 사용량이 0이었고, 이 줄도 없었다. 탈취 키 공격이 대기 중인 tx를 모두 기다리는 동안 루프가 밀려서 sim 270분 open과 300분 STOP이 이어서 실행되었기 때문이다. 화면에 이 줄이 있을 때만 말한다.
 
 ## 3. 장면별 내레이션
@@ -128,7 +129,7 @@
    ```sh
    export PATH="$HOME/.foundry/bin:$PATH"
    forge --version && cast --version
-   forge test && npm test      # 2026-09-29: forge test 38 pass, npm test 282 pass, 0 fail, 0 skipped (약 104초)
+   forge test && npm test      # 2026-09-29: forge test 38 pass, npm test 284 pass, 0 fail, 0 skipped (약 115초)
    ```
    `npm test`의 skipped가 0보다 크면 anvil을 못 찾은 것이다(PATH 확인).
 2. founder ETH가 0.0021 이상인지 본다. 주소는 공개값이라 키가 필요 없다.

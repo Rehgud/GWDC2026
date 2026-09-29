@@ -469,6 +469,48 @@ describe('orchestrator on anvil (stub LLM)', { skip: ANVIL ? false : 'anvil bina
     await assertClean('stop-migrate', session, dep, dir)
   })
 
+  test('a job opened by a scripted step bills only from its open, not the open flow before its hold existed', async () => {
+    // Regression (demo run 0xA8CE, job 2): the step read its clock, then the scripted open waited on F1/F2 and the
+    // receipt. The new job ticked with that older clock, so its next tick billed the whole open flow.
+    const { session, dep } = await build({ ...scenario('normal'), name: 'scripted-open', interventions: [{ kind: 'openJob', atSimMinute: 20, label: 'A', note: 'second job' }] })
+    slowLlm(session, 300) // the open takes ~40 sim minutes at speed 60
+    await session.run()
+    const { chain } = await assertClean('scripted-open', session, dep, session.dir)
+    const events = readFileSync(join(session.dir, 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const opened = events.find((e) => e.src === 'commit' && e.ev === 'mined' && e.fn === 'open' && e.jobId === '2')
+    const ckpt = chain.find((r) => r.rec.type === 'CHECKPOINT' && r.rec.body.job_id === '2')
+    assert.ok(opened && ckpt, 'job 2 opened and reached a checkpoint')
+    const since = (ckpt!.rec.t - opened.ts) * session.speed // virtual ms from its HoldOpened receipt to that record
+    assert.ok(Number(ckpt!.rec.body.runningMs) <= since, `job 2's first checkpoint bills ${ckpt!.rec.body.runningMs} ms, ${since} ms after its open`)
+  })
+
+  test('a job resumed by a top-up that lands during a scripted step bills from its resume, not its wait for funds', async () => {
+    // Job 1's first top-up F1 is held until the stolen key's step (sim minute 90) drains it: job 1 exhausted at ~60 and
+    // waits idle, and the top-up lands inside a step whose clock was read before. Ticked with that clock, it billed the wait.
+    const { session, dep } = await build({ ...scenario('normal'), name: 'drained-topup', endAtSimMinute: 200, interventions: [{ kind: 'stolenKey', atSimMinute: 90, note: 'drains the held top-up' }] })
+    const s = session as any, orig = s.callLlm.bind(s)
+    let held = false, waited: string | null = null
+    s.callLlm = async (req: any) => {
+      if (!held && req.flow === 'F1' && /action: topUp/.test(req.messages.map((m: any) => m.content).join('\n'))) {
+        held = true
+        while (!s.firedSteps.has(0)) await sleep(5)
+        waited = s.slots[0].job.state
+        await sleep(500) // ~30 sim minutes inside the step
+      }
+      return orig(req)
+    }
+    await session.run()
+    const { chain } = await assertClean('drained-topup', session, dep, session.dir)
+    assert.equal(waited, 'AWAITING_TOPUP', 'job 1 was exhausted and idle when the step began')
+    const events = readFileSync(join(session.dir, 'events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const topUp = events.find((e) => e.src === 'commit' && e.ev === 'mined' && e.fn === 'topUp')
+    assert.ok(topUp, 'the held top-up landed')
+    const cps = chain.filter((r) => r.rec.type === 'CHECKPOINT' && r.rec.body.job_id === '1')
+    const idle = cps.filter((r) => r.rec.t < topUp.ts).at(-1)!, next = cps.find((r) => r.rec.t > topUp.ts)! // exhaust, first after
+    const billed = Number(next.rec.body.runningMs) - Number(idle.rec.body.runningMs), since = (next.rec.t - topUp.ts) * session.speed
+    assert.ok(billed <= since, `job 1's first checkpoint after its top-up bills ${billed} ms more, ${since} ms after the top-up landed`)
+  })
+
   /** Pauses the vault right after the first windDown intent matching `when` (by fn/signer/reason) is sent. */
   function pauseAfterSend(session: Session, dep: Deployment, when: (i: any, out: any) => boolean) {
     const s = session as any, send = s.send.bind(s)
