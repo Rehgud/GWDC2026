@@ -14,7 +14,7 @@
 - **Problem:** agents already rent GPUs by API ([RunPod MCP](https://www.runpod.io/blog/manage-your-runpod-infrastructure-from-any-ai-assistant-introducing-the-runpod-mcp-server), [io.net Agent Cloud](https://io.net/docs/guides/clouds/agent-cloud) with x402/USDC), but nothing enforces "how much, which vendor, until when" per agent, and the payment rail records who paid whom, not who approved it on what terms.
 - **New to the terms?** USER, hold, top-up, the code gate, `rec` and the rest are explained in plain Korean and English in the [glossary](#처음-보는-분을-위한-용어-설명-glossary) right below.
 
-**How it works** ([diagram](#4-작동-흐름))
+**How it works** ([diagram](#3-작동-흐름))
 1. **Agent (Qwen F1)** requests a per-job GPU hold (vendor, GPU, amount, rationale). Each checkpoint settles actual usage plus a 3% fee; when a hold drops below 40% of its size, the agent requests a top-up mid-flight, reviewed the same way.
 2. **Code gate:** 10 deterministic rules (vendor allowlist, budget incl. fee, per-request cap, deadline, STOP, GPU type, job cap, capacity, NaN, loss plateau) on a chain snapshot pinned to one block. A gate denial means 0 CFO Qwen (F2) calls; only the agent's F1 request was made.
 3. **CFO Qwen (F2)** checks purpose fit, rationale and scope creep against the USER-signed job spec. Only an exact `approve` passes; deny, unparseable output or a timeout all deny (fail-closed). F2 can only block: it cannot override the gate or change the amount.
@@ -39,7 +39,7 @@ Demo video: (link after upload) · Deck: (link after export)
 
 ## 처음 보는 분을 위한 용어 설명 (Glossary)
 
-블록체인이나 AI 에이전트가 낯선 분을 위해 README에 나오는 말을 풀었다. `이렇게` 적은 것은 코드에 나오는 이름이다.
+블록체인이나 AI 에이전트가 낯선 분을 위해 README에 나오는 말을 풀었다. `이렇게` 적은 것은 코드에 나오는 이름이다. 범위 확대, 프롬프트 주입, 탈취된 키는 [§10](#10-대본-개입) 맨 위에서 푼다.
 
 **사람과 역할**
 
@@ -75,19 +75,17 @@ Demo video: (link after upload) · Deck: (link after export)
 | STOP | USER의 비상 정지 버튼이다. 누르면 `setPaused(true, STOP 기록 해시)`가 나가고, 그 뒤로 agent 키의 open·충전·정산·닫기는 모두 `Denied(PAUSED)`가 되며 정산·닫기·환불은 USER만 할 수 있다. | The USER's emergency brake (`setPaused`): afterwards the agent key moves no money, while the USER can still settle, close and refund. |
 | `Denied` 이벤트 (`enforced=true` / `false`) | 지출을 거절했다는 체인 기록이다. `enforced=true`는 금고 컨트랙트가 직접 막은 것(돈 이동 0)이고, `enforced=false`는 게이트나 CFO Qwen이 체인 밖에서 거절한 것을 `recordDecision`으로 남긴 것이다. | An on-chain record of a refused spend: `enforced=true` means the contract itself blocked it, `enforced=false` means the gate or the CFO refused it off chain. |
 | `recordDecision` | 체인 밖(게이트·CFO 등)의 거절을 기록 해시와 함께 체인에 남기는 금고 함수다. 돈은 움직이지 않는다. | The vault call that writes an off-chain denial on chain as `Denied(enforced=false)`; it moves no money. |
-| 범위 확대 (scope creep) | 숫자 규칙은 다 지키지만 서명된 목적 밖의 일에 돈을 쓰려는 요청이다. 데모에서는 LoRA 파인튜닝 작업에 "새 7B 모델 사전학습"을 끼워 넣은 충전을 CFO Qwen이 거절했다(`QWEN_DENIED`). | A request that keeps every numeric rule but pays for work outside the signed purpose; only the CFO review can catch it. |
-| 프롬프트 주입 (prompt injection) | AI가 읽는 글에 몰래 지시를 심어 AI를 조종하려는 공격이다. 데모에서는 실행 로그에 심은 한 줄에 작업 에이전트가 속았지만 코드 게이트가 거절했다. | Hiding instructions in text an AI reads to steer it; in the demo a planted log line fooled the agent and the code gate refused the result. |
-| 탈취된 키 (stolen agent key) | 공격자가 agent 개인키를 손에 넣어 우리 서버·게이트·Qwen을 건너뛰고 금고를 직접 부르는 상황이다. 금고가 벤더·예산·상한·기한·STOP을 스스로 강제해 위반은 `Denied`로 막힌다(한계는 [§11](#11-한계)). | An attacker with the agent's private key calls the vault directly, skipping our server; the vault's own rules still block violations. |
 
 **증거**
 
 | 용어 | 쉬운 설명 | In plain English |
 |---|---|---|
-| 작업 명세 (USER가 서명) | 작업의 목적·성공 지표·허용 GPU·작업 상한·기한을 적은 파일(`spec.json`)에 USER 키로 서명한 것(`spec.sig`)이다. CFO Qwen은 이 원문에 비추어 판단한다. 서명자가 금고의 `founder`(USER)인지는 사후 검증으로 확인할 수 있다. | The job's terms (purpose, success metric, allowed GPU, job cap, deadline) signed with the USER's key; the CFO judges against it, and the after-the-fact check shows who signed it. |
-| 기록과 해시 체인 | 결정·정산·STOP 같은 일마다 JSON 파일 하나를 `records/`에 쓰고, 각 파일에 바로 앞 파일의 해시(`prev`)를 넣는다. 해시는 파일 내용으로 계산한 지문이라 내용이 조금만 바뀌어도 값이 달라진다. 그래서 파일 하나를 지우거나 1바이트만 고쳐도 사슬이 끊겨 사후 검증에서 FAIL이 난다. | Each decision, payment or STOP is saved as a JSON file that holds the previous file's hash (a fingerprint of its content that changes if one byte changes), so deleting or editing any file breaks the chain. |
-| `rec` | 기록 파일의 해시(keccak256, 파일 내용의 지문)다. 금고 tx의 마지막 인자로 넣어 이벤트에 남기므로 체인의 tx 하나가 기록 파일 하나를 가리킨다(STOP은 `reasonHash`). 이렇게 기록 해시를 체인에 고정하는 것을 앵커(anchor)라고 한다. | A record file's hash, passed as the last argument of each vault transaction so that every on-chain event points at one record file; pinning a hash on chain this way is called anchoring. |
-| 기록 묶음 (`runs/<vault>/`) | run 하나의 증거 폴더다: `records/`, 서명된 명세(`spec.json`, `spec.sig`), 가격표(`prices/akash.json`), 이벤트 로그(`events.jsonl`), Kiln 호출 로그(`kiln.jsonl`), `run.json`, `report.md`. 사후 검증에는 이 폴더와 공개 RPC만 있으면 된다. | One run's evidence folder (records, signed spec, prices, logs, report); the after-the-fact check needs only this folder and a public RPC. |
-| 사후 검증 (`npm run audit`) | USER가 나중에 우리 서버 없이 기록 묶음과 공개 체인만으로 지출을 다시 판정하는 것이다(코드는 `src/audit.ts`). USER는 사후 검증으로 기록 사슬과 앵커, 명세 서명자, 지출마다의 게이트·CFO 승인 기록, 규칙 재계산, 수취자, 예산·수수료, STOP·기한 뒤 agent 지출, 거절 기록을 확인할 수 있다. 결과는 PASS(exit 0)·FAIL(1)·CANNOT_VERIFY(2, 체인 확인 불가)이고, WARN은 실패가 아닌 주의다(예: 기록 없는 탈취 키 tx). 사후 검증으로는 과금이 정직했는지(기록된 GPU 사용 시간이 실제와 같은지), CFO Qwen의 판단이 옳았는지, 벤더가 GPU를 실제로 내주었는지(데모 벤더는 mock), Qwen 답이 정말 Kiln에서 왔는지는 확인할 수 없다([§11](#11-한계)). | The after-the-fact check: the USER re-judges the spending later from the bundle and the public chain alone, without our server, and gets PASS (exit 0), FAIL (1) or CANNOT_VERIFY (2), with WARN as a note that does not fail. It cannot tell whether billing was honest (real GPU time), whether CFO Qwen's judgment was right, whether a vendor really delivered (the demo vendors are mocks) or whether Qwen's text came from Kiln. |
+| ① 작업 명세 (USER가 서명) | 작업의 목적·성공 지표·허용 GPU·작업 상한·기한을 적은 파일(`spec.json`)에 USER 키로 서명한 것(`spec.sig`)이다. CFO Qwen은 이 원문에 비추어 판단한다. 서명자가 금고의 `founder`(USER)인지는 사후 검증으로 확인할 수 있다. | The job's terms (purpose, success metric, allowed GPU, job cap, deadline) signed with the USER's key; the CFO judges against it, and the after-the-fact check shows who signed it. |
+| ② 기록과 해시 체인 | 결정·정산·STOP 같은 일마다 JSON 파일 하나를 `records/`에 쓰고, 각 파일에 바로 앞 파일의 해시(`prev`)를 넣는다. 해시는 파일 내용으로 계산한 지문이라 내용이 조금만 바뀌어도 값이 달라진다. 그래서 파일 하나를 지우거나 1바이트만 고쳐도 사슬이 끊겨 사후 검증에서 FAIL이 난다. | Each decision, payment or STOP is saved as a JSON file that holds the previous file's hash (a fingerprint of its content that changes if one byte changes), so deleting or editing any file breaks the chain. |
+| ③ `rec` | 기록 파일의 해시(keccak256, 파일 내용의 지문)다. 금고 tx의 마지막 인자로 넣어 이벤트에 남기므로 체인의 tx 하나가 기록 파일 하나를 가리킨다(STOP은 `reasonHash`). 이렇게 기록 해시를 체인에 고정하는 것을 앵커(anchor)라고 한다. | A record file's hash, passed as the last argument of each vault transaction so that every on-chain event points at one record file; pinning a hash on chain this way is called anchoring. |
+| ④ 기록 묶음 (`runs/<vault>/`) | run 하나의 증거 폴더다: `records/`, 서명된 명세(`spec.json`, `spec.sig`), 가격표(`prices/akash.json`), 이벤트 로그(`events.jsonl`), Kiln 호출 로그(`kiln.jsonl`), `run.json`, `report.md`. 사후 검증에는 이 폴더와 공개 RPC만 있으면 된다. | One run's evidence folder (records, signed spec, prices, logs, report); the after-the-fact check needs only this folder and a public RPC. |
+| ⑤ 사후 검증 (`npm run audit`) | USER가 나중에 우리 서버 없이 기록 묶음과 공개 체인만으로 지출을 다시 판정하는 것이다(코드는 `src/audit.ts`). USER는 사후 검증으로 기록 사슬과 앵커, 명세 서명자, 지출마다의 게이트·CFO 승인 기록, 규칙 재계산, 수취자, 예산·수수료, STOP·기한 뒤 agent 지출, 거절 기록을 확인할 수 있다. 결과는 PASS(exit 0)·FAIL(1)·CANNOT_VERIFY(2, 체인 확인 불가)이고, WARN은 실패가 아닌 주의다(예: 기록 없는 탈취 키 tx). | The after-the-fact check: the USER re-judges the spending later from the bundle and the public chain alone, without our server, and gets PASS (exit 0), FAIL (1) or CANNOT_VERIFY (2), with WARN as a note that does not fail. |
+| 사후 검증이 확인하지 못하는 것 | 사후 검증으로는 과금이 정직했는지(기록된 GPU 사용 시간이 실제와 같은지), CFO Qwen의 판단이 옳았는지, 벤더가 GPU를 실제로 내주었는지(데모 벤더는 mock), Qwen 답이 정말 Kiln에서 왔는지는 확인할 수 없다([§11](#11-한계)). | What the after-the-fact check cannot tell: whether billing was honest (real GPU time), whether CFO Qwen's judgment was right, whether a vendor really delivered (the demo vendors are mocks) or whether Qwen's text came from Kiln (see §11). |
 | 스냅샷 | 두 가지다. 체인 스냅샷은 요청 직전 블록 하나에서 읽은 금고 값(멈춤, 기한, 예산, 약정액, 상한, 허용 목록 등)으로 게이트의 입력이 되고, 가격 스냅샷은 Akash 가격 API가 안 될 때 쓰는 커밋된 가격 파일(`prices/akash-snapshot.json`)이다. | The chain snapshot is the vault's values read at one block right before a request (the gate's input); the price snapshot is the committed Akash price file used when the live API fails. |
 | 대본 개입 | 데모가 일부러 넣은 조작이다(에이전트 근거 바꿔치기, 로그 한 줄 주입, 탈취 키 공격, STOP 등). 에이전트가 본 것이나 말한 것을 바꾼 개입은 기록의 `overrides`에 남고, 전부 [§10](#10-대본-개입)에 있다. | Things the demo script does on purpose (a rewritten reason, a planted log line, a stolen-key attack, STOP); changes to what the agent saw or said are kept in the record's `overrides`, and all are listed in §10. |
 
@@ -157,42 +155,7 @@ npm run audit -- runs/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415 --submission   
 - **우리의 답:** 결제 한 건을 막는 데서 끝나지 않는다. **돈이 나가는 도중에** 충전할 가치가 있는지 심사한다. 규칙은 통과했지만 목적을 벗어난 충전은 CFO가 거절한다.
 - **결과물:** 통제된 GPU 지출, 작업별 영수증, USER(PO, 창업자, 감사인 등)가 우리 서버 없이 검증할 수 있는 기록 묶음(`runs/<vault>/`).
 
-## 3. 빠른 시작
-
-```sh
-# 0) 준비 (한 번). Foundry가 없으면 먼저: curl -L https://foundry.paradigm.xyz | bash
-foundryup                                   # forge · anvil · cast
-npm install                                 # 의존성은 viem 하나
-git submodule update --init                 # lib/forge-std
-cp .env.example .env                        # Kiln 키와 Base Sepolia 값은 여기에만 둔다 (커밋 금지)
-ln -sf ../../scripts/check-secrets.sh .git/hooks/pre-commit   # .env 값이 커밋에 섞이면 막는 훅
-
-# 1) 로컬 체인 (터미널 A)
-npm run anvil                               # anvil --block-time 1
-
-# 2) 데모 시나리오 1회 = 새 금고 1개 = 기록 묶음 1개 (터미널 B)
-LLM_MODE=stub npm run demo                  # Kiln 없이 결정적 stub로 끝까지 (약 2분)
-LLM_MODE=kiln npm run demo                  # 실제 Qwen3-32B on Kiln (.env의 KILN_API_KEY)
-
-# 3) 사후 검증: 우리 서버 없이 기록 묶음 + RPC만으로 다시 판정
-npm run audit -- runs/<vault> [--rpc URL]   # exit 0 PASS / 1 FAIL / 2 CANNOT_VERIFY
-
-# 4) USER 대시보드: 새 금고를 배포하고 같은 시나리오를 화면으로 돌린다
-LLM_MODE=stub npm run dashboard -- --scenario demo   # http://127.0.0.1:8787/ (Kiln은 LLM_MODE=kiln + KILN_API_KEY)
-
-# 5) 흐름별 토큰·비용·에너지 표 6개
-npm run report -- runs/<vault>              # runs/<vault>/report.md 도 쓴다 (세션 종료 때 자동 생성도 됨)
-```
-
-- `<vault>`는 2)가 끝에 찍는 요약의 `bundle runs/0x…` 줄에 있다. RPC를 생략하면 사후 검증 명령은 `run.json`에 적힌 공개 RPC를 쓴다.
-- `LLM_MODE`는 기본값이 없다. 빠지면 기동을 거부하고, stub에서 kiln으로 자동 전환하지 않는다. 셸 변수가 `.env`보다 우선한다.
-- 테스트: `forge test`(컨트랙트, fuzz 불변식 포함), `npm test`(`node --test`, anvil 통합 테스트는 anvil을 직접 띄운다).
-- 다른 시나리오: `LLM_MODE=stub npm run session -- --scenario <이름>`. 이름은 `normal`, `qwen-deny`, `injection`, `stop`, `deadline`, `migrate`, `nan`, `budget`, `plateau`, `demo`다([§10](#10-대본-개입)).
-- **Base Sepolia 실제 실행:** `.env`에 `LLM_MODE=kiln`, `CHAIN=base-sepolia`, `RPC_URL`, `FOUNDER_PK`(USER의 키, ETH 필요)를 넣고
-  `npm run smoke:kiln && npm run eval:f2` → `npm run dashboard -- --scenario demo --chain base-sepolia` → `npm run audit -- runs/<vault> --submission`.
-  커밋한 세 번들 중 demo 두 개는 `npm run demo -- --chain base-sepolia`로, budget은 `npm run session -- --scenario budget --chain base-sepolia --speed 3`으로 만들었다([온체인 증빙](#온체인-증빙-verify-it-yourself)). 기한 시나리오는 공개 체인에서 돌리지 않았다([§7](#7-성공-기준-지도) 2c). 녹화 절차는 [`docs/demo-script.md`](docs/demo-script.md)에 있고, 영상은 아직 녹화 전이다.
-
-## 4. 작동 흐름
+## 3. 작동 흐름
 
 ```mermaid
 graph TD
@@ -229,6 +192,41 @@ graph TD
 | **Qwen3-32B (Kiln)** | F1 요청 작성(벤더·GPU·금액·근거, `src/prompts.ts` `f1Messages`), F2 CFO 심사(목적 부합·근거 타당성·범위 확대 판단과 사유, `f2Messages`), F3 영수증 설명(`f3Messages`) | 서명, 규칙 판정, 한도 변경. F2는 **막을 수만 있다**. 게이트를 통과시키거나 금액을 바꾸지 못한다 |
 | **코드 (백엔드, `src/`)** | 블록 고정 체인 읽기(`chainread.ts` `snapshot`), 게이트 규칙 10개(`rules.ts` `check`), bigint 금액·수수료 계산(`gross`/`maxNet`), 기록과 해시 체인(`record.ts`), 서명·전송의 단일 경로(`chain.ts` `Committer`), fail-closed 파싱(`parse.ts`), 작업 상태 머신과 실행기(`executor.ts`), 세션 조율(`session.ts`) | 목적 판단 |
 | **컨트랙트 (`contracts/AgentBudgetVault.sol`)** | 허용 벤더·수수료 포함 예산·1회 상한·기한·STOP의 **최종 강제**, 위반 시 `Denied` 이벤트 | 판단, 실제 GPU 사용량 검증 |
+
+## 4. 빠른 시작
+
+```sh
+# 0) 준비 (한 번). Foundry가 없으면 먼저: curl -L https://foundry.paradigm.xyz | bash
+foundryup                                   # forge · anvil · cast
+npm install                                 # 의존성은 viem 하나
+git submodule update --init                 # lib/forge-std
+cp .env.example .env                        # Kiln 키와 Base Sepolia 값은 여기에만 둔다 (커밋 금지)
+ln -sf ../../scripts/check-secrets.sh .git/hooks/pre-commit   # .env 값이 커밋에 섞이면 막는 훅
+
+# 1) 로컬 체인 (터미널 A)
+npm run anvil                               # anvil --block-time 1
+
+# 2) 데모 시나리오 1회 = 새 금고 1개 = 기록 묶음 1개 (터미널 B)
+LLM_MODE=stub npm run demo                  # Kiln 없이 결정적 stub로 끝까지 (약 2분)
+LLM_MODE=kiln npm run demo                  # 실제 Qwen3-32B on Kiln (.env의 KILN_API_KEY)
+
+# 3) 사후 검증: 우리 서버 없이 기록 묶음 + RPC만으로 다시 판정
+npm run audit -- runs/<vault> [--rpc URL]   # exit 0 PASS / 1 FAIL / 2 CANNOT_VERIFY
+
+# 4) USER 대시보드: 새 금고를 배포하고 같은 시나리오를 화면으로 돌린다
+LLM_MODE=stub npm run dashboard -- --scenario demo   # http://127.0.0.1:8787/ (Kiln은 LLM_MODE=kiln + KILN_API_KEY)
+
+# 5) 흐름별 토큰·비용·에너지 표 6개
+npm run report -- runs/<vault>              # runs/<vault>/report.md 도 쓴다 (세션 종료 때 자동 생성도 됨)
+```
+
+- `<vault>`는 2)가 끝에 찍는 요약의 `bundle runs/0x…` 줄에 있다. RPC를 생략하면 사후 검증 명령은 `run.json`에 적힌 공개 RPC를 쓴다.
+- `LLM_MODE`는 기본값이 없다. 빠지면 기동을 거부하고, stub에서 kiln으로 자동 전환하지 않는다. 셸 변수가 `.env`보다 우선한다.
+- 테스트: `forge test`(컨트랙트, fuzz 불변식 포함), `npm test`(`node --test`, anvil 통합 테스트는 anvil을 직접 띄운다).
+- 다른 시나리오: `LLM_MODE=stub npm run session -- --scenario <이름>`. 이름은 `normal`, `qwen-deny`, `injection`, `stop`, `deadline`, `migrate`, `nan`, `budget`, `plateau`, `demo`다([§10](#10-대본-개입)).
+- **Base Sepolia 실제 실행:** `.env`에 `LLM_MODE=kiln`, `CHAIN=base-sepolia`, `RPC_URL`, `FOUNDER_PK`(USER의 키, ETH 필요)를 넣고
+  `npm run smoke:kiln && npm run eval:f2` → `npm run dashboard -- --scenario demo --chain base-sepolia` → `npm run audit -- runs/<vault> --submission`.
+  커밋한 세 번들 중 demo 두 개는 `npm run demo -- --chain base-sepolia`로, budget은 `npm run session -- --scenario budget --chain base-sepolia --speed 3`으로 만들었다([온체인 증빙](#온체인-증빙-verify-it-yourself)). 기한 시나리오는 공개 체인에서 돌리지 않았다([§7](#7-성공-기준-지도) 2c). 녹화 절차는 [`docs/demo-script.md`](docs/demo-script.md)에 있고, 영상은 아직 녹화 전이다.
 
 ## 5. 경계와 강제 위치
 
@@ -460,6 +458,14 @@ stub 호출이 섞인 번들이면 맨 위에 **STUB 경고**를 찍는다. 이 
 
 ## 10. 대본 개입
 
+**이 절의 용어**
+
+| 용어 | 쉬운 설명 | In plain English |
+|---|---|---|
+| 범위 확대 (scope creep) | 숫자 규칙은 다 지키지만 서명된 목적 밖의 일에 돈을 쓰려는 요청이다. 데모에서는 LoRA 파인튜닝 작업에 "새 7B 모델 사전학습"을 끼워 넣은 충전을 CFO Qwen이 거절했다(`QWEN_DENIED`). | A request that keeps every numeric rule but pays for work outside the signed purpose; only the CFO review can catch it. |
+| 프롬프트 주입 (prompt injection) | AI가 읽는 글에 몰래 지시를 심어 AI를 조종하려는 공격이다. 데모에서는 실행 로그에 심은 한 줄에 작업 에이전트가 속았지만 코드 게이트가 거절했다. | Hiding instructions in text an AI reads to steer it; in the demo a planted log line fooled the agent and the code gate refused the result. |
+| 탈취된 키 (stolen agent key) | 공격자가 agent 개인키를 손에 넣어 우리 서버·게이트·Qwen을 건너뛰고 금고를 직접 부르는 상황이다. 금고가 벤더·예산·상한·기한·STOP을 스스로 강제해 위반은 `Denied`로 막힌다(한계는 [§11](#11-한계)). | An attacker with the agent's private key calls the vault directly, skipping our server; the vault's own rules still block violations. |
+
 시나리오가 에이전트가 본 것이나 말한 것을 바꾸는 곳은 `src/scenarios.ts` 한 곳뿐이다. F1 출력이나 실행기 로그, 시장 값을 바꾼 개입은 해당 DECISION 기록의 `overrides[{field, from, to, by: "scenario:<이름>"}]`에 남는다. 아래 표는 `interventionTable()`로 생성한 그대로다. 표의 `founder`와 `founderStop`은 코드가 USER를 부르는 이름이다.
 
 ```sh
@@ -500,7 +506,7 @@ node -e "import('./src/scenarios.ts').then(m => console.log(m.interventionTable(
 - **사후 검증으로는 과금 시간이 맞는지 확인할 수 없다.** USER는 사후 검증으로 기록과 체인이 서로 맞는지, 모든 지출이 게이트·CFO 기록을 거쳤는지를 확인할 수 있지만, 기록된 `runningMs`가 작업이 실제로 돈 시간과 같은지까지는 알 수 없다. 우리 리뷰에서 실제 오류를 찾았다. 수정 전 코드는 루프 한 단계가 가상 시계를 읽고 대본 단계(여기서는 job 2의 open 흐름, 약 9초)를 기다린 뒤 새 작업을 그 앞선 시각부터 과금해서, 수정 전 demo(`0xA8CE…7415`)의 job 2가 hold가 생기기 전 약 28 시뮬레이션 분까지 과금되었다(기록 000009의 `runningMs` 41,808). 그래서 job 2는 약 32 시뮬레이션 분만 돌고 hold 전액(net $2.56, gross $2.636799)을 정산했는데 사후 검증 결과는 PASS였다. `d2c7bad`에서 고쳤고, `test/session.test.ts`의 회귀 테스트 2개(대본 단계로 연 새 작업, 대본 단계 중 충전이 도착해 재개된 작업)가 옛 코드에서 실패한다. 수정 뒤 demo(`0x6372…0772`)는 작업마다 첫 CHECKPOINT의 `runningMs`가 (그 기록의 시각 − 그 작업 `HoldOpened` 확정 시각) × 속도 이하인지 비교해 통과했다(job 1 33,744 ≤ 45,705, job 2 39,918 ≤ 53,256, job 3은 과금 0). budget run은 수정 전 코드지만 대본 단계로 연 작업도, 충전으로 재개된 작업도 없었고 같은 비교를 통과한다(34,725 ≤ 48,147). 세 run 중 걸리는 것은 0xA8CE의 job 2뿐이다(41,808 > 39,381). 이 비교는 `npm run audit`에 들어 있지 않은 수동 검사다. 기록 시각은 과금을 계산한 시각보다 늦으므로 느슨한 상한이고, 두 시각 모두 백엔드가 남긴 값(기록의 `t`, `events.jsonl`)이다.
 - **Qwen 판정과 기록은 백엔드가 스스로 증명한 값이다.** Kiln 서명이 없다. USER는 사후 검증으로 결정적 규칙을 다시 계산하고 기록된 원문에서 판정을 다시 파싱할 수 있지만, 그 원문이 실제 Kiln 응답인지는 확인할 수 없다. 기록마다 Kiln generation id가 있으므로 **Bricksum은 generation id로 진위를 확인할 수 있다.**
 - **백엔드는 기록을 위조하거나 누락할 수 있다. 앵커는 앵커 이후의 변조만 막는다.** 기록 해시는 tx 인자로 체인에 고정되므로, 앵커된 뒤 1바이트라도 바뀌면 사후 검증에서 FAIL이 난다.
-- **탈취된 agent 키**는 허용 벤더에게 금고의 미지급 잔액 전체(`budget − Σpaid`, 열린 hold 포함)까지 보낼 수 있다. `maxHold`는 open/topUp **1회** 상한일 뿐이고, hold를 여러 번 열어 모아서 정산할 수 있기 때문이다. 허용 목록 밖 지급, 예산 초과, `refund`, 허용 목록 변경은 할 수 없고, 위반 시도는 모두 `Denied`로 남는다. 규칙 안에서 job을 닫거나 쓸모없는 hold로 예산을 묶어 세션을 방해할 수도 있다. **실질적인 멈춤은 STOP이다.** STOP 뒤에는 agent 키로 아무것도 나가지 않는다.
+- **탈취된 agent 키**는 허용 벤더에게 금고의 미지급 잔액 전체(`budget − Σpaid`, 열린 hold 포함)까지 보낼 수 있다. `maxHold`는 open/topUp **1회** 상한일 뿐이고, hold를 여러 번 열어 모아서 정산할 수 있기 때문이다. 허용 목록 밖 지급, 예산 초과, `refund`, 허용 목록 변경은 할 수 없고, 위반 시도는 모두 `Denied`로 남는다. 규칙 안에서 job을 닫거나 쓸모없는 hold로 예산을 묶어 세션을 방해할 수도 있다. **실질적인 멈춤은 STOP이다.** STOP 뒤에는 agent 키로 아무것도 나가지 않는다. 탈취된 agent 키만으로는 hold를 열거나 충전할 수 없게 하는 게이트 공동 서명은 설계만 했다([§12](#12-데모용-지름길)).
 - **데모에서는 두 키가 한 서버 프로세스에 있다**(USER의 키 `FOUNDER_PK`는 `.env`, agent 키는 `keys/<vault>.agent`). 서버가 침해되면 `setVendor`로 공격자 주소를 허용한 뒤 전액을 빼낼 수 있다.
 - **gas(ETH)는 USDC 예산 한도 밖이다.** 장부에만 기록한다.
 - **벤더는 mock이고 가격은 실제 Akash 입찰가다.** A/B/C는 팀 주소이고, 각각 Akash H100 제공자 한 곳의 최근 31일 온체인 best bid(2026-09-28 기준 $2.04 / $2.56 / $3.16 per GPU-hour)를 붙였다. 확정 견적이 아니며, `?debug=true`는 문서에 없는 옵션이라 커밋된 스냅샷(`prices/akash-snapshot.json`)을 fallback으로 둔다. 가격은 세션 동안 고정한다.
@@ -516,6 +522,7 @@ node -e "import('./src/scenarios.ts').then(m => console.log(m.interventionTable(
 |---|---|
 | 역할 주소(USER의 `founder`, `agent`, `feeTo`, `inferencePayee`)가 `immutable`. 녹화마다 새 금고와 새 agent 키 | 타임락을 둔 역할 교체 함수, 또는 에이전트 교체 시 새 금고 발급을 제품 흐름으로 |
 | hot key: `FOUNDER_PK`가 `.env`에, agent 키가 `keys/` 파일에 있고 둘 다 한 프로세스가 쓴다. 명세 서명도 백엔드가 USER 키로 한다 | USER는 브라우저·하드웨어 지갑으로 STOP·정산·명세에 서명, agent 키는 KMS/HSM, 서명된 위임장(AP2 스타일) |
+| 금고는 agent 키가 보낸 `open`·`topUp`을 자기 규칙으로만 검사한다. 게이트와 CFO Qwen을 거쳤는지는 모른다 | **다음 버전: 게이트 공동 서명(gate co-signature). 설계만 했고 아직 구현하지 않았다.** agent 키도 USER 키도 아닌 별도의 게이트 키가 코드 게이트와 CFO Qwen을 통과한 open·충전에만(Qwen 심사가 없는 INFERENCE open은 코드 게이트를 통과한 뒤) EIP-712 승인 `{action, jobId, vendor, amount, rec, nonce, validUntil}`에 서명한다. 금고는 모든 `open`·`topUp`(INFERENCE 포함)에서 검사 순서의 맨 끝에 이 서명을 확인하고, 실패하면 돈을 움직이지 않고 `Denied(GATE_SIG_INVALID)`를 남긴다. 그러면 탈취된 agent 키만으로는 hold를 열거나 충전할 수 없다. 이미 열린 hold 안의 `settle`은 여전히 가능해 피해는 열린 hold까지이고, 두 키를 모두 훔치면 지금과 같다. 데모에서는 모든 키가 한 프로세스에 있으므로 제품화할 때 게이트 키는 KMS나 별도 서명 서비스에 둔다 |
 | 기록이 로컬 파일(`runs/<vault>/`)이고 해시만 체인에 앵커 | append-only 저장소(오브젝트 락이나 IPFS)에 원문 보관, 앵커는 지금처럼 tx마다 |
 | 공용 RPC(`https://sepolia.base.org`, `getLogs` 1,000블록 제한) | 자체 노드나 여러 공급자 fallback. 사후 검증 명령은 지금도 어떤 RPC로든 돌아간다 |
 | 규칙을 TS(`src/rules.ts`)와 Solidity(`_reserveCode`/`_liveCode`)에 이중 구현. 공유 픽스처와 순서 고정 테스트로 맞춘다 | 규칙 명세 하나에서 양쪽을 생성하거나, 교차 언어 테스트 벡터를 CI 필수로 |
