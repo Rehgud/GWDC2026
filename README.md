@@ -46,7 +46,7 @@
 3. **CFO Qwen (F2)** checks purpose fit, rationale and scope creep against the USER-signed job spec. Only an exact `approve` passes; deny, unparseable output or a timeout all deny (fail-closed). F2 can only block: it cannot override the gate or change the amount.
 4. **Escrow vault** (Base Sepolia) enforces vendor, budget, cap, deadline and STOP again as the last line, even against a stolen agent key: a violation emits `Denied` and moves no money. Every decision is a hash-chained record whose hash goes on chain as the tx argument `rec`.
 
-**Challenge B evidence** (one in-scope case plus two or more out-of-scope pushes, each recorded) on Base Sepolia with live Kiln `qwen3-32b`: demo run [`0x6372…0772`](runs/0x6372558F859935DF9364F0c822e703310d160772/) (12 Kiln calls, $0.000834; per-call generation ids and costs in [`kiln.jsonl`](runs/0x6372558F859935DF9364F0c822e703310d160772/kiln.jsonl)) and budget run [`0x7C81…dCcb`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/). Tx links and record files for each row: [detailed table](#조건이-바뀔-때-challenge-b-범위-안-1--범위-밖-2회-이상-각각-기록).
+**Challenge B evidence** (one in-scope case plus two or more out-of-scope pushes, each recorded) on Base Sepolia with live Kiln `qwen3-32b`: demo run [`0x6372…0772`](runs/0x6372558F859935DF9364F0c822e703310d160772/) (12 Kiln calls, $0.000834; per-call generation ids and costs in [`kiln.jsonl`](runs/0x6372558F859935DF9364F0c822e703310d160772/kiln.jsonl)) and budget run [`0x7C81…dCcb`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/). Tx links and record files for each row: [detailed table](#조건이-바뀔-때-challenge-b-범위-안-1--범위-밖-2회-이상-각각-기록). The demo video shows a later run of the same scenario, [`0x4E8E…507C`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/) (12 Kiln calls, $0.000898, `AUDIT PASS`, 0 FAIL).
 
 | Condition | Run | Stopped by | On chain |
 |---|---|---|---|
@@ -138,10 +138,11 @@ Demo video: (link after upload) · Deck: (link after export)
 
 ### 온체인 증빙 (Verify it yourself)
 
-Base Sepolia(chainId 84532)에서 실제 Kiln(`qwen3-32b`)으로 돌린 run 3개다. 금고와 MockUSDC는 Blockscout·Sourcify에 소스 검증(exact match)되어 있어서 Blockscout에서는 이벤트(`HoldOpened`, `Settled`, `Denied`, `PausedSet` 등)가 디코딩되어 보인다. `Denied`의 `code`는 ASCII bytes32다(예: `0x5157454e5f44454e494544…` = `QWEN_DENIED`).
+Base Sepolia(chainId 84532)에서 실제 Kiln(`qwen3-32b`)으로 돌린 run 4개다. 3분 데모 영상에 나오는 run은 맨 위의 영상 run(`0x4E8E…507C`)이다. 금고와 MockUSDC는 Blockscout·Sourcify에 소스 검증(exact match)되어 있어서 Blockscout에서는 이벤트(`HoldOpened`, `Settled`, `Denied`, `PausedSet` 등)가 디코딩되어 보인다. `Denied`의 `code`는 ASCII bytes32다(예: `0x5157454e5f44454e494544…` = `QWEN_DENIED`).
 
 | run | 금고 | 기록 묶음 | 금고 블록 | 남은 것 | 사후 검증 결과 |
 |---|---|---|---|---|---|
+| demo · 영상 (코드 `114bd1a`) | `0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C` ([Basescan](https://sepolia.basescan.org/address/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C) · [Blockscout](https://base-sepolia.blockscout.com/address/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C)) | [`runs/0x4E8E…507C/`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/) ([`kiln.jsonl`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/kiln.jsonl) · [`report.md`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/report.md)) | 47465760..47465872 | Kiln 12회 $0.000898 · 준비 tx 11 + 백엔드 tx 19 + 탈취 키 tx 2 · GPU open 승인 3, 게이트 거절 1, Qwen 거절 1, 탈취 키 Denied 2, STOP, STOP 뒤 agent settle Denied(`PAUSED`) 1 | `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)` |
 | demo (코드 `d2c7bad`) | `0x6372558F859935DF9364F0c822e703310d160772` ([Basescan](https://sepolia.basescan.org/address/0x6372558F859935DF9364F0c822e703310d160772) · [Blockscout](https://base-sepolia.blockscout.com/address/0x6372558F859935DF9364F0c822e703310d160772)) | [`runs/0x6372…0772/`](runs/0x6372558F859935DF9364F0c822e703310d160772/) ([`kiln.jsonl`](runs/0x6372558F859935DF9364F0c822e703310d160772/kiln.jsonl) · [`report.md`](runs/0x6372558F859935DF9364F0c822e703310d160772/report.md)) | 47443410..47443524 | Kiln 12회 $0.000834 · 준비 tx 11 + 백엔드 tx 19 + 탈취 키 tx 2 · GPU open 승인 3, 게이트 거절 1, Qwen 거절 1, 탈취 키 Denied 2, STOP, STOP 뒤 agent settle Denied(`PAUSED`) 1 | `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)` |
 | budget (코드 `e140dd8`) | `0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb` ([Basescan](https://sepolia.basescan.org/address/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb) · [Blockscout](https://base-sepolia.blockscout.com/address/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb)) | [`runs/0x7C81…dCcb/`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/) ([`kiln.jsonl`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/kiln.jsonl) · [`report.md`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/report.md)) | 47439368..47439440 | Kiln 4회 $0.000302 · 준비 tx 11 + 백엔드 tx 10 · GPU open 승인 1, 수수료 포함 예산 초과 게이트 거절 1 | `AUDIT PASS (exit 0) (0 FAIL, 0 WARN, 0 INFO)` |
 | 수정 전 demo (코드 `f151d4e`) | `0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415` ([Basescan](https://sepolia.basescan.org/address/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415) · [Blockscout](https://base-sepolia.blockscout.com/address/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415)) | [`runs/0xA8CE…7415/`](runs/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415/) | 47439104..47439209 | Kiln 12회 $0.000844 · 준비 tx 11 + 백엔드 tx 18 + 탈취 키 tx 2 · GPU open 승인 3, 게이트 거절 1, Qwen 거절 1, 탈취 키 Denied 2, STOP | `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)` |
@@ -150,10 +151,11 @@ Base Sepolia(chainId 84532)에서 실제 Kiln(`qwen3-32b`)으로 돌린 run 3개
 npm ci && npm run audit -- runs/0x6372558F859935DF9364F0c822e703310d160772 --submission   # Node ≥ 23.6, RPC는 run.json의 https://sepolia.base.org
 npm run audit -- runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb --submission
 npm run audit -- runs/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415 --submission   # 수정 전 demo
-# 세 번 모두 마지막 줄: AUDIT PASS (exit 0)
+npm run audit -- runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C --submission   # 영상 run
+# 네 번 모두 마지막 줄: AUDIT PASS (exit 0)
 ```
 
-- 두 demo run의 WARN 3건은 설계대로다. 기록 없이 금고를 직접 부른 탈취 키 tx 2건(`UNRECORDED_ATTEMPT`)과, 그 두 tx가 같은 rec를 쓴 `DUPLICATE_REC_REF` 1건이다. tx ↔ 기록 1:1 표는 [§8](#8-tx와-기록-11-표-base-sepolia)에 있다.
+- 세 demo run의 WARN 3건은 설계대로다. 기록 없이 금고를 직접 부른 탈취 키 tx 2건(`UNRECORDED_ATTEMPT`)과, 그 두 tx가 같은 rec를 쓴 `DUPLICATE_REC_REF` 1건이다. tx ↔ 기록 1:1 표는 [§8](#8-tx와-기록-11-표-base-sepolia)에 있다.
 - 수정 전 demo(`0xA8CE…7415`)는 과금 오류를 고치기(`d2c7bad`) 전 코드로 돌린 run이다. job 2가 hold가 열리기 전 시간까지 과금되었고, 사후 검증으로는 이것을 잡을 수 없다([§11](#11-한계)). budget run(`e140dd8`)도 수정 전 코드지만 이 오류가 생기는 경우(대본 단계로 연 작업, 충전으로 재개된 작업)가 없었다.
 
 ### 조건이 바뀔 때 (Challenge B: 범위 안 1 + 범위 밖 2회 이상, 각각 기록)
@@ -252,7 +254,7 @@ npm run report -- runs/<vault>              # runs/<vault>/report.md 도 쓴다 
 - 다른 시나리오: `LLM_MODE=stub npm run session -- --scenario <이름>`. 이름은 `normal`, `qwen-deny`, `injection`, `stop`, `deadline`, `migrate`, `nan`, `budget`, `plateau`, `demo`다([§10](#10-대본-개입)).
 - **Base Sepolia 실제 실행:** `.env`에 `LLM_MODE=kiln`, `CHAIN=base-sepolia`, `RPC_URL`, `FOUNDER_PK`(USER의 키, ETH 필요)를 넣고
   `npm run smoke:kiln && npm run eval:f2` → `npm run dashboard -- --scenario demo --chain base-sepolia` → `npm run audit -- runs/<vault> --submission`.
-  커밋한 세 번들 중 demo 두 개는 `npm run demo -- --chain base-sepolia`로, budget은 `npm run session -- --scenario budget --chain base-sepolia --speed 3`으로 만들었다([온체인 증빙](#온체인-증빙-verify-it-yourself)). 기한 시나리오는 공개 체인에서 돌리지 않았다([§7](#7-성공-기준-지도) 2c). 녹화 절차는 [`docs/demo-script.md`](docs/demo-script.md)에 있고, 영상은 아직 녹화 전이다.
+  커밋한 네 번들 중 demo 두 개는 `npm run demo -- --chain base-sepolia`로, 영상 run은 `npm run dashboard -- --scenario demo --chain base-sepolia`로, budget은 `npm run session -- --scenario budget --chain base-sepolia --speed 3`으로 만들었다([온체인 증빙](#온체인-증빙-verify-it-yourself)). 기한 시나리오는 공개 체인에서 돌리지 않았다([§7](#7-성공-기준-지도) 2c). 녹화 절차는 [`docs/demo-script.md`](docs/demo-script.md)에 있고, 3분 데모 영상은 영상 run(`0x4E8E…507C`)을 녹화했다.
 
 ## 5. 경계와 강제 위치
 
