@@ -1,0 +1,159 @@
+1
+00:00:00,300 --> 00:00:05,000
+AI agents now rent GPUs on their own.
+AI 에이전트가 GPU를 직접 빌립니다.
+
+2
+00:00:05,000 --> 00:00:08,500
+Payment logs don't say who allowed what, or why.
+결제 기록엔 누가 왜 허락했는지가 없습니다.
+
+3
+00:00:08,500 --> 00:00:11,900
+CFO Agent: escrow per job, every yes and no recorded.
+CFO Agent: 작업별 에스크로, 모든 허락·거절을 기록
+
+4
+00:00:12,000 --> 00:00:16,000
+Scope signed by the founder: LoRA fine-tune, H100 only
+창업자가 서명한 범위: LoRA 파인튜닝, H100만
+
+5
+00:00:16,000 --> 00:00:19,900
+3 vendors · max $6 per hold · $20 budget
+허용 벤더 3곳 · hold 상한 $6 · 예산 $20
+
+6
+00:00:20,000 --> 00:00:25,000
+RUN (in scope): an H100 job on vendor B
+RUN (범위 안): 벤더 B의 H100 작업
+
+7
+00:00:25,000 --> 00:00:30,000
+10/10 rules pass → CFO Qwen approves → on chain
+규칙 10/10 통과 → CFO Qwen 승인 → 체인 반영
+
+8
+00:00:30,000 --> 00:00:35,900
+The job runs. Usage + 3% fee settle from the hold.
+작업 실행. 사용분 + 수수료 3%를 hold에서 정산
+
+9
+00:00:36,000 --> 00:00:41,000
+PUSH #1 (scripted): "…pretraining a new 7B base model…"
+PUSH #1 (대본 개입): 충전 근거를 7B 모델 사전학습으로 교체
+
+10
+00:00:41,000 --> 00:00:46,500
+All 10 rules pass. CFO Qwen checks the purpose: DENY
+규칙 10개는 통과. CFO Qwen이 목적을 보고 거절
+
+11
+00:00:46,500 --> 00:00:53,900
+Stopped and recorded: QWEN_DENIED anchored on chain
+멈춤 + 기록: QWEN_DENIED가 체인에 고정
+
+12
+00:00:54,000 --> 00:00:59,900
+Job 1 settles what it used. Job 2: approved (in scope)
+작업 1은 쓴 만큼 정산. 작업 2: 승인 (범위 안)
+
+13
+00:01:00,000 --> 00:01:04,500
+PUSH #2 (scripted): one poisoned log line
+PUSH #2 (대본 개입): 실행 로그에 악성 한 줄
+
+14
+00:01:04,500 --> 00:01:09,000
+The fooled agent asks for vendor 0xBAD… and H200
+속은 에이전트가 벤더 0xBAD…와 H200을 요청
+
+15
+00:01:09,000 --> 00:01:13,900
+Code gate blocks it: 0 CFO Qwen calls. Recorded.
+코드 게이트가 차단. CFO Qwen 호출 0회. 기록됨
+
+16
+00:01:14,000 --> 00:01:18,000
+PUSH #3 (scripted): stolen agent key calls the vault
+PUSH #3 (대본 개입): 탈취한 키로 금고 직접 호출
+
+17
+00:01:18,000 --> 00:01:21,900
+The contract answers Denied on chain. No money moves.
+컨트랙트가 Denied로 응답. 돈은 그대로
+
+18
+00:01:22,000 --> 00:01:24,900
+Numbers: code. Purpose: Qwen. Enforcement: contract.
+숫자는 코드, 목적은 Qwen, 강제는 컨트랙트
+
+19
+00:01:25,000 --> 00:01:30,000
+Founder STOP (scripted): the vault pauses on chain
+창업자 STOP (대본 개입): 금고가 체인에서 정지
+
+20
+00:01:30,000 --> 00:01:35,000
+Founder closes jobs, pays the Kiln cost, refunds the rest
+창업자가 작업 종료, Kiln 비용 정산, 잔액 환불
+
+21
+00:01:35,000 --> 00:01:38,900
+Session over: HALTED. The stop is recorded too.
+세션 종료: HALTED. 멈춤도 기록됨
+
+22
+00:01:39,000 --> 00:01:45,000
+Blockscout: the Denied event, decoded
+Blockscout: 디코딩된 Denied 이벤트
+
+23
+00:01:45,000 --> 00:01:50,900
+code as text = QWEN_DENIED · rec = hash of the record
+code를 텍스트로 = QWEN_DENIED · rec = 기록 해시
+
+24
+00:01:51,000 --> 00:01:58,900
+Same hash = record file name. The script edit is in it.
+같은 해시가 기록 파일 이름. 대본 개입도 기록에 있음
+
+25
+00:01:59,000 --> 00:02:03,500
+Third-party audit: records + public RPC only
+제3자 감사: 기록 묶음 + 공개 RPC만
+
+26
+00:02:03,500 --> 00:02:08,900
+AUDIT PASS. Stolen-key attempts listed as WARN.
+AUDIT PASS. 탈취 키 시도는 WARN으로 따로 표시
+
+27
+00:02:09,000 --> 00:02:14,500
+Change 1 byte in one record: "7B" → "1B"
+기록 한 파일에서 1바이트 변조: "7B" → "1B"
+
+28
+00:02:14,500 --> 00:02:20,900
+The hash chain breaks: AUDIT FAIL
+해시 체인이 끊김: AUDIT FAIL
+
+29
+00:02:21,000 --> 00:02:25,900
+PUSH #4, 2nd vault: over budget with fee → gate, recorded
+PUSH #4, 두 번째 금고: 수수료 포함 예산 초과 → 거절·기록
+
+30
+00:02:26,000 --> 00:02:32,000
+Every Kiln call: tokens, cost, energy per flow
+모든 Kiln 호출: 흐름별 토큰·비용·에너지
+
+31
+00:02:32,000 --> 00:02:37,900
+Kiln cost = on-chain settle · /no_think output: 346 → 66 tokens
+Kiln 비용 = 체인 정산액 · /no_think: 출력 346 → 66 토큰
+
+32
+00:02:38,000 --> 00:02:44,000
+Verify it yourself: vaults, txs, audit in the README
+직접 확인: README에 금고·tx·감사 명령

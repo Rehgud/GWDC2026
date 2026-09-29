@@ -1,18 +1,19 @@
 graph TD
-    F["창업자<br/>fund · 허용 벤더 · 상한<br/>명세 서명"] --> V["에스크로 금고<br/>Base Sepolia"]
-    W["작업 에이전트<br/>Qwen F1"] -->|"GPU·충전 요청"| R["체인 읽기<br/>예산·정지·기한"]
-    R --> G{"코드 게이트<br/>규칙 10개"}
+    F["창업자<br/>fund · 허용 벤더 · maxHold<br/>작업 명세 서명"] --> V["에스크로 금고<br/>Base Sepolia"]
+    W["작업 에이전트<br/>Qwen F1"] -->|"GPU hold · 충전 요청"| G{{"코드 게이트 · 규칙 10개<br/>요청 + 수수료 3% ≤ 남은 예산"}}
+    S["체인 스냅샷<br/>블록 1개에 고정"] --> G
     G -->|"통과"| C{"CFO Agent<br/>Qwen F2<br/>거절만 가능"}
-    G -->|"거절"| D["Denied 기록"]
-    C -->|"비거절"| T["open / topUp<br/>hold 예약"]
-    C -->|"거절"| D
+    G -->|"거절 · F2 호출 0회"| D["Denied(enforced=false)<br/>지출 tx 전에 거절<br/>recordDecision으로 앵커"]
+    C -->|"approve만"| T["open / topUp<br/>hold 예약"]
+    C -->|"나머지 전부<br/>deny · 해석 불가 · 타임아웃"| D
     T --> V
-    V -->|"규칙 위반"| D
-    V -->|"settle 실사용분"| P["벤더 A/B/C<br/>Akash 실가격<br/>실행은 mock"]
-    P --> X["mock 실행기<br/>체크포인트 정산<br/>잔액 40% 미만이면 충전 요청"]
-    X --> W
-    V --> L["장부<br/>해시 연결 기록"]
+    V -->|"규칙 위반"| DC["Denied(enforced=true)<br/>컨트랙트가 직접 거절<br/>돈 이동 0"]
+    V -->|"settle 실사용분 + 수수료 3%"| P["벤더 A/B/C<br/>Akash 실가격<br/>실행은 mock"]
+    P --> X["mock 실행기<br/>체크포인트마다 정산"]
+    X -->|"hold 잔액 40% 미만<br/>충전 요청"| W
+    T --> L["장부<br/>해시 연결 기록"]
     D --> L
+    DC --> L
     L --> A["감사자 CLI<br/>PASS / FAIL"]
     L --> U["대시보드<br/>영수증 · F3 설명"]
     F -->|"STOP · refund"| V
@@ -23,7 +24,7 @@ graph TD
     classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
     classDef vault fill:#d0ebff,stroke:#1971c2,stroke-width:3px,color:#1a1a1a;
     class T,P approved;
-    class D blocked;
+    class D,DC blocked;
     class G,C decision;
     class V vault;
-    class F,W,R,X,L,A,U neutral;
+    class F,W,S,X,L,A,U neutral;

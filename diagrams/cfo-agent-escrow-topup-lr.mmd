@@ -1,0 +1,29 @@
+%%{init: {"flowchart": {"nodeSpacing": 45, "rankSpacing": 35}}}%%
+graph LR
+    W["작업 에이전트<br/>Qwen F1<br/>hold · 충전 요청"] --> G{{"코드 게이트<br/>규칙 10개<br/>요청 + 수수료 3%<br/>≤ 남은 예산"}}
+    G -->|"통과"| C{"CFO Agent<br/>Qwen F2<br/>거절만 가능"}
+    G -->|"거절<br/>F2 호출 0회"| D["Denied<br/>enforced=false<br/>지출 tx 전 거절<br/>recordDecision"]
+    C -->|"approve만<br/>open · topUp"| V["에스크로 금고<br/>Base Sepolia"]
+    C -->|"나머지 전부<br/>deny · 해석 불가<br/>타임아웃"| D
+    V -->|"규칙 위반"| DC["Denied<br/>enforced=true<br/>컨트랙트가 거절<br/>돈 이동 0"]
+    V -->|"settle 실사용분<br/>+ 수수료 3%"| P["벤더 A/B/C<br/>Akash 실가격<br/>실행은 mock"]
+    P --> X["mock 실행기<br/>체크포인트마다<br/>정산"]
+    X -->|"hold 잔액 40% 미만<br/>충전 요청"| W
+    V --> L["장부<br/>해시 연결 기록"]
+    D --> L
+    DC --> L
+    L --> A["감사자 CLI<br/>PASS / FAIL"]
+    L --> U["대시보드<br/>영수증 · F3 설명"]
+    F["창업자<br/>fund · 허용 벤더<br/>maxHold<br/>작업 명세 서명"] -->|"STOP<br/>refund"| V
+    S["체인 스냅샷<br/>블록 1개에 고정"] --> G
+
+    classDef approved fill:#d1f5d3,stroke:#2f9e44,stroke-width:2px,color:#1a1a1a;
+    classDef blocked fill:#ffd6d6,stroke:#e03131,stroke-width:2px,color:#1a1a1a;
+    classDef neutral fill:#e9ecef,stroke:#495057,stroke-width:2px,color:#1a1a1a;
+    classDef decision fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#1a1a1a;
+    classDef vault fill:#d0ebff,stroke:#1971c2,stroke-width:3px,color:#1a1a1a;
+    class P approved;
+    class D,DC blocked;
+    class G,C decision;
+    class V vault;
+    class F,W,S,X,L,A,U neutral;
