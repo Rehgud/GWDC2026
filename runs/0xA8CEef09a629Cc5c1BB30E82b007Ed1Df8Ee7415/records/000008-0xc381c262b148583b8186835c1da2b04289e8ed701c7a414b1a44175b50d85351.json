@@ -1,0 +1,1 @@
+{"schema_version":1,"seq":8,"prev":"0xa9dfd7b3c29a4e46c4cca5114c25082fbec14264be48a98e5a0a516b2a1bc295","type":"CLOSE","run_id":"demo-A8CEef09","t":1790646614586,"body":{"job_id":"1","signer":"agent","reason":"HOLD_EXHAUSTED","accrued":"2560000","settledNet":"2560000"}}
