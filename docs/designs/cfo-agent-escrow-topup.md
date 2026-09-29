@@ -264,7 +264,7 @@ USER(PO, 창업자, 감사인 등)는 기록과 체인만 보고 세 가지를 �
 
 ## Open Questions
 
-- **Challenge A vs B:** 분석은 B 권장(가중 76 : 63), 팀원 1명은 A 선호. **9/29 01:00 KST까지 팀 리드가 결정한다.**
+- **Challenge A vs B:** 분석은 B 권장(가중 76 : 63), 팀원 1명은 A 선호. **9/29 01:00 KST까지 팀 리드가 결정한다.** → 2026-09-29: 팀이 **Challenge B**로 확정했다.
   - A로 가도 코드는 같다. README 선언과 강조점이 바뀌고, A5 조건을 바꾼 재실행 3회분의 tx·로그 비교가 추가된다.
 - **Top 3 선정 범위**(A·B 합산인지, 과제별인지): TG t.me/GWDC_Global/740에 문의한다.
 - **Kiln 키 승인 상태:** 팀 확인 필요. **9/29 00:00까지 미승인이면** TG로 운영진에게 요청하고, 그동안은 stub LLM으로 개발한다.
@@ -562,7 +562,7 @@ Stop: CONVERGENCE
 | D5 · P4 | 주입 경로 (R3-18, S3-3, S8-7, S11-9) | 실행기 로그 한 줄 주입 | — | approved | "실행기 로그 (추천)" |
 | D6 · P4 | 데모 범위 (S11-15, S11-8, S9-8, S9-9, S11-7) | 기준선은 A(가볍고 결정적), 목표는 B(React + 라이브) | — | approved | "일단 1번을하고 목표는 2" |
 | CR · 리뷰 | 승인된 동작을 바꾸지 않는 교정(아래 "리뷰 수정 사항") | 교정 반영 | — | applied(Analyze 규칙) | 승인이 필요 없는 사실·일관성 교정 |
-| OPEN-AB · 팀 리드 | Challenge A vs B (본문 Open Questions) | B 권장 | — | **unresolved** | 팀 결정. 기한 9/29 01:00 KST (리뷰 범위 밖) |
+| OPEN-AB · 팀 리드 | Challenge A vs B (본문 Open Questions) | B 권장 | — | **resolved: B** | 팀 결정. 2026-09-29 Challenge B로 확정 (리뷰 범위 밖) |
 
 Approval readiness: PASS — P1\~P4, AP, DN, D1\~D6 모두 위 "승인 원문"을 인용했고, 계획에는 각 답의 범위만 반영했다. CR은 동작 변경이 없는 교정이다. OPEN-AB는 미결 상태로 보고서에 표시한다.
 
@@ -1193,13 +1193,13 @@ make deploy
   | Diagrams produced    | 7 (아키텍처, 상태 머신, 데이터 흐름, 비동기   |
   |                      | 순서, 사용자 흐름, 배포, 롤백)                |
   | Stale diagrams found | 2 (+ 본문 흐름 블록 일부)                    |
-  | Unresolved decisions | 1 (Challenge A vs B, 팀 결정)               |
+  | Unresolved decisions | 0 (Challenge A vs B → 9/29 B로 확정)         |
   +====================================================================+
 ```
 전체 발견 120건(CRITICAL GAP 34건). CRITICAL은 모두 위 "리뷰 수정 사항"과 D1\~D6에 구조가 지정되어 있다. 구현과 검증은 아직이다.
 
 ### Unresolved Decisions
-- **Challenge A vs B:** 팀 리드가 9/29 01:00 KST까지 결정한다. 이 리뷰의 질문에서 나온 게 아니라 본문 Open Questions에서 넘어온 팀 결정이다.
+- **Challenge A vs B:** 팀 리드가 9/29 01:00 KST까지 결정한다(2026-09-29 B로 확정). 이 리뷰의 질문에서 나온 게 아니라 본문 Open Questions에서 넘어온 팀 결정이다.
 
 ## GSTACK REVIEW REPORT
 | Review | Trigger | Why | Runs | Status | Findings |
@@ -1214,4 +1214,4 @@ make deploy
 - **VERDICT:** CLEAR인 리뷰 없음. CEO Review는 ISSUES OPEN(미결 1건: Challenge A vs B 팀 결정). eng review required.
 
 **UNRESOLVED DECISIONS:**
-- Challenge A vs B 선언 — 팀 리드 결정, 기한 9/29 01:00 KST
+- Challenge A vs B 선언 — 팀 리드 결정, 기한 9/29 01:00 KST → B로 확정

@@ -2,7 +2,6 @@
 
 > **Team 404 Found** · GWDC 2026 Korea Hackathon · FuriosaAI × Bricksum *Agent Finance Bonus Track*
 > **선언 과제: Challenge B (spending controls + evidence)**. 지출 통제와 그 증거를 함께 제출한다.
-> 과제 선택은 팀 리드가 최종 확인한다.
 > 설계 문서: [`docs/designs/cfo-agent-escrow-topup.md`](docs/designs/cfo-agent-escrow-topup.md) (끝의 CEO Review 절이 본문보다 우선) · 금고 설명: [`docs/escrow-vault.md`](docs/escrow-vault.md) · 3분 데모 대본: [`docs/demo-script.md`](docs/demo-script.md) · 데모 영상: 아직 없음(녹화 전)
 > 온체인 증빙: [§1 바로 아래](#온체인-증빙-verify-it-yourself) · 사전 작업·AI 도구·출처 선언: [§15](#15-사전-작업ai-도구출처-선언-pre-built-work-ai-tools-credits)
 > 용어: **USER**(CFO Agent를 쓰는 사람: 예산과 규칙을 정하고 STOP을 누르고 기록으로 검증한다. 예: PO, 창업자, 감사인. 코드에서는 `founder`) · 처음 보는 용어 풀이: [용어 설명 (Glossary)](#처음-보는-분을-위한-용어-설명-glossary)
