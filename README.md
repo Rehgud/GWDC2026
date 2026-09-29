@@ -1,7 +1,7 @@
 # CFO Agent — GPU 지출을 충전식으로 감독하는 에스크로 금고
 
 > **Team 404 Found** · GWDC 2026 Korea Hackathon · FuriosaAI × Bricksum *Agent Finance Bonus Track*
-> **선언 과제: Challenge B (spending controls + evidence)**. 지출 통제와 그 증거를 함께 제출한다.
+> **선언 과제: Challenge B — Controls & records** ("Build the Controls and Records for an AI Agent That Spends"). 지출 통제와 그 증거를 함께 제출한다.
 > 설계 문서: [`docs/designs/cfo-agent-escrow-topup.md`](docs/designs/cfo-agent-escrow-topup.md) (끝의 CEO Review 절이 본문보다 우선) · 금고 설명: [`docs/escrow-vault.md`](docs/escrow-vault.md) · 3분 데모 대본: [`docs/demo-script.md`](docs/demo-script.md) · 데모 영상: 아직 없음(녹화 전)
 > 온체인 증빙: [§1 바로 아래](#온체인-증빙-verify-it-yourself) · 사전 작업·AI 도구·출처 선언: [§15](#15-사전-작업ai-도구출처-선언-pre-built-work-ai-tools-credits)
 > 용어: **USER**(CFO Agent를 쓰는 사람: 예산과 규칙을 정하고 STOP을 누르고 기록으로 검증한다. 예: PO, 창업자, 감사인. 코드에서는 `founder`) · 처음 보는 용어 풀이: [용어 설명 (Glossary)](#처음-보는-분을-위한-용어-설명-glossary)
@@ -34,7 +34,7 @@
 
 ## At a glance (English)
 
-**One-sentence declaration:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that the USER (a project owner, a founder or an auditor, for example) can re-judge it from the records and the chain alone, without trusting our server.
+**One-sentence declaration:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only GPU spending that passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that the USER (a project owner, a founder or an auditor, for example) can re-judge it from the records and the chain alone, without trusting our server.
 
 - **For:** the USER at a team that rents GPUs (e.g. an AI startup) and hands a GPU budget to research or eval agents, typically its project owner (PO), ML lead or founder. The USER sets the budget and rules, signs the job spec, presses STOP and checks the records; an auditor who only checks the records is a USER too. The code calls the USER `founder`.
 - **Problem:** agents already rent GPUs by API ([RunPod MCP](https://www.runpod.io/blog/manage-your-runpod-infrastructure-from-any-ai-assistant-introducing-the-runpod-mcp-server), [io.net Agent Cloud](https://io.net/docs/guides/clouds/agent-cloud) with x402/USDC), but nothing enforces "how much, which vendor, until when" per agent, and the payment rail records who paid whom, not who approved it on what terms.
@@ -133,8 +133,8 @@ Demo video: (link after upload) · Deck: (link after export)
 
 ## 1. 기능 선언 (한 문장)
 
-- **KO:** CFO Agent는 GPU를 빌리는 AI 에이전트의 지출을 작업 단위 에스크로로 충전하고 감독한다. 코드 규칙과 CFO(Qwen3-32B on Kiln)의 판단을 모두 통과한 지출만 테스트넷에서 정산하고, 모든 허락과 거절을 기록으로 남겨 USER(프로젝트 담당자(PO), 창업자, 감사인 등)가 우리 서버를 믿지 않고도 기록과 체인만으로 다시 판정할 수 있게 하는 통제·증빙 레이어다.
-- **EN:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that the USER (a project owner, a founder or an auditor, for example) can re-judge it from the records and the chain alone, without trusting our server.
+- **KO:** CFO Agent는 GPU를 빌리는 AI 에이전트의 지출을 작업 단위 에스크로로 충전·감독하면서, 코드 규칙과 CFO(Qwen3-32B on Kiln)의 판단을 모두 통과한 GPU 지출만 테스트넷에서 정산하고 모든 허락과 거절을 기록으로 남겨, USER(프로젝트 담당자(PO), 창업자, 감사인 등)가 우리 서버를 믿지 않고도 기록과 체인만으로 다시 판정할 수 있게 하는 통제·증빙 레이어다.
+- **EN:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only GPU spending that passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that the USER (a project owner, a founder or an auditor, for example) can re-judge it from the records and the chain alone, without trusting our server.
 
 ### 온체인 증빙 (Verify it yourself)
 
@@ -171,6 +171,7 @@ npm run audit -- runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C --submission   
 | **범위 밖 ④: 수수료 포함 예산 초과** (budget) | 예산 $5.29 중 INFERENCE $0.05 + job 1 gross $2.6368이 약정되어 남은 돈은 $2.6032. net $2.56 충전은 수수료를 더하면 $2.6368이라 초과 → 게이트 거절, F2 0회 | [0x205f73a2…](https://sepolia.basescan.org/tx/0x205f73a223356b6da60a736ef471b1990e7c0617c65ae6dfaba4f1069dda066a) | [000006-0x34c7c01e….json](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/records/000006-0x34c7c01ea71c424e282976151a92181aef331e03951f970f390c8bc551fc6f9c.json) | `Denied(OVER_BUDGET_WITH_FEE, enforced=false)` |
 | **멈춤: USER STOP** (demo) | 대본대로 job 3을 연 뒤 STOP → `setPaused(true, STOP 기록 해시)` → 그 뒤에 도착한 agent의 `settle`(hold를 다 쓴 job 2의 남은 사용분 net $0.856832)을 컨트랙트가 거절, 자금 이동 0 → USER의 windDown(job 2를 같은 금액으로 settle 후 close, job 3 close(과금 0), INFERENCE 정산 $0.000834, refund $14.725568) | [0x0a779baf…](https://sepolia.basescan.org/tx/0x0a779baf2dc29de0aad8ec73b693314a373c2cc1c57c86854b2f63ebdc06bd54) · [0x7c889af2…](https://sepolia.basescan.org/tx/0x7c889af2f48559029084a8f42136aa0c8b1a40c2acda57dc348cb3bf9b06b98c) | [000013-0x3bd09ad6….json](runs/0x6372558F859935DF9364F0c822e703310d160772/records/000013-0x3bd09ad6d4323ea883c5108409b471cc1f07e6bd4bf7a607fd5654eaf100c4c6.json) (`STOP`, `MANUAL`) · [000014-0xa87b19ee….json](runs/0x6372558F859935DF9364F0c822e703310d160772/records/000014-0xa87b19ee14e16a1021c07e00027981c648eae091bea002e5399298f312b59459.json) (CHECKPOINT, job 2) | `PausedSet(reasonHash = 기록 해시)`, `Denied(PAUSED, enforced=true)` |
 
+- **영상 run(`0x4E8E…507C`)의 같은 장면:** 범위 안 open [0x1c774293…](https://sepolia.basescan.org/tx/0x1c774293a2ddf0adb44d2409d3a96618d04ab4d653dcd30db33076587a2f3023)(기록 000002) · 범위 밖 ① [0x39b721d7…](https://sepolia.basescan.org/tx/0x39b721d7d574a973b19b10d2e83ca4642ef7cb6ac6e2fa1fa90694d0803d5e0f)(000005, `QWEN_DENIED`) · ② [0x0b39f95c…](https://sepolia.basescan.org/tx/0x0b39f95c1091ee461875e9f0945ae1f9c9042b21b212c2ce94adf2953802767c)(000011, `VENDOR_NOT_ALLOWED`) · ③ 탈취 키 [0x90a93f75…](https://sepolia.basescan.org/tx/0x90a93f753dba858fae4d889874d74b7a37a338f85f60b9946ae76db6f620daaa) · [0xa43f24d6…](https://sepolia.basescan.org/tx/0xa43f24d6eea66c7e8b2c9900da3d0909996f4ff5148dbf4bd005cd9a4a84a052) · STOP [0x7874c110…](https://sepolia.basescan.org/tx/0x7874c11096d98a5e82dcaf7e99440f1d971b0c82eb4c2f50855a2c2fa6b1bd5b)(000013) · STOP 뒤 agent settle [0xbbf5b156…](https://sepolia.basescan.org/tx/0xbbf5b156054740d9e3d9b5fe4027bd53679b85c1c74bfac420e32a65a25675c1)(000014, `Denied(PAUSED)`) · refund [0x62a73873…](https://sepolia.basescan.org/tx/0x62a73873d31767c9c81700a93ba4decb5f0feb13189e4b7f8ba38b519e2ea89a). 기록 파일과 전체 tx는 [`runs/0x4E8E…507C/report.md`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/report.md) §2와 `events.jsonl`에 있다.
 - 기한 경과(`PAST_DEADLINE`)는 공개 체인에서 돌리지 않았다. 대신 무엇이 증명하는지는 [§7](#7-성공-기준-지도) 2c에 적었다.
 
 ## 2. 사용자와 문제
@@ -181,7 +182,7 @@ npm run audit -- runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C --submission   
   - 하지만 에이전트 단위로 "얼마까지, 어느 벤더에, 언제까지"를 강제하고, 그 허락을 나중에 검증할 방법이 없다.
   - 결제 레일에는 누가 누구에게 냈는지만 남는다. 누가 어떤 조건으로 허락했는지는 남지 않는다.
 - **우리의 답:** 결제 한 건을 막는 데서 끝나지 않는다. **돈이 나가는 도중에** 충전할 가치가 있는지 심사한다. 규칙은 통과했지만 목적을 벗어난 충전은 CFO가 거절한다.
-- **결과물:** 통제된 GPU 지출, 작업별 영수증, USER(PO, 창업자, 감사인 등)가 우리 서버 없이 검증할 수 있는 기록 묶음(`runs/<vault>/`).
+- **결과물:** 통제된 GPU 지출, 작업별 영수증, USER(PO, 창업자, 감사인 등)가 우리 서버 없이 검증할 수 있는 기록 묶음(`runs/<vault>/`). 영수증 예시: 영상 run job 1의 [`records/000009-0x0406da7a….json`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/records/000009-0x0406da7a63657cf0b20baf759fdb16853c784ebedcff1010e12f1f61fe15b301.json)(`RECEIPT`, 금액은 체인, 설명은 Qwen F3).
 
 ## 3. 작동 흐름
 
@@ -421,7 +422,7 @@ npm run audit -- runs/<vault> --rpc <URL> --submission     # 다른 RPC로, stub
 
 사후 검증(`src/audit.ts`)에서는 과거 상태를 archive `eth_call` 없이 이벤트 재생(1,000블록 청크 `getLogs`)으로 복원한다. 검사 항목: bundle, 1 기록 해시 체인과 앵커, 2 명세 서명자 == `vault.founder()`(USER 주소), 3 모든 지출 앞의 게이트·CFO 기록, 4 게이트 규칙 재계산, 5 수취자 == job 벤더, 6 예산·수수료, 7 STOP·기한 이후 agent 지출 없음, 8 Denied 기록, receipts, (선택) submission.
 
-**Base Sepolia 결과 (2026-09-29, 공개 RPC, `--submission`):** demo `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`, budget `AUDIT PASS (exit 0) (0 FAIL, 0 WARN, 0 INFO)`, 수정 전 demo `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`. 새 clone(`git -c core.autocrlf=true clone`)에서 `npm ci` 뒤 세 번들을 다시 돌려도 같았다.
+**Base Sepolia 결과 (2026-09-29, 공개 RPC, `--submission`):** demo `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`, budget `AUDIT PASS (exit 0) (0 FAIL, 0 WARN, 0 INFO)`, 수정 전 demo `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`. 영상 run(2026-09-30) `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`. 새 clone(`git -c core.autocrlf=true clone`)에서 `npm ci` 뒤 네 번들을 다시 돌려도 같았다.
 
 **로컬 리허설 결과 (anvil, `LLM_MODE=stub`, `demo`, 2026-09-29):** 약 2분, 기록 28개, 백엔드 tx 24건(그중 `settle` Denied(`PAUSED`) 1건), 탈취 키 tx 2건, `AUDIT PASS (exit 0) (0 FAIL, 3 WARN, 0 INFO)`. WARN 3건은 탈취 키의 `UNRECORDED_ATTEMPT` 2건과 공격자가 같은 rec를 재사용한 `DUPLICATE_REC_REF` 1건이다. 기록 한 파일의 1바이트를 바꾼 사본은 `AUDIT FAIL (exit 1)`.
 
@@ -473,6 +474,7 @@ F2 60회에는 `/no_think`를 끈 비교 호출 3회(각 346 토큰)가 들어 �
 - 작업별: job 1은 GPU gross $2.636799에 AI 비용 $0.00036660, job 2는 $2.636799에 $0.00028652. 전체 AI 비용/GPU 지출은 0.0158%(1 : 6328).
 - 체인 대조: INFERENCE 정산 = ceil(Σcost × 1e6) = 834 micro-USDC, 온체인 `Settled` 834([0x11e0a735…](https://sepolia.basescan.org/tx/0x11e0a7354400a0d4b93543b4aeab999578273a1f756d0ed38142615cba04f59b)) → MATCH.
 - budget run(`0x7C81…dCcb`): Kiln 4회, 출력 343 토큰, $0.00030184, 559.1 J, INFERENCE 정산 302 micro-USDC MATCH([`report.md`](runs/0x7C813285C6f9049e21dc10CF9a1367430Ae8dCcb/report.md)).
+- 영상 run(`0x4E8E…507C`): Kiln 12회(F1 5, F2 4, F3 3), 출력 956 토큰, $0.00089800, 1,558.3 J = 0.4329 Wh, AI 비용/GPU 지출 0.0170%, INFERENCE 정산 899 micro-USDC MATCH([`report.md`](runs/0x4E8E2db83acdcb1E2941aE9E7d76aDE04356507C/report.md)). 표시 합은 $0.000898인데 정산이 899인 것은, Kiln이 돌려준 비용 값에 부동소수점 꼬리가 붙어(예: `0.00007196000000000001`) 정확한 합이 0.000898000000000000014가 되고 이를 올림(`src/kiln.ts` `costToMicro`)하기 때문이다.
 
 **`npm run report -- runs/<vault>`가 만드는 표 6개** (`src/report.ts`, 같은 `kiln.jsonl`·`records/`·`events.jsonl`에서 계산. 파일이 없거나 깨져도 "no data"로 표시하고 멈추지 않는다)
 1. 호출 종류별(F1/F2/F3): 호출·시도·재시도·실패·429·잘림 수, 입력·출력·reasoning 토큰, 비용, 에너지, 지연 p50/p95
@@ -574,7 +576,7 @@ node -e "import('./src/scenarios.ts').then(m => console.log(m.interventionTable(
 
 ## 15. 사전 작업·AI 도구·출처 선언 (Pre-built work, AI tools, credits)
 
-- **사전 작업:** 참가 안내서 기준 코딩 시작(2026-09-28 19:00 KST) 전의 커밋은 `036f4d9`(09-14 00:47 KST, "Add hackathon track notes") 하나다. 트랙 설명 메모 1개이고 코드는 없다. 설계 문서는 `4e4bc83`(09-28 19:15 KST)부터, 첫 코드 커밋은 09-29 00:55 KST의 `773152b`(gitignore, 비밀 검사 스크립트)와 `9b181fd`(금고 컨트랙트와 Foundry 테스트)다. git 이력은 고쳐 쓰지 않는다(force-push 없음).
+- **사전 작업:** 참가 안내서 기준 코딩 시작(2026-09-28 19:00 KST) 전에 만든 것은 두 가지다. ① `036f4d9`(09-14 00:47 KST, "Add hackathon track notes"): 트랙 설명 메모 1개, 코드 없음. ② 아이디어 다이어그램 2종 `diagrams/cfo-agent-architecture.*`, `diagrams/gpu-marketplace-cfo-agent.*`(mermaid 원본과 PNG·SVG·excalidraw 렌더): 09-28 17:18\~17:51 KST에 Claude Code로 초안을 만들어 `4e4bc83`(19:15)에 커밋했다. 지금 설계로 대체된 옛 구상(GPU 마켓플레이스)이며 README는 이 그림을 쓰지 않는다. 아이디어 조사와 트랙 선택은 대회 전과 킥오프 중에 팀 Notion(레포 밖)에서 했다. 대회 전에 쓴 코드는 없다. 첫 코드 커밋은 09-29 00:55 KST의 `773152b`(gitignore, 비밀 검사 스크립트)와 `9b181fd`(금고 컨트랙트와 Foundry 테스트)다. 텔레그램 공식 Q&A([t.me/GWDC_Global/742](https://t.me/GWDC_Global/742))는 개발 시작을 20:00으로 적는데, 19:00\~20:00의 커밋 `4e4bc83`·`30a988e`·`88fd24a`는 문서와 다이어그램뿐이다. git 이력은 고쳐 쓰지 않는다(force-push 없음).
 - **AI 도구:** 구현은 팀의 설계와 지시에 따라 Claude Code(Anthropic의 AI 코딩 에이전트)로 했다. main 브랜치에서 `036f4d9`를 뺀 커밋에는 `Co-Authored-By: Claude` 줄이 있다. 모듈마다 구현, 적대적 리뷰와 수정, 종단 검증을 거쳤고 `forge test`·`npm test`·사후 검증 골든 테스트가 동작을 고정한다. 팀은 코드를 검토했고 설명할 수 있다. 제품 안의 LLM 호출(F1/F2/F3)은 모두 Kiln의 Qwen3-32B다.
 - **서드파티와 출처:**
   - [viem](https://github.com/wevm/viem)(MIT): 체인 읽기·쓰기, 유일한 직접 npm 의존성
@@ -583,6 +585,7 @@ node -e "import('./src/scenarios.ts').then(m => console.log(m.interventionTable(
   - [Akash Console API](https://console-api.akash.network/v1/gpu-prices)의 GPU 가격: 벤더 A/B/C 가격(fallback 스냅샷 `prices/akash-snapshot.json`)
   - 에너지 수치는 [Furiosa 블로그](https://furiosa.ai/blog/rngd-rtx-pro-6000-real-world-efficiency-benchmark-qwen3)([§9](#9-흐름별-토큰에너지)), 문제 정의의 사례는 RunPod·io.net 문서([§2](#2-사용자와-문제))에서 인용했다
 - **주최 측 자료와 사전 메모:** `pdf/`는 주최 측 참가 안내서다. `md/`는 대회 전(09-14)에 공개 정보를 정리한 트랙 메모로, 홍콩 대회 기준의 옛 정보라 이번 과제와 다르다. 둘 다 제출 작업물이 아니다.
+- **다른 브랜치:** `juhee/cfo-agent-impl`은 팀원 정주희의 병행 프로토타입(09-29 02:15\~16:54 KST 커밋)이며 제출물이 아니다. 심사 대상은 `main`이다.
 - **IP:** 이 레포의 코드와 문서는 팀 404 Found의 것이다. 단, `pdf/`의 참가 안내서는 주최 측의 것이고, 서드파티 코드(`lib/forge-std`, npm 패키지)와 데이터(Akash 가격)는 각 권리자의 것으로 각자의 라이선스를 따른다.
 
 ## 레포 구성

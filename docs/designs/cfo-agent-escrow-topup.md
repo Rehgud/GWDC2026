@@ -1062,7 +1062,7 @@ make deploy
 - 1년 뒤 남는 자산은 금고 코드가 아니라 **충전 심사 루프, 기록 형식(`schema_version`), 사후 검증**이다(S10-4).
 
 ### Stale Diagram Audit
-- `diagrams/gpu-marketplace-cfo-agent.*`: 블록 방식이라 **stale**이다. README에 "이전 단계"로 표시되어 있다.
+- `diagrams/gpu-marketplace-cfo-agent.*`: 블록 방식이라 **stale**이다. README §15에 대회 전 초안으로 선언했다.
 - `diagrams/cfo-agent-architecture.*`: 초기 Multi-API 버전이라 **stale**이다. 마찬가지로 표시되어 있다.
 - `diagrams/cfo-agent-escrow-topup.*`와 README의 mermaid: 현재 흐름과 일치한다. 다만 `commit()` 큐, chain watcher, 상태 머신 같은 세부는 없다. 세부는 위 다이어그램 1\~4가 기준이다.
 - 본문 "흐름" 코드 블록: D3 가드(일시정지 후 agent close는 Denied)와 D2(INFERENCE open에 게이트 없음)가 반영되지 않았다. 이 절이 우선한다.
