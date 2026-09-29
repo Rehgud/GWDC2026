@@ -393,7 +393,7 @@ test('index.html: a wind-down without a STOP strikes through the STOP stages it 
   const { $ } = env
   const li = () => $('stop-stages').all((e) => e.tagName === 'LI').map((e) => [e.className, e.textContent])
   assert.deepEqual(li(), [['done', '✓ RUNNING'], ['skip', 'SENDING'], ['skip', 'PAUSED_ON_CHAIN'], ['skip', 'HALTING'], ['cur', '● HALTED']])
-  assert.match($('health').textContent, /ETH agent 0\.9998 \/ founder 0\.0871/)
+  assert.match($('health').textContent, /ETH agent 0\.9998 \/ USER 0\.0871/)
   env.current = { ...s, version: s.version + 1, ledger: [...s.ledger, { ts: 1, fn: 'setPaused', status: 'OK', code: null, txHash: null, recHash: null, job_id: null, signer: 'founder' }] }
   await tick(env)
   assert.deepEqual(li().map(([c]) => c), ['done', 'done', 'done', 'done', 'cur'], 'after a real STOP every stage is ticked')

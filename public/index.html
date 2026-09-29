@@ -348,7 +348,7 @@ function renderHeader(s) {
   const k = s.health.kiln
   $('health').textContent = 'Kiln ' + k.mode + ' · ' + k.calls + ' calls · ' + (k.lastLatencyMs == null ? '—' : k.lastLatencyMs + ' ms') +
     ' · errors ' + k.errors + ' · Akash ' + s.health.akash + ' · RPC ' + (s.health.rpcOk ? 'OK' : 'FAIL') +
-    ' · ETH agent ' + eth(s.health.ethAgent) + ' / founder ' + eth(s.health.ethFounder)
+    ' · ETH agent ' + eth(s.health.ethAgent) + ' / USER ' + eth(s.health.ethFounder)
 }
 
 function renderBanners(s, errs = []) {

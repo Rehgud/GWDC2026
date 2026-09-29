@@ -7,7 +7,8 @@
 - 기준 run은 과금 수정(`d2c7bad`) 뒤의 공개 run `runs/0x6372558F859935DF9364F0c822e703310d160772/`이다(2026-09-29, 속도 3, Kiln 12회 $0.000834, `AUDIT PASS`). 첫 공개 run `0xA8CE…7415`는 과금 오류가 난 run이라 기준에서 뺐다(README §11). 아래 시각은 기준 run의 `events.jsonl`·`kiln.jsonl` 실측값이다. 새 녹화에서는 몇 초씩 달라지므로, 편집은 시각이 아니라 장면표의 "편집 기준 신호"(화면 변화)를 보고 자른다.
 - **t0** = 세션 첫 tx(INFERENCE hold `open`)의 intent 시각. 화면에서는 t0+4.2초에 첫 장부 줄 `open ✓ OK`가 뜬다. t0 전 약 50초는 배포 구간이다(준비 tx 11개, 첫 준비 tx 블록이 t0−46초). 편집에서 통째로 뺀다.
 - 속도 3: 실제 1초 = 시뮬레이션 3분이라 hold 1시간분이 20초에 준다. 세션은 t0부터 `refund`까지 약 190초다. 1x가 아닌 구간에는 모두 배지(`2x`, `4x`, `8x`, `16x`, `✂ n초`, `정지 화면`)를 단다.
-- 대본 개입(범위 확대 rationale, 실행 로그 주입 한 줄, 탈취 키, 창업자 STOP)은 README §10 표에 전부 공개되어 있다. 영상에서도 해당 장면의 라벨과 캡션에 `대본 개입 / scripted`를 붙인다.
+- **USER**: 예산과 규칙을 정하고, 작업 명세에 서명하고, STOP을 누르고, 정리·환불하고, 기록을 검증하는 사람(프로젝트 담당자(PO), 창업자, 감사인 등). 코드는 USER를 `founder`로 부른다(컨트랙트 `founder()`, `FOUNDER_PK`, `founderStop`, 서명자 값 `founder`). 그래서 영상에 보이는 founder도 USER다: 장면 4 카드와 장면 11 기록의 CFO Qwen 사유 "…not covered by the founder-signed spec…"(기준 run), 장면 12 감사 출력 `[PASS] check 2 (spec)`의 `vault.founder()`.
+- 대본 개입(범위 확대 rationale, 실행 로그 주입 한 줄, 탈취 키, USER STOP)은 README §10 표에 전부 공개되어 있다. 영상에서도 해당 장면의 라벨과 캡션에 `대본 개입 / scripted`를 붙인다.
 
 ## 1. Challenge B 요구와 장면
 
@@ -18,7 +19,7 @@
 | 범위 밖 #2: 허용 안 된 벤더 | 6 `PUSH #2` | 게이트 칩 `✕ VENDOR_NOT_ALLOWED` 외 2개, `F2 호출 0회` → `✕ DENIED_RECORDED` |
 | 범위 밖 #3: 탈취 키로 금고 직접 호출 | 7 `PUSH #3` | 장부 빨간 줄 `open 탈취 키 ✕ DENIED VENDOR_NOT_ALLOWED`, `topUp 탈취 키 ✕ DENIED OVER_MAX_HOLD` |
 | 범위 밖 #4: 수수료 포함 예산 초과 (두 번째 Base Sepolia 금고) | 14 `PUSH #4` | Blockscout `Denied`, code `OVER_BUDGET_WITH_FEE`, F2 0회 |
-| 창업자 정지 | 9 `STOP` | `SENDING → PAUSED_ON_CHAIN → HALTING → HALTED`, `setPaused`, 정지 뒤 agent `settle`이 있으면 빨간 줄 `✕ DENIED PAUSED`(기준 run: 작업 2), founder 정산·환불 |
+| USER 정지 | 9 `STOP` | `SENDING → PAUSED_ON_CHAIN → HALTING → HALTED`, `setPaused`, 정지 뒤 agent `settle`이 있으면 빨간 줄 `✕ DENIED PAUSED`(기준 run: 작업 2), USER 정산·환불 |
 | 멈출 때마다 기록 | 10~13 `EVIDENCE` | Blockscout의 `rec` = 기록 파일 이름의 해시 → 감사 PASS → 1바이트 변조 FAIL |
 
 범위 밖 번호는 녹화에서 일어나는 순서다(범위 확대 sim 45분, 로그 주입 200분, 탈취 키 260분). README "조건이 바뀔 때" 표의 범위 밖 ①~④도 이 번호와 같다.
@@ -30,17 +31,17 @@
 | # | 영상 | 길이 | 화면 라벨 | 소스 (t0 기준) · 속도 | 편집 기준 신호 (화면) |
 |---|---|---|---|---|---|
 | 1 | 0:00–0:12 | 12초 | `CFO Agent · Challenge B: Controls & records` | README 머리글 (촬영 H) + 가로형 흐름도 (촬영 I) · 1x | – |
-| 2 | 0:12–0:20 | 8초 | `SCOPE` 창업자가 정한 범위 | `기본 보기` GRANT: t0−1 → t0+3 1x (4초) + 마지막 프레임 `정지 화면` 4초 | 시작: 벤더 A/B/C가 `✓ 허용`(첫 체인 스냅샷, t0 직전), purpose가 보임. 끝: 4초 뒤 `영상 모드`를 누르기 직전. 예산 막대의 `열린 hold $0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다 |
+| 2 | 0:12–0:20 | 8초 | `SCOPE` USER가 정한 범위 | `기본 보기` GRANT: t0−1 → t0+3 1x (4초) + 마지막 프레임 `정지 화면` 4초 | 시작: 벤더 A/B/C가 `✓ 허용`(첫 체인 스냅샷, t0 직전), purpose가 보임. 끝: 4초 뒤 `영상 모드`를 누르기 직전. 예산 막대의 `열린 hold $0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다 |
 | 3 | 0:20–0:36 | 16초 | `RUN` 범위 안 → 허락 | 영상 모드. t0+4 → t0+8 `2x` (2초), t0+8 → t0+16 1x (8초), t0+16 → t0+40 `4x` (6초) | 2x 구간: 카드 `…-r2 · open · job (신규)`의 `F1 요청 생성 중…`, 장부 첫 줄 `open ✓ OK`, 예산 막대 `열린 hold $0.05`(t0+7쯤). 1x 구간: F1 `B · h100 · $…`(t0+9) → `✓ 10/10 PASS` → `✓ approve`(t0+10) → `✓ APPROVED_ONCHAIN`(t0+14), 장부 `open ✓ OK`. 4x 구간: 작업 #1 탱크가 40% 선 아래로, 새 카드 `topUp · job #1`(`F1 요청 생성 중…`, t0+34쯤). 끝: 그 카드의 F1 결과가 뜨기 직전 |
 | 4 | 0:36–0:54 | 18초 | `PUSH #1` 범위 밖: 목적 밖 충전 → CFO Qwen 거절 → 기록 · `대본 개입` | t0+40 → t0+49 1x (9초), t0+49 → t0+61 `4x` (3초), t0+61 → t0+67 1x (6초) | 장부 첫 `settle ✓ OK #1`(t0+42) → F1 rationale "…pretraining a new 7B base model…"(t0+43) → `✓ 10/10 PASS` → `✕ deny` + 사유 + `명세 purpose`(t0+44) → (`tx 전송·확정 대기…`, 4x) → `✕ DENIED_RECORDED`(t0+63), code `QWEN_DENIED`, 장부 `recordDecision ✓ OK QWEN_DENIED #1` |
 | 5 | 0:54–1:00 | 6초 | `RUN` 작업 2 → 허락 | t0+67 → t0+83 `4x` (4초), t0+83 → t0+99 `8x` (2초) | 작업 #1의 마지막 `settle ✓ OK #1`(t0+72), 카드 `…-r4 · open` → `✓ APPROVED_ONCHAIN`(t0+82), 작업 #2 RUNNING → (8x) 장부 `close ✓ OK #1`(t0+91, `HOLD_EXHAUSTED`였던 작업 #1 행이 사라진다). 끝: 카드 `topUp · job #2`가 뜨기 직전 |
 | 6 | 1:00–1:14 | 14초 | `PUSH #2` 범위 밖: 허용 안 된 벤더 → 코드 게이트 거절 (CFO Qwen 0회) → 기록 · `대본 개입` | t0+99 → t0+105 `2x` (3초), t0+105 → t0+116 1x (11초) | 카드 `topUp · job #2`(`F1 요청 생성 중…`, t0+100) → F1 `0xBADb…BAD0 · h200 · $…`(t0+109) → 칩 `✕ VENDOR_NOT_ALLOWED` `✕ GPU_TYPE_NOT_ALLOWED` `✕ NO_CAPACITY`, `✕ 3건 위반 → 거절`, `F2 호출 0회 (게이트에서 차단)` → `✕ DENIED_RECORDED`(t0+114), code `VENDOR_NOT_ALLOWED`. 끝: 장부에 탈취 키 줄이 뜨기 직전 |
 | 7 | 1:14–1:22 | 8초 | `PUSH #3` 범위 밖: 탈취 키 → 컨트랙트 Denied (체인) · `대본 개입` | t0+116 → t0+124 `2x` (4초), t0+124 → t0+128 1x (4초) | 장부 맨 위 빨간 줄 2개: `open 탈취 키 ✕ DENIED VENDOR_NOT_ALLOWED`(t0+116), `topUp 탈취 키 ✕ DENIED OVER_MAX_HOLD #0`(t0+120). 예산 막대는 그대로. 카드는 작업 3의 `…-r6 · open`으로 바뀐다(`✓ approve`, t0+126) |
 | 8 | 1:22–1:25 | 3초 | `RUN` 작업 3 → 허락 | t0+128 → t0+134 `2x` (3초) | 카드 `…-r6 · open` → `✓ APPROVED_ONCHAIN`(t0+130.0 확정), 장부 `open ✓ OK`. 끝: 정지 단계가 `SENDING`으로 바뀌기 직전 |
-| 9 | 1:25–1:39 | 14초 | `STOP` 창업자 정지 → 정산·환불 · `대본 개입` | t0+134 → t0+140 1x (6초), t0+140 → t0+188 `16x` (3초), t0+188 → t0+193 1x (5초) | 정지 단계 `● SENDING`(t0+134) → `● PAUSED_ON_CHAIN`, 장부 `setPaused ✓ OK`(t0+138) → (16x) `● HALTED`(정지 뒤 첫 체인 스냅샷에서. `HALTING`은 같은 순간에 지나가 `✓`로만 보일 수 있다), 빨간 줄 `settle ✕ DENIED PAUSED #2`(t0+147), 창업자 `settle #2`, `close #2`, `close #3`, `settle #0`, `close #0` → `refund ✓ OK`(t0+190). 끝 1x 구간에서 빨간 줄은 장부 6줄의 맨 아래에 있다가 `refund`에 밀려난다 |
+| 9 | 1:25–1:39 | 14초 | `STOP` USER 정지 → 정산·환불 · `대본 개입` | t0+134 → t0+140 1x (6초), t0+140 → t0+188 `16x` (3초), t0+188 → t0+193 1x (5초) | 정지 단계 `● SENDING`(t0+134) → `● PAUSED_ON_CHAIN`, 장부 `setPaused ✓ OK`(t0+138) → (16x) `● HALTED`(정지 뒤 첫 체인 스냅샷에서. `HALTING`은 같은 순간에 지나가 `✓`로만 보일 수 있다), 빨간 줄 `settle ✕ DENIED PAUSED #2`(t0+147), USER `settle #2`, `close #2`, `close #3`, `settle #0`, `close #0` → `refund ✓ OK`(t0+190). 끝 1x 구간에서 빨간 줄은 장부 6줄의 맨 아래에 있다가 `refund`에 밀려난다 |
 | 10 | 1:39–1:51 | 12초 | `EVIDENCE` 체인: Blockscout | 촬영 B · 1x | `called recordDecision on AgentBudgetVault` → Logs의 `Denied(uint256 indexed jobId, bytes32 indexed code, bytes32 indexed rec, bool enforced)`, `enforced false` → Topics [2]를 `Hex`에서 `Text`로 = `QWEN_DENIED`, [3] = rec |
 | 11 | 1:51–1:59 | 8초 | `EVIDENCE` 기록 파일 | 촬영 C · 1x | 파일 이름 `0000xx-0x<rec>.json` = Topics [3]의 해시, rationale, `gate: []`, `f2_calls: 1`, `QWEN_DENIED`, `f1.rationale by scenario:demo` |
-| 12 | 1:59–2:09 | 10초 | `EVIDENCE` 제3자 감사 PASS | 촬영 D · 1x, 출력 전 대기 `✂ 약 19초` | `[PASS] check 1 … anchored up to #22 / 23`(기준 run), `[WARN] … UNRECORDED_ATTEMPT` 2줄, `AUDIT PASS (exit 0)` |
+| 12 | 1:59–2:09 | 10초 | `EVIDENCE` USER가 감사 → PASS | 촬영 D · 1x, 출력 전 대기 `✂ 약 19초` | `[PASS] check 1 … anchored up to #22 / 23`(기준 run), `[WARN] … UNRECORDED_ATTEMPT` 2줄, `AUDIT PASS (exit 0)` |
 | 13 | 2:09–2:21 | 12초 | `EVIDENCE` 1바이트 변조 → FAIL | 촬영 E · 1x, 출력 전 대기 `✂ 약 18초` | `wc -l`이 `1` → `[FAIL] check 1 (records)` 3줄 → `AUDIT FAIL (exit 1)` |
 | 14 | 2:21–2:26 | 5초 | `PUSH #4` 두 번째 금고: 수수료 포함 예산 초과 → 게이트 거절 → 기록 | 촬영 F · 1x | Topics [2] `Text` = `OVER_BUDGET_WITH_FEE`, `enforced false` |
 | 15 | 2:26–2:38 | 12초 | `COST` 토큰·비용·에너지 | 촬영 G · 1x (스크롤) | §1b 흐름별 표 → §4 `reconciliation MATCH` → §5b 게이트 절감 → §5c `/no_think` 346 → 66 |
@@ -52,7 +53,7 @@
 - **A (기대값).** 작업 1의 첫 충전 요청이 곧 범위 확대다. 공개 RPC(`https://sepolia.base.org`, `.env`에 `RPC_URL`이 없으면 이것)에서는 체인 읽기와 tx 확정이 느려서, 첫 충전의 F1이 작업 시작 뒤 약 25~28초(시뮬 약 76~82분)에 시작한다. 그 전에 sim 45분의 rationale 교체가 걸린다. 기준 run은 26.7초(시뮬 80분), 수정 전 demo run은 25.5초(시뮬 76분)였고, budget run(rationale 교체 없음)도 첫 충전 F1이 27.5초(시뮬 82분)에 시작했다.
 - **B (빠른 RPC나 anvil).** 첫 충전이 그대로 승인되고(`topUp ✓ APPROVED_ONCHAIN`), 범위 확대는 약 20초 뒤 다음 충전에 걸린다. 2026-09-29 anvil·stub 리허설이 이 순서였다. 그러면 승인된 충전 4초를 장면 3에 1x로 넣고(범위 안 두 번째 예), 장면 5·8을 `8x`로 줄여 합계를 맞춘다.
 - **작업 2의 open이 약 17초보다 오래 걸리면**(기준 run은 `openJob`부터 `open` 확정까지 9.3초) 탈취 키(sim 260분)가 작업 2의 첫 충전 요청보다 먼저 와서 PUSH #3이 PUSH #2보다 앞선다. 작업 2는 hold가 열린 뒤부터 사용량이 쌓여 sim 36분(12초)에 40% 선을 넘고, 주입이 걸리는 첫 충전 요청은 그 뒤 루프가 체인을 다시 읽고 나서 시작된다. 기준 run에서는 open 확정 약 18초 뒤(t0+100)였고, 탈취 키는 그 약 7초 뒤(t0+107)였다. 충전 요청이 먼저 시작되면 탈취 키 공격은 그 요청이 거절 기록까지 끝나기를 기다리므로 순서가 지켜진다. 순서가 뒤집히면 장면표·캡션과 맞지 않으니 새 금고로 다시 찍는다.
-- **STOP 때 정산 안 된 사용분이 남은 작업이 있으면** agent가 그 사용분을 `settle`하고, 멈춘 금고가 `✕ DENIED PAUSED`(빨간 줄)로 거절한다. 그 사용분은 창업자 정산이 낸다. 기준 run에서는 hold를 다 쓴 작업 2의 남은 사용분(net $0.856832)이었다. 탈취 키 공격(t0+107 → t0+120)과 작업 3의 open(→ t0+130)이 루프를 붙잡아 이 정산이 STOP 확정(t0+138) 뒤에야 나갔고, `settle ✕ DENIED PAUSED #2`(t0+147)로 거절되었다. 같은 금액은 창업자 `settle ✓ OK #2`(t0+156)가 냈다. 작업 3은 STOP 4초 전에 열려 과금 0이었다. 새 take에서는 STOP 때 남은 사용분이 없으면 이 줄이 없고, 있으면 작업 번호가 다를 수 있다. 화면에 이 줄이 있을 때만 말한다: 장면 9의 "이후 정산은 창업자 키로만 합니다"를 "에이전트 정산은 거절되고, 창업자 키로만 정산합니다"로 바꾼다.
+- **STOP 때 정산 안 된 사용분이 남은 작업이 있으면** agent가 그 사용분을 `settle`하고, 멈춘 금고가 `✕ DENIED PAUSED`(빨간 줄)로 거절한다. 그 사용분은 USER 정산이 낸다. 기준 run에서는 hold를 다 쓴 작업 2의 남은 사용분(net $0.856832)이었다. 탈취 키 공격(t0+107 → t0+120)과 작업 3의 open(→ t0+130)이 루프를 붙잡아 이 정산이 STOP 확정(t0+138) 뒤에야 나갔고, `settle ✕ DENIED PAUSED #2`(t0+147)로 거절되었다. 같은 금액은 USER `settle ✓ OK #2`(t0+156)가 냈다. 작업 3은 STOP 4초 전에 열려 과금 0이었다. 새 take에서는 STOP 때 남은 사용분이 없으면 이 줄이 없고, 있으면 작업 번호가 다를 수 있다. 화면에 이 줄이 있을 때만 말한다: 장면 9의 "이후 정산은 USER 키로만 합니다"를 "에이전트 정산은 거절되고, USER 키로만 정산합니다"로 바꾼다.
 
 ## 3. 장면별 내레이션
 
@@ -61,17 +62,17 @@
 | # | 말할 것 |
 |---|---|
 | 1 (12초) | "AI 에이전트가 GPU를 빌립니다. 결제 기록엔 누가 왜 허락했는지가 없습니다. CFO Agent는 작업별 에스크로로 충전하고, 허락과 거절을 모두 기록합니다." |
-| 2 (8초) | "창업자가 정한 범위. 명세는 Llama 8B LoRA 파인튜닝, H100만. 벤더 셋, hold 상한 6달러, 예산 20달러." |
+| 2 (8초) | "USER가 정한 범위. 명세는 Llama 8B LoRA 파인튜닝, H100만. 벤더 셋, hold 상한 6달러, 예산 20달러." |
 | 3 (16초) | "범위 안의 요청부터. 작업 에이전트가 벤더 B의 H100을 Akash 실제 가격으로 요청합니다. 규칙 10개 통과, CFO Qwen 승인, 체인에 hold가 열립니다. 작업이 도는 동안 사용분과 수수료 3%가 정산됩니다." |
 | 4 (18초) | "이제 조건을 바꿉니다. 충전 근거를 대본으로 바꿨습니다. 7B 모델도 처음부터 사전학습하자. 숫자는 멀쩡해서 규칙 10개는 통과합니다. 하지만 CFO Qwen이 서명된 목적과 비교해 거절합니다. 돈은 나가지 않고, 거절 기록의 해시가 체인에 고정됩니다." |
 | 5 (6초) | "작업 1은 쓴 만큼 정산됩니다. 두 번째 작업도 같은 검사로 승인됩니다." |
 | 6 (14초) | "이번엔 실행 로그에 악성 한 줄을 넣었습니다. 속은 에이전트가 목록에 없는 벤더와 H200을 요청합니다. 코드 게이트가 먼저 막아서 CFO Qwen은 불리지도 않고, 거절은 역시 기록됩니다." |
 | 7 (8초) | "훔친 에이전트 키로 백엔드를 건너뛰고 금고를 부릅니다. 컨트랙트가 Denied로 답하고, 돈은 그대로입니다." |
 | 8 (3초) | "숫자는 코드, 목적은 Qwen, 강제는 컨트랙트." |
-| 9 (14초) | "창업자가 STOP을 보냅니다. 금고가 체인에서 멈추고, 이후 정산은 창업자 키로만 합니다. 작업을 닫고 Kiln 비용을 정산하고 남은 예산을 환불합니다. 멈춤도 기록으로 남습니다." |
+| 9 (14초) | "USER가 STOP을 보냅니다. 금고가 체인에서 멈추고, 이후 정산은 USER 키로만 합니다. 작업을 닫고 Kiln 비용을 정산하고 남은 예산을 환불합니다. 멈춤도 기록으로 남습니다." |
 | 10 (12초) | "이제 증거입니다. Blockscout에서 거절 tx를 열면 Denied 이벤트가 디코딩되어 있습니다. code를 텍스트로 바꾸면 QWEN_DENIED, rec는 기록 파일의 해시입니다." |
 | 11 (8초) | "그 해시가 기록 파일 이름입니다. 요청, 게이트, Qwen의 사유, 대본 개입까지 들어 있습니다." |
-| 12 (10초) | "제3자는 이 기록 묶음과 공개 RPC만으로 다시 판정합니다. PASS. 기록 없는 탈취 키 시도는 따로 경고로 나옵니다." |
+| 12 (10초) | "USER는 이 기록 묶음과 공개 RPC만으로 다시 판정합니다. PASS. 기록 없는 탈취 키 시도는 따로 경고로 나옵니다." |
 | 13 (12초) | "기록 한 파일에서 7B를 1B로, 1바이트만 바꿉니다. 해시 체인이 끊겨 FAIL입니다." |
 | 14 (5초) | "두 번째 금고: 수수료 포함 예산 초과, 게이트 거절, 기록." |
 | 15 (12초) | "모든 Kiln 호출이 흐름별 토큰, 비용, 에너지로 남습니다. Kiln 비용은 체인 정산액과 맞고, /no_think로 출력 토큰을 346에서 66으로 줄였습니다." |
@@ -79,7 +80,7 @@
 
 - 장면 4의 7B 문장은 `src/scenarios.ts`의 `SCOPE_CREEP_RATIONALE`이다. 장면 6의 주입 줄은 `INJECTION_LINE`이다.
 - 장면 6의 "Qwen 0회"는 CFO Qwen(F2)만 센다. 속은 요청을 쓴 작업 에이전트(F1)도 Qwen3-32B라서 Kiln 호출은 1회 있다(기준 run `r5`: F1 1, F2 0). 그래서 "Qwen 0회"가 아니라 "CFO Qwen 0회"라고 말한다.
-- 음절 수는 영어 약어를 읽는 소리로 셌다(`CFO` 3, `GPU` 3, `H100` 4). 장면 4(약 107음절), 8(약 18음절), 10(약 68음절)은 장면 길이에 거의 꽉 찬다.
+- 음절 수는 영어 약어를 읽는 소리로 셌다(`CFO` 3, `GPU` 3, `H100` 4, `USER`는 "유저" 2). 장면 4(약 107음절), 8(약 18음절), 10(약 68음절)은 장면 길이에 거의 꽉 찬다.
 - 장면 15의 346 → 66은 `runs/eval/nothink.jsonl`의 켬/끔 비교(각 3회, 오프라인)다. `report.md` §5c에 그대로 나온다.
 - 장면 9의 STOP은 대본(sim 300분, `founderStop`, 사유 `MANUAL`)이다. 사람이 버튼을 누르지 않는다(§7 본 녹화 6).
 
@@ -132,11 +133,11 @@
    forge test && npm test      # 2026-09-29: forge test 38 pass, npm test 284 pass, 0 fail, 0 skipped (약 115초)
    ```
    `npm test`의 skipped가 0보다 크면 anvil을 못 찾은 것이다(PATH 확인).
-2. founder ETH가 0.0021 이상인지 본다. 주소는 공개값이라 키가 필요 없다.
+2. USER ETH가 0.0021 이상인지 본다. 주소는 공개값이라 키가 필요 없다.
    ```sh
    cast balance 0x87e3866c97b7aE307b9d030581111D076AAaDB58 --ether --rpc-url https://sepolia.base.org
    ```
-   배포는 새 agent에게 가스 0.0015 ETH(바닥값 0.0005 × 3)를 보내고 준비 tx 11개를 보낸다. preflight는 배포 뒤 founder와 agent가 각각 0.0005 ETH 이상이어야 통과하고, preflight 실패는 배포 tx를 다 보낸 뒤에야 난다. 금고 하나에 약 0.0015 ETH라서 기준 run(0x6372) 뒤 잔액 0.00544 ETH면 새 금고 3개까지 된다(그 run 전 0.00696 ETH). 0.0021 미만이면 새 금고를 만들기 전에 faucet으로 충전한다.
+   배포는 새 agent에게 가스 0.0015 ETH(바닥값 0.0005 × 3)를 보내고 준비 tx 11개를 보낸다. preflight는 배포 뒤 USER와 agent가 각각 0.0005 ETH 이상이어야 통과하고, preflight 실패는 배포 tx를 다 보낸 뒤에야 난다. 금고 하나에 약 0.0015 ETH라서 기준 run(0x6372) 뒤 잔액 0.00544 ETH면 새 금고 3개까지 된다(그 run 전 0.00696 ETH). 0.0021 미만이면 새 금고를 만들기 전에 faucet으로 충전한다.
 3. `.env`는 열지 않고, 값이 있는지만 본다(값은 출력하지 않는다).
    ```sh
    node --env-file=.env -e 'for (const k of ["FOUNDER_PK", "KILN_API_KEY", "RPC_URL"]) console.log(k, process.env[k] ? "set" : "MISSING")'
@@ -151,7 +152,7 @@
 ### T-5
 
 1. 포트 8787이 비어 있다: `lsof -nP -iTCP:8787 -sTCP:LISTEN`의 출력이 없다.
-2. founder에게 대기 중인 tx가 없다: `cast nonce 0x87e3866c97b7aE307b9d030581111D076AAaDB58 --block pending --rpc-url https://sepolia.base.org`와 `--block latest`가 같다.
+2. USER에게 대기 중인 tx가 없다: `cast nonce 0x87e3866c97b7aE307b9d030581111D076AAaDB58 --block pending --rpc-url https://sepolia.base.org`와 `--block latest`가 같다.
 3. Kiln 예열(마지막 smoke가 10분이 넘었으면 `LLM_MODE=kiln npm run smoke:kiln` 한 번, 뒤에 fixture 되돌리기), 팀 Kiln 중지 확인.
 4. 감사용 터미널은 repo에서 `clear`. 브라우저에는 Blockscout 탭(`https://base-sepolia.blockscout.com`)을 준비한다.
 5. 판단 규칙: 빨간 표시가 15분 안에 회복되지 않으면 그때까지 가장 좋은 take를 쓴다.
@@ -199,7 +200,7 @@
 | Akash 실패 | `SNAPSHOT:<사유>` 가격 사용 | 배지 확인 | 계속 |
 | 비밀 유출 의심 | pre-commit 실패 | Kiln 키 폐기·재발급. agent 키면 HALT 절차 → 새 금고 | 중단 |
 
-**HALT 절차.** take가 HALT되거나 백엔드가 죽으면 hold가 잠긴 채 남는다. `scripts/wind-down.ts`가 백엔드 없이 founder 키만으로 정리한다(체인 상태와 `records/`를 읽고, 기록 체인을 이어 붙인다).
+**HALT 절차.** take가 HALT되거나 백엔드가 죽으면 hold가 잠긴 채 남는다. `scripts/wind-down.ts`가 백엔드 없이 USER 키만으로 정리한다(체인 상태와 `records/`를 읽고, 기록 체인을 이어 붙인다).
 
 ```sh
 # 0) 녹화를 멈추고 대시보드를 Ctrl+C (HALT된 Committer는 더 보내지 않지만, 보내는 쪽은 하나만 둔다)
@@ -208,7 +209,7 @@ npm run wind-down -- runs/<vault> --chain base-sepolia --dry-run
 # 2) 실행: setPaused(true) → 열린 job 전부 close → refund. 기록(STOP, CLOSE, SESSION_END)을 이어 붙이고 run.json lastBlock을 고친다
 npm run wind-down -- runs/<vault> --chain base-sepolia
 #    마지막 CHECKPOINT의 settle이 체인에 안 들어갔으면 --pay-last-checkpoint를 붙인다(출력의 "UNPAID USAGE" 줄 참고)
-# 3) founder ETH가 0.0021 이상인지 보고, 새 금고로 다시 녹화한다(대시보드 명령이 새 금고를 배포한다)
+# 3) USER ETH가 0.0021 이상인지 보고, 새 금고로 다시 녹화한다(대시보드 명령이 새 금고를 배포한다)
 ```
 
 - 버린 take의 번들(`runs/<vault>/`)은 제출물이 아니다. 커밋하지 않는다.

@@ -15,8 +15,8 @@ CFO Agent: 작업별 에스크로, 모든 허락·거절을 기록
 
 4
 00:00:12,000 --> 00:00:16,000
-Scope signed by the founder: LoRA fine-tune, H100 only
-창업자가 서명한 범위: LoRA 파인튜닝, H100만
+Scope signed by the USER: LoRA fine-tune, H100 only
+USER가 서명한 범위: LoRA 파인튜닝, H100만
 
 5
 00:00:16,000 --> 00:00:19,900
@@ -90,13 +90,13 @@ Numbers: code. Purpose: Qwen. Enforcement: contract.
 
 19
 00:01:25,000 --> 00:01:30,000
-Founder STOP (scripted): the vault pauses on chain
-창업자 STOP (대본 개입): 금고가 체인에서 정지
+USER STOP (scripted): the vault pauses on chain
+USER STOP (대본 개입): 금고가 체인에서 정지
 
 20
 00:01:30,000 --> 00:01:35,000
-Founder closes jobs, pays the Kiln cost, refunds the rest
-창업자가 작업 종료, Kiln 비용 정산, 잔액 환불
+USER closes jobs, pays the Kiln cost, refunds the rest
+USER가 작업 종료, Kiln 비용 정산, 잔액 환불
 
 21
 00:01:35,000 --> 00:01:38,900
@@ -120,8 +120,8 @@ Same hash = record file name. The script edit is in it.
 
 25
 00:01:59,000 --> 00:02:03,500
-Third-party audit: records + public RPC only
-제3자 감사: 기록 묶음 + 공개 RPC만
+Audit by the USER: records + public RPC only
+USER가 감사: 기록 묶음 + 공개 RPC만
 
 26
 00:02:03,500 --> 00:02:08,900

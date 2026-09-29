@@ -1,5 +1,5 @@
 graph TD
-    F["창업자<br/>fund · 허용 벤더 · maxHold<br/>작업 명세 서명"] --> V["에스크로 금고<br/>Base Sepolia"]
+    F["USER<br/>fund · 허용 벤더 · maxHold<br/>작업 명세 서명"] --> V["에스크로 금고<br/>Base Sepolia"]
     W["작업 에이전트<br/>Qwen F1"] -->|"GPU hold · 충전 요청"| G{{"코드 게이트 · 규칙 10개<br/>요청 + 수수료 3% ≤ 남은 예산"}}
     S["체인 스냅샷<br/>블록 1개에 고정"] --> G
     G -->|"통과"| C{"CFO Agent<br/>Qwen F2<br/>거절만 가능"}
