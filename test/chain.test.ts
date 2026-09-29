@@ -10,7 +10,7 @@ import { createTestClient, createWalletClient, custom, encodeAbiParameters, enco
 import { privateKeyToAccount } from 'viem/accounts'
 import { usdcAbi, vaultAbi } from '../src/abi.ts'
 import { Committer, classify, makeWallet, type Intent } from '../src/chain.ts'
-import { CHAINS, ReadFailed, decodeVaultLogs, getLogsChunked, makePublicClient, snapshot } from '../src/chainread.ts'
+import { CHAINS, ReadFailed, decodeVaultLogs, getLogsChunked, makePublicClient, snapshot, untilLatest } from '../src/chainread.ts'
 import { toBytes32 } from '../src/codes.ts'
 import { RecordChain, ZERO_HASH, readChain, verifyChain } from '../src/record.ts'
 import { ANVIL_FOUNDER_PK, PAYEES, agentKeyPath, deploy, loadAgentKey, payee, preflight } from '../src/deploy.ts'
@@ -63,6 +63,16 @@ test('snapshot: RPC error twice -> ReadFailed (one retry)', async () => {
   const dead = { getBlock: async () => { n++; throw new Error('ECONNREFUSED') } } as any
   await assert.rejects(snapshot(dead, V, { vendors: [] }), (e: Error) => e instanceof ReadFailed && e.name === 'ReadFailed')
   assert.equal(n, 2)
+})
+
+test('untilLatest: waits until latest reaches the receipt block (flashblock receipts arrive a block early); bounded', async () => {
+  const seq = [5n, 5n, 6n]
+  let n = 0
+  await untilLatest(async () => seq[Math.min(n++, seq.length - 1)], 6n, 5_000, 1)
+  assert.equal(n, 3)
+  let m = 0
+  await untilLatest(async () => { m++; return 5n }, 6n, 30, 5) // never catches up: returns after the timeout, no throw
+  assert.ok(m >= 2)
 })
 
 test('getLogsChunked: a 429 chunk is retried once; twice -> throws; other errors are not retried', async () => {

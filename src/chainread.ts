@@ -1,6 +1,7 @@
 // Chain READ side: clients, the pinned-block snapshot, chunked getLogs, vault log decoding.
 // No signing, no writes: the auditor imports this file.
 import { BaseError, createPublicClient, decodeEventLog, fallback, http, type Hex, type Log, type PublicClient } from 'viem'
+import { getBlockNumber, waitForTransactionReceipt } from 'viem/actions'
 import { anvil, baseSepolia } from 'viem/chains'
 import { vaultAbi } from './abi.ts'
 import type { ChainName, ChainSnapshot, DecodedEvent } from './types.ts'
@@ -15,7 +16,23 @@ export function makePublicClient(chain: ChainName, rpcUrls: string[]): PublicCli
     chain: CHAINS[chain],
     transport: fallback(rpcUrls.map((u) => http(u))),
     pollingInterval: chain === 'anvil' ? 100 : 1000,
-  }) as PublicClient
+  }).extend((client) => ({
+    // sepolia.base.org answers a receipt from the preconfirmed flashblock (latest + 1) before 'latest' holds that block,
+    // while the next tx is simulated and gas-estimated on 'latest': it ran without the previous one (the mint right after
+    // MockUSDC's deploy was estimated at 22,825 gas and ran out; tx 0x4e62307e…, block 47438868). Every receipt wait in
+    // the repo goes through this client, so a receipt counts only once 'latest' has its block.
+    async waitForTransactionReceipt(args: Parameters<typeof waitForTransactionReceipt>[1]) {
+      const r = await waitForTransactionReceipt(client, args)
+      await untilLatest(() => getBlockNumber(client, { cacheTime: 0 }), r.blockNumber)
+      return r
+    },
+  })) as unknown as PublicClient
+}
+
+/** Polls until 'latest' reaches `block`; after `timeoutMs` it gives up and the caller goes on as before (no new failure mode). */
+export async function untilLatest(latest: () => Promise<bigint>, block: bigint, timeoutMs = 20_000, pollMs = 200): Promise<void> {
+  const end = Date.now() + timeoutMs
+  while ((await latest()) < block && Date.now() < end) await new Promise((r) => setTimeout(r, pollMs))
 }
 
 /** Name + short message only: viem's full message can carry the RPC URL (and an API key in it). */
