@@ -216,8 +216,6 @@ graph TD
     L --> UI["대시보드 · 영수증 (Qwen F3 설명)"]
 ```
 
-![CFO Agent 흐름](diagrams/cfo-agent-escrow-topup.png)
-
 1. USER가 예산과 기한을 넣고(`fund`), 허용 벤더(A/B/C, INFERENCE)와 1회 상한 `maxHold`를 정하고, 작업 명세(목적·허용 GPU·작업 상한·기한)에 서명한다. 세션 시작 때 추론비 전용 hold $0.05를 연다.
 2. 작업 에이전트(F1)가 GPU hold를 요청한다. 코드 게이트가 먼저 판정하고, 통과한 요청만 CFO Qwen(F2)이 명세의 목적에 비추어 판단한다. 둘 다 통과해야 `open`한다.
 3. GPU 작업은 끊기지 않고 진행된다. 체크포인트(시뮬레이션 30분)마다 실사용분을 `settle`한다. 수수료는 3%(`feeBps = 300`)다.
