@@ -12,7 +12,7 @@ GPU를 빌려 쓰는 AI 스타트업의 연구·평가 에이전트는 이미 AP
 
 CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스크로 금고**다. 금고는 Base Sepolia 컨트랙트로 구현한다. 허용 벤더, 수수료 포함 예산, 호출당 상한, 기한, STOP은 체인이 강제한다.
 
-제3자는 기록과 체인만 보고 세 가지를 다시 판정할 수 있다.
+USER(PO, 창업자, 감사인 등)는 기록과 체인만 보고 세 가지를 다시 판정할 수 있다.
 1. 각 지출이 **결정적 규칙**을 지켰는지: 벤더, 예산, 상한, 기한, STOP, 허용 GPU. 기록에 남은 입력값과 체인 상태로 게이트 규칙을 다시 계산한다.
 2. 모든 hold와 충전 앞에 게이트 통과와 CFO 비거절 기록이 있는지.
 3. 기록이 변조되지 않았는지.
@@ -70,7 +70,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 마일스톤마다 비용 추정이 필요하고, 시간 단위 과금으로 바꾸는 작업이 따로 든다.
 
 ### 제외한 결제 방식 (한 줄씩)
-- **Akash 실제 사용:** 테스트넷에서 응답하는 GPU 제공자가 1곳뿐이고, Cosmos 스택이 추가로 필요하다(10~16h). 가격만 가져온다.
+- **Akash 실제 사용:** 테스트넷에서 응답하는 GPU 제공자가 1곳뿐이고, Cosmos 스택이 추가로 필요하다(10\~16h). 가격만 가져온다.
 - **x402 exact:** 수신자를 체인에서 제한할 수 없다. 벤더 1곳을 x402 `upto`로 정산하는 것은 stretch로 둔다. upto는 돈을 잠그지 않으므로 hold로 부르지 않는다.
 - **Superfluid:** 잔액이 0이 되면 청산되면서 buffer를 잃는다.
 - **approve / Spend Permissions / Safe allowance:** 수신자를 체인에서 제한할 수 없다.
@@ -95,7 +95,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 ### 작업 명세 (목적의 출처, 창업자 서명)
 - 창업자가 작업마다 명세 JSON을 쓴다. 필드는 `purpose`, `success_metric`, `allowed_gpu_types`, `job_cap_usd`, `deadline`이다.
 - 창업자 지갑으로 서명한다(EIP-191). 서명과 명세 해시는 첫 기록에 들어간다.
-- 감사자는 서명자가 금고의 `founder`인지 확인한다. 백엔드가 명세를 바꾸면 여기서 FAIL이 난다.
+- USER는 사후 검증으로 서명자가 금고의 `founder`인지 확인할 수 있다. 백엔드가 명세를 바꾸면 여기서 FAIL이 난다.
 - Qwen은 심사할 때마다 명세 원문을 입력으로 받는다.
 
 ### 시뮬레이션 시계와 데모 규모
@@ -135,7 +135,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 [기한] 기한에 닿으면 실행기 정지 → 에이전트 호출은 Denied(PAST_DEADLINE)
        → 창업자(대시보드 버튼)가 settle(실사용) → close → refund
 [종료] 작업 close 때 F3로 영수증 설명 → 추론 작업 settle(INFERENCE 누적 추론비) → close
-       → 감사자 CLI PASS/FAIL
+       → 사후 검증 PASS/FAIL
 ```
 - **평가 순서:** 게이트가 먼저 판정하고, Qwen F2는 **게이트를 통과한 요청만** 판단한다. Qwen이 거절하면 그걸로 최종이다.
 - 실행기는 hold 소진, STOP, 기한, NaN 가운데 하나라도 해당하면 멈춘다. 그래서 hold를 넘는 사용량은 생기지 않는다.
@@ -182,7 +182,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 | `maxHold` + `setMaxHold`(open과 topUp 모두 상한) | 없음 | **추가** |
 | INFERENCE 수수료 면제(`inferencePayee` immutable) | 없음 | **추가**(약 2줄) |
 
-- 변경 규모는 **약 30~40줄**로 추정한다. Solidity를 할 줄 아는 사람이 없어도 필수다. 없으면 P3가 가장 먼저 붙는다.
+- 변경 규모는 **약 30\~40줄**로 추정한다. Solidity를 할 줄 아는 사람이 없어도 필수다. 없으면 P3가 가장 먼저 붙는다.
 - **Foundry 테스트 목록:**
   1. 정상 흐름: fund → open → settle → topUp → settle → close → refund
   2. Denied 5종: 벤더, 예산+수수료, `maxHold`, 기한, 일시정지. 각각 자금 이동 0과 이벤트 확인
@@ -209,7 +209,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 **영수증 필드**
 작업 ID, 벤더(Akash 제공자 라벨), 가격 출처(스냅샷 해시), 사용 시간, 금액, 수수료, 누적 gross, tx 해시, Qwen 사유, F3 설명.
 
-### 감사자 CLI (제3자 재판정)
+### 사후 검증 명령 (USER 재판정)
 - **입력:** 기록 파일 묶음, 금고 주소, 공개 RPC, 창업자 서명 명세.
 - **소비하는 이벤트:** `Funded`, `VendorSet`, `MaxHoldSet`, `HoldOpened`, `ToppedUp`, `Settled`, `Closed`, `PausedSet`, `Refunded`, `Denied`.
 - **검사 항목:**
@@ -222,14 +222,14 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
   7. 에이전트의 `open`/`topUp`/`settle` 성공 tx가 기한 전, 일시정지 전인가. 에이전트 `close`와 `recordDecision`은 제외한다.
   8. 모든 `Denied` 이벤트에 대응하는 기록이 있는가.
 - **범위 밖:** 정산 금액이 실제 사용량과 같은지, Qwen 기록이 진짜 Kiln 응답인지. Kiln generation id는 참고용으로만 남긴다.
-- 심사위원이 재현하는 방법은 **감사자 CLI를 기록 묶음에 돌리는 것**이다(필수). 대시보드 리플레이는 선택이다.
+- 심사위원이 재현하는 방법은 **사후 검증 명령(`npm run audit`)을 기록 묶음에 돌리는 것**이다(필수). 대시보드 리플레이는 선택이다.
 
 ### Kiln 흐름과 효율
 | 흐름 | 트리거 | 입력 → 출력 | 표시 위치 |
 |---|---|---|---|
 | F1 `work_request` | 작업 시작, 충전 트리거 | 명세 + 진행 로그 → 요청 JSON(벤더·GPU·금액·근거) | 대시보드 요청 카드 |
 | F2 `cfo_review` | 게이트 통과 후 | 명세 + 요청 + 요약 → `{verdict, reason}` | 결정 기록, 대시보드 |
-| F3 `receipt_explain` | 작업 close | 작업 기록 요약 → 설명 2~3문장 | 영수증 |
+| F3 `receipt_explain` | 작업 close | 작업 기록 요약 → 설명 2\~3문장 | 영수증 |
 
 - **실제 호출 증거:** 최종 증거는 반드시 실제 Kiln 응답이어야 한다. 원문 응답, `usage`, generation id를 JSONL로 남긴다. stub LLM은 개발에만 쓴다.
 - **응답이 결정을 바꾸는 장면:** F2의 `deny`가 `recordDecision`을 거쳐 `Denied` 이벤트로 남는 과정을 로그로 이어서 보여준다.
@@ -246,7 +246,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 
 ### 알려진 한계 (README에 명시)
 - **정산 금액은 우리 장부가 신고한 값이다.** 체인은 실제 사용량을 검증하지 않는다. 벤더와 공모하면 hold 한도 안에서 샐 수 있다.
-- **Qwen 판단과 기록은 백엔드가 스스로 증명한 값이다.** Kiln 서명이 없다. 감사자가 결정적 규칙은 다시 계산하지만, Qwen 판정 자체의 진위는 확인하지 못한다.
+- **Qwen 판단과 기록은 백엔드가 스스로 증명한 값이다.** Kiln 서명이 없다. USER는 사후 검증으로 결정적 규칙은 다시 계산할 수 있지만, Qwen 판정 자체의 진위는 확인할 수 없다.
 - **탈취된 agent 키**는 허용 벤더에게 금고의 미지급 잔액 전체(budget − Σpaid, 열린 hold 포함)까지 보낼 수 있다. `maxHold`는 open/topUp 1회 상한일 뿐이다. 규칙 위반 시도는 `Denied`로 체인에 남고, STOP 이후에는 아무것도 나가지 않는다. 또 규칙 안에서 진행 중인 job을 close하거나 남은 예산을 쓸모없는 hold로 묶어 세션을 방해할 수 있다(SEC-2). 이때는 STOP 후 windDown한다.
 - **gas(ETH)는 USDC 예산 한도 밖이다.** 장부에만 기록한다.
 - **벤더 가격은 과거 bid 기반 추정치**이고 확정 견적이 아니다. `debug=true`는 문서에 없는 옵션이라 스냅샷 JSON을 fallback으로 둔다.
@@ -260,7 +260,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 - **KillSwitch Wallet** (github.com/rectinajh/killswitch-wallet)
   - `SessionPolicy.sol`로 수수료 포함 예산, 판매자 허용 목록, 기한, 동결을 온체인에서 강제한다.
   - 9/20에 "drop Furiosa Challenge B identity" 커밋을 마지막으로 멈췄다. 이 트랙에서는 빠진 것으로 보인다.
-- **판단 해시 온체인, 제3자 검증기, 온체인 강제는 기본기로 본다.** 차별점으로 주장하지 않는다.
+- **판단 해시 온체인, 독립 검증기, 온체인 강제는 기본기로 본다.** 차별점으로 주장하지 않는다.
 
 ## Open Questions
 
@@ -279,7 +279,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
    - (i) 규칙은 통과했지만 **CFO Qwen(F2)이 거절**(범위 확대 요청)
    - (ii) 주입 공격에 **작업 에이전트(F1)가 속아** 범위 밖 요청을 만들었고, **F2에 가기 전에 게이트가 거절**
    - (iii) 게이트와 Qwen을 **우회한 탈취 키 호출을 컨트랙트가 `Denied`로 기록**하고 자금은 움직이지 않음
-4. 감사자 CLI가 기록 묶음과 공개 RPC만으로 PASS를 낸다. 기록이나 명세를 1바이트 변조하면 FAIL이 난다.
+4. 사후 검증 명령(`npm run audit`)이 기록 묶음과 공개 RPC만으로 PASS를 낸다. 기록이나 명세를 1바이트 변조하면 FAIL이 난다.
 5. 흐름별(F1/F2/F3) 토큰 표, 게이트 선거절로 줄인 호출 수, `/no_think` 비교, 에너지 추정(가정 명시)을 낸다.
 6. 벤더 가격이 Akash 실데이터이고, 스냅샷 fallback이 동작한다.
 
@@ -289,7 +289,7 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
 |---|---|---|
 | **필수** | 게이트 `check()`, 읽기 단계, 기록과 해시 체인, 장부, README(선언, 경계·강제 위치 표, 상태 표, 한계, 재현) | P1 |
 | **필수** | Kiln `llm(flow)` 래퍼와 JSONL, F1/F2/F3 프롬프트, fail-closed, 토큰·에너지 표 스크립트 | P2 |
-| **필수** | 금고 변경(Denied, recordDecision, maxHold, INFERENCE 면제), 배포, Foundry 테스트 10종, 감사자 CLI | P3 |
+| **필수** | 금고 변경(Denied, recordDecision, maxHold, INFERENCE 면제), 배포, Foundry 테스트 10종, 사후 검증 명령 | P3 |
 | **필수** | mock 실행기(60배 시계, 체크포인트, 정지 조건 4종, AWAITING_TOPUP), Akash 가격 캐시와 스냅샷, 최소 대시보드(예산 부여, 지출 흐름, STOP, 영수증, 기한 후 정산 버튼) | P4 |
 | 나중 | 대시보드 다듬기와 리플레이, "모든 결정을 LLM이" 기준선 | P4, P2 |
 | 컷 1순위 | x402 upto, 게이트 co-signature, 실제 CPU 학습, Akash sandbox 배포, Blockscout 소스 검증 | – |
@@ -306,19 +306,19 @@ CFO Agent는 이 지출을 **작업 단위로 충전하고 감독하는 에스�
   - 한계, 재현 명령
   - Qwen3-32B 변경 공지 캡처
 - 컨트랙트를 Base Sepolia에 배포한다. 소스 검증은 선택이다.
-- 대시보드는 로컬 웹이다. 심사위원 재현은 감사자 CLI로 한다.
-- 3분 데모 영상과 피치덱을 만든다. 영상 0:00~0:20에는 선언과 흐름도를 넣는다.
+- 대시보드는 로컬 웹이다. 심사위원 재현은 사후 검증 명령(`npm run audit`)으로 한다.
+- 3분 데모 영상과 피치덱을 만든다. 영상 0:00\~0:20에는 선언과 흐름도를 넣는다.
 
 ## Next Steps
 
 1. **지금(9/28 23시대):**
    - Kiln 키 상태를 확인한다. 승인됐으면 스모크 테스트(`qwen3-32b`, JSON 파싱, `/no_think`, `usage`). 아니면 stub으로 시작하고 00:00에 문의한다.
    - MockUSDC와 금고 초안을 배포하고 `fund` tx를 확보한다.
-2. 금고 변경 약 30~40줄과 Foundry 테스트 10종(P3).
+2. 금고 변경 약 30\~40줄과 Foundry 테스트 10종(P3).
 3. 게이트, 읽기 단계, 기록·해시 체인, 장부(P1).
 4. Akash 캐시·스냅샷, mock 실행기(P4).
 5. F1/F2/F3 흐름과 fail-closed(P2).
-6. 감사자 CLI(P3), 최소 대시보드(P4).
+6. 사후 검증 명령(P3), 최소 대시보드(P4).
 7. 9/29 01:00까지 A/B 결정. 9/29 밤에 데모 1차 녹화.
 
 ## What I noticed about how you think
@@ -353,7 +353,7 @@ Stop: CONVERGENCE
 
 **Remedy**
 
-> State the INFERENCE hold amount and its sizing basis (e.g., expected calls × ~$0.00014 with margin). Define the overflow behavior: a topUp of the inference job, a cap that halts LLM calls, or a partial settle recorded as a known shortfall.
+> State the INFERENCE hold amount and its sizing basis (e.g., expected calls × \~$0.00014 with margin). Define the overflow behavior: a topUp of the inference job, a cap that halts LLM calls, or a partial settle recorded as a known shortfall.
 
 ### R3-3 — completeness
 
@@ -545,38 +545,38 @@ Stop: CONVERGENCE
 
 ## CEO Review (HOLD SCOPE) — 2026-09-28
 
-`/plan-ceo-review` HOLD SCOPE 모드로 리뷰한 결과다. 섹션 1~11 전체를 봤고(리뷰어 6명 + 통합), 남은 Reviewer Concerns R3-1~R3-20도 함께 처리했다. **이 절의 내용이 앞선 본문과 충돌하면 이 절을 따른다.** 본문에 적힌 행 번호는 리뷰 시점 문서 기준이다.
+`/plan-ceo-review` HOLD SCOPE 모드로 리뷰한 결과다. 섹션 1\~11 전체를 봤고(리뷰어 6명 + 통합), 남은 Reviewer Concerns R3-1\~R3-20도 함께 처리했다. **이 절의 내용이 앞선 본문과 충돌하면 이 절을 따른다.** 본문에 적힌 행 번호는 리뷰 시점 문서 기준이다.
 
 ### 결정 원장 (Decision Ledger)
 
 | ID · 담당 | 계약과 근거 | 현재(승인된 값) | 제안 | 상태 | 승인 원문과 범위 |
 |---|---|---|---|---|---|
-| P1~P4 · 팀 | office-hours Phase 3 전제 | mock 벤더(가격만 Akash 실데이터), 숫자 신호는 코드가 판단, 작업당 벤더 1곳, hold를 금고에 잠금 | — | approved | 전제 2~4 "동의 (추천)", 전제 1은 "GPU벤더는 mock이 맞는데…" |
+| P1\~P4 · 팀 | office-hours Phase 3 전제 | mock 벤더(가격만 Akash 실데이터), 숫자 신호는 코드가 판단, 작업당 벤더 1곳, hold를 금고에 잠금 | — | approved | 전제 2\~4 "동의 (추천)", 전제 1은 "GPU벤더는 mock이 맞는데…" |
 | AP · 팀 | 접근 방식 | 에스크로 금고 + 충전식 | — | approved | "에스크로 금고 + 충전식 (추천)" |
 | DN · P3 | 거절 기록 방식 | Denied 이벤트(revert하지 않음) | — | approved | "반영 + Denied 방식 (추천)" |
 | MODE · 리뷰 | 리뷰 모드 | HOLD SCOPE | — | approved(관리) | "범위 유지 (최대 엄밀)" |
 | D1 · P3/P4 | founder 키 위치 (S1-2, S2-7, S9-7, S11-6, S4-6, S4-9, S3-11) | 백엔드 별도 변수 FOUNDER_PK + `/action` → `commit()` 큐, 명세 서명·배포는 forge keystore | — | approved | "백엔드 별도 변수 (추천)" |
 | D2 · P1/P2 | 추론비 작업과 세션 종료 (R3-1, R3-2, R3-6, S2-14, S1-8, S3-10) | 단순·결정적(아래 D2) | — | approved | "단순·결정적 (추천)" |
-| D3 · P3 | 컨트랙트 가드와 감사자 담당 (S6-5, S3-5, S3-6, S4-10, S5-5, S5-1, R3-19, S10-1) | 가드 2개 추가, 감사자는 P1 담당 | — | approved | "가드 2개 추가 (추천)" |
+| D3 · P3 | 컨트랙트 가드와 사후 검증 명령 담당 (S6-5, S3-5, S3-6, S4-10, S5-5, S5-1, R3-19, S10-1) | 가드 2개 추가, 사후 검증 명령은 P1 담당 | — | approved | "가드 2개 추가 (추천)" |
 | D4 · P2 | Kiln 지연 예산 (S7-2, R3-15, S2-2, S4-2, S2-3, S2-15) | 타임아웃 10초, 일시 장애만 재시도·재무장 | — | approved | "10초 + 일시 장애만 재시도 (추천)" |
 | D5 · P4 | 주입 경로 (R3-18, S3-3, S8-7, S11-9) | 실행기 로그 한 줄 주입 | — | approved | "실행기 로그 (추천)" |
 | D6 · P4 | 데모 범위 (S11-15, S11-8, S9-8, S9-9, S11-7) | 기준선은 A(가볍고 결정적), 목표는 B(React + 라이브) | — | approved | "일단 1번을하고 목표는 2" |
 | CR · 리뷰 | 승인된 동작을 바꾸지 않는 교정(아래 "리뷰 수정 사항") | 교정 반영 | — | applied(Analyze 규칙) | 승인이 필요 없는 사실·일관성 교정 |
 | OPEN-AB · 팀 리드 | Challenge A vs B (본문 Open Questions) | B 권장 | — | **unresolved** | 팀 결정. 기한 9/29 01:00 KST (리뷰 범위 밖) |
 
-Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 인용했고, 계획에는 각 답의 범위만 반영했다. CR은 동작 변경이 없는 교정이다. OPEN-AB는 미결 상태로 보고서에 표시한다.
+Approval readiness: PASS — P1\~P4, AP, DN, D1\~D6 모두 위 "승인 원문"을 인용했고, 계획에는 각 답의 범위만 반영했다. CR은 동작 변경이 없는 교정이다. OPEN-AB는 미결 상태로 보고서에 표시한다.
 
-### 결정 반영 내용 (D1~D6)
+### 결정 반영 내용 (D1\~D6)
 
 **D1 — founder 키: 백엔드 별도 변수**
 - founder 키는 백엔드 `.env`의 별도 변수 `FOUNDER_PK`에 둔다. 대시보드 버튼(STOP, 정산·close, 환불)은 `POST /action`을 거쳐 agent tx와 같은 `commit()` 큐로 들어간다.
 - 명세 서명과 배포는 `forge --account founder` keystore로 한다.
 - 서버는 `127.0.0.1`에만 바인딩하고 Origin을 검사한다.
-- README 한계 절에 "데모에서는 두 키가 한 서버에 있다. 서버가 침해되면 setVendor를 거쳐 전액을 탈취할 수 있다"를 적는다. 본문 91~92행의 탈취 주장은 "agent 키만 탈취된 경우"로 좁힌다.
+- README 한계 절에 "데모에서는 두 키가 한 서버에 있다. 서버가 침해되면 setVendor를 거쳐 전액을 탈취할 수 있다"를 적는다. 본문 91\~92행의 탈취 주장은 "agent 키만 탈취된 경우"로 좁힌다.
 
 **D2 — 추론비 작업과 세션 수명: 단순·결정적**
 - INFERENCE 작업은 **게이트와 F2 없이** 연다. 체인 규칙 검사와 기록은 남긴다.
-  - 감사자 check 3은 `vendor==inferencePayee`이면 "체인 규칙 PASS 기록"만 요구한다.
+  - 사후 검증의 check 3은 `vendor==inferencePayee`이면 "체인 규칙 PASS 기록"만 요구한다.
 - hold는 **$0.05로 고정**한다. 래퍼 상한 60회 × $0.00014 ≈ $0.0084이므로 약 6배 여유다.
   - 래퍼 하드캡: 누적이 80%를 넘으면 경고하고, 100%에 닿기 전에 `LLM_CALL_CAP`으로 차단한다.
   - inference topUp 경로는 없다.
@@ -584,16 +584,16 @@ Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 
 - 백엔드가 크래시하면 그 세션은 폐기한다. founder `windDown` 후 새 금고로 다시 실행한다.
 - 추가 코드는 `LLM_CALL_CAP`이다.
 
-**D3 — 컨트랙트 가드 2개 추가 + 감사자는 P1 담당**
+**D3 — 컨트랙트 가드 2개 추가 + 사후 검증 명령은 P1 담당**
 - agent `settle`에서 `vendorAllowed[j.vendor]`를 다시 검사한다. 허용이 해제된 벤더면 `Denied(VENDOR_NOT_ALLOWED)`를 남긴다. founder `settle`은 이 검사를 우회한다.
 - 일시정지·기한 이후의 **agent `close`는 `Denied(PAUSED/PAST_DEADLINE)`**로 막는다. founder `close`는 계속 허용한다. 본문의 "에이전트 close는 허용"은 이 내용으로 대체한다.
 - 변경 규모는 약 3줄이고 Foundry 테스트 2개를 추가한다.
-- 감사자 check 5에서 settle은 "수취자 == job.vendor이고 그 시점에 허용 상태"인지 확인한다. `usedRec`는 만들지 않는다.
-- **감사자 CLI 담당을 P1으로 옮긴다.** 게이트 규칙 모듈을 그대로 import하도록 한다.
+- 사후 검증의 check 5에서 settle은 "수취자 == job.vendor이고 그 시점에 허용 상태"인지 확인한다. `usedRec`는 만들지 않는다.
+- **사후 검증 명령의 담당을 P1으로 옮긴다.** 게이트 규칙 모듈을 그대로 import하도록 한다.
 
 **D4 — Kiln 지연 예산: 10초 + 일시 장애만 재시도**
 - 충전 트리거는 40%를 유지한다. F1/F2 타임아웃은 **각 10초**이고, 타임아웃이 나면 재시도하지 않는다.
-- 429(reset ≤ 5초)와 5xx만 1회 재시도한다(1~2초 jitter).
+- 429(reset ≤ 5초)와 5xx만 1회 재시도한다(1\~2초 jitter).
 - 거절 뒤 재무장은 **일시 코드(`QWEN_UNAVAILABLE`, `READ_FAILED`, `TOPUP_TIMEOUT`)에만** 허용한다. 다음 체크포인트에서 job당 1회이고, 시도마다 `recordDecision`을 남긴다.
 - 규칙 거절, `QWEN_DENIED`, `QWEN_UNPARSEABLE`은 최종이다.
 - 최악의 경우 약 37초가 걸리고, 이때 AWAITING_TOPUP 상태가 약 13초 보인다. 본문 107행의 "최대 약 20초"를 이 값으로 고친다.
@@ -607,7 +607,7 @@ Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 
 - **기준선(필수):**
   - 대시보드: 백엔드가 서빙하는 HTML 1파일 + 1초 `GET /state` 폴링
   - 영상: 클라이맥스("규칙은 통과했지만 Qwen이 거절")를 중심으로 1회 실행분을 편집한다. 기한, 이동, NaN, 정체 시나리오는 README 표와 로그로 보여준다.
-  - Demo Day: 영상 + 커밋한 번들에 대한 감사자 CLI + Basescan `Denied` 1건. 라이브 에이전트는 돌리지 않는다.
+  - Demo Day: 영상 + 커밋한 번들에 대한 사후 검증 명령(`npm run audit`) + Basescan `Denied` 1건. 라이브 에이전트는 돌리지 않는다.
   - 소스 검증은 20분 타임박스로 시도한다.
 - **목표(stretch):** Vite + React 대시보드, 성공기준 전 항목을 2배속 몽타주로 보여주기, 짧은 라이브 시나리오 1개.
   - **시작 조건:** 기준선 완성 + 백업 영상 녹화 + Base Sepolia 리허설 통과. 그리고 **9/30 03:00 이전**일 때만.
@@ -625,21 +625,21 @@ Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 
 - **`close(id, rec)`, `refund(amount, rec)`로 바꾸고 Closed/Refunded 이벤트에 rec를 넣는다.** 세션의 마지막 tx는 "세션 종료 기록"을 앵커하는 refund다. 201행은 "open/topUp/settle/close/refund/recordDecision/setPaused가 recHash를 남긴다. fund/setVendor/setMaxHold는 tx 해시로 매칭한다"로 좁힌다. [S1-6, S2-8, S3-4, R3-5]
 - **`recordDecision`은 agent 또는 founder만 호출할 수 있고, 그 외는 revert Unauthorized로 한다.** [S3-7]
 - **166행 revert 목록을 완성한다:** Unauthorized, JobClosed(없는 id 포함), refund 한도 초과 OverBudget, 토큰 전송 실패. [S6-6]
-- **보안 주장 문구를 사실에 맞춘다.** 91~92·165·250행을 "권한 있는 호출자의 규칙 위반만 Denied로 남는다. 권한 없는 함수 호출은 revert되고 대개 브로드캐스트조차 되지 않는다. 총 손실 상한은 maxHold가 아니라 `budget − committed`다"로 고친다. [R3-20, S3-5, S3-7, S11-7]
-- **금액 기준을 하나로 정한다:** open/topUp/settle의 `amount`는 **net**이고, 예약은 `gross(v,a) = v==INFERENCE ? a : a + a*300/10000`(floor)이다. OVER_MAX_HOLD는 net ≤ maxHold, OVER_BUDGET은 committed + gross ≤ budget로 판정한다. 게이트, 실행기, 감사자는 `rules.ts`의 bigint `gross/maxNet`을 공유한다. `maxNet(h)`는 gross(n) ≤ h를 만족하는 최대 n이다(시작값 floor(h·10000/10300), ±1 보정). 150행의 "×1.03"을 이 식으로 교체한다. [R3-12, S2-11, S4-7, S6-4, S9-4]
+- **보안 주장 문구를 사실에 맞춘다.** 91\~92·165·250행을 "권한 있는 호출자의 규칙 위반만 Denied로 남는다. 권한 없는 함수 호출은 revert되고 대개 브로드캐스트조차 되지 않는다. 총 손실 상한은 maxHold가 아니라 `budget − committed`다"로 고친다. [R3-20, S3-5, S3-7, S11-7]
+- **금액 기준을 하나로 정한다:** open/topUp/settle의 `amount`는 **net**이고, 예약은 `gross(v,a) = v==INFERENCE ? a : a + a*300/10000`(floor)이다. OVER_MAX_HOLD는 net ≤ maxHold, OVER_BUDGET은 committed + gross ≤ budget로 판정한다. 게이트, 실행기, 사후 검증 코드는 `rules.ts`의 bigint `gross/maxNet`을 공유한다. `maxNet(h)`는 gross(n) ≤ h를 만족하는 최대 n이다(시작값 floor(h·10000/10300), ±1 보정). 150행의 "×1.03"을 이 식으로 교체한다. [R3-12, S2-11, S4-7, S6-4, S9-4]
 - **`fund`는 deadline을 덮어쓰므로 모든 스크립트가 `cfg.deadline`을 명시적으로 넘긴다**고 적는다. [S9-3, S4-8]
 
 #### 백엔드 쓰기 경로와 결과 판정
 - **모든 쓰기는 `commit(intent)` 하나로만 한다**(Promise 체인 큐). 한 단위의 순서: head 읽기 → compact JSON 직렬화(bigint와 NaN은 문자열, 들여쓰기·끝 개행 없음) → 쓴 Buffer 그대로 keccak → tmp+rename → 다시 읽어 해시 확인(실패 시 HALT, tx 없음) → ledger `intent` → send → txHash를 즉시 `sent`로 기록 → receipt → `classify` → `mined` → head 갱신. 매 tx마다 receipt를 기다리므로 nonceManager는 필요 없다. Kiln/게이트 계산은 큐 밖에서 병렬로 돌려도 된다. [S1-1, S2-6, S7-1, S8-2, S6-2, S3-13]
 - **tx가 안 잡힐 때 정책:** 60초 타임아웃 → 같은 해시로 1회 재조회 → 그래도 없으면 HALT와 UNCONFIRMED 배너. **새 nonce로 다시 보내는 것은 금지**다(이중 지급 위험). 자동 수수료 인상 재전송은 만들지 않는다. (충돌 해소: S1-7·S8-6의 자동 교체 대신 S2-16·S5-6을 택함) [S2-16, S6-10 A, S5-6]
-- **`classify(receipt)`를 단일 판정 지점으로 둔다.** 금고 주소의 로그만 ABI로 디코드한다. 기대한 이벤트가 있으면 OK, Denied가 있으면 DENIED(code)로 [거절] 경로에 보낸다. status 0이면 REVERTED, 둘 다 없으면 UNEXPECTED로 HALT한다. 전송 전 revert는 errorName으로 가른다(JobClosed이고 실제로 closed면 ALREADY_CLOSED). jobId는 HoldOpened 로그에서만 얻는다. 오프체인에서 승인했는데 체인이 Denied로 돌려준 경우는 `CHAIN_DENIED` 기록(prev=승인 기록)을 남기고, 감사자는 이를 `CHAIN_OVERRIDE`로 분류한다(FAIL 아님). [R3-8, S2-9, S4-3, S8-1, S11-1]
+- **`classify(receipt)`를 단일 판정 지점으로 둔다.** 금고 주소의 로그만 ABI로 디코드한다. 기대한 이벤트가 있으면 OK, Denied가 있으면 DENIED(code)로 [거절] 경로에 보낸다. status 0이면 REVERTED, 둘 다 없으면 UNEXPECTED로 HALT한다. 전송 전 revert는 errorName으로 가른다(JobClosed이고 실제로 closed면 ALREADY_CLOSED). jobId는 HoldOpened 로그에서만 얻는다. 오프체인에서 승인했는데 체인이 Denied로 돌려준 경우는 `CHAIN_DENIED` 기록(prev=승인 기록)을 남기고, 사후 검증에서는 이를 `CHAIN_OVERRIDE`로 분류한다(FAIL 아님). [R3-8, S2-9, S4-3, S8-1, S11-1]
 - **chain watcher는 1개만 둔다.** 블록 N을 고정하고 multicall 1회로 paused, deadline, budget, committed, maxHold, feeBps, vendorAllowed, jobs[id]와 block timestamp를 읽어 snapshot을 만든다. 게이트, 실행기, 대시보드가 이 snapshot을 공유한다. 읽기가 실패하면 READ_FAILED(fail-closed)로 처리하고, snapshot이 10초를 넘기면 STALE_CHAIN으로 사용량 누적을 멈춘다. 게이트의 "현재"는 블록 타임스탬프다. [S1-3, S4-4, S2-17, S7-3, S8-6, R3-10, R3-13]
 - **job 상태 머신 `next(state, event)`을 순수 함수로 둔다.** 상태는 NO_JOB/OPEN/RUNNING/AWAITING_TOPUP/HOLD_EXHAUSTED/STOPPED/CLOSED이고, 충전 요청 latch는 none/inflight/denied다. 불법 전이는 throw한다. 전이는 디코드된 이벤트로만 일어난다. STOPPED는 CLOSED까지 유지하고, unpause나 늦게 온 ToppedUp은 무시한다. paused, deadline, NaN은 **매 tick**(AWAITING 포함) 확인한다. 비동기 흐름은 epoch를 들고 다니다가, epoch가 바뀌었으면 CANCELLED로 끝내고 tx를 보내지 않는다. 충전 흐름이 60초를 넘으면 TOPUP_TIMEOUT으로 거절한다. [S4-1, S2-15, S5-4, S6-4, R3-14]
 - **트리거 정의:** "현재 hold"는 마지막 open/topUp의 gross(고정값)다. `remaining = held − gross(unsettled_net)`이고, 트리거는 `remaining*10 < holdSize*4 && latch==none`일 때 한 번만 발화한다(엣지 트리거). unsettled는 Settled를 디코드했을 때만 줄인다. [S4-2, S2-2, S6-4, S4-3]
 - **실행기 정지 기준:** `unsettled_net ≥ maxNet(held)`이면 정지하고, settle 금액은 `min(accrued, maxNet(held))`다. 기한은 체인 시간 기준 `deadline − 15s`에 멈춘다. 기한 Denied 시연을 위해 margin을 끄는 플래그를 하나 둔다. [S4-7, S4-8, S2-11]
 - **R3-13 단위 정의:** 요청 시간(sim h) = net 금액 ÷ 시간당 net 가격, real_s = sim_h × 60이다. 예시: B $2.56/h에서 $5.12 요청 = 2 sim h = 120 real s이므로 `blockTs + 120 > min(명세 기한, 금고 기한)`이면 PAST_DEADLINE이다. 110행을 이 식으로 교체한다. [R3-13]
 - **OVER_JOB_CAP 누적은 job id가 아니라 `spec_id` 단위로 센다**(이동해도 초기화되지 않음). [R3-11]
-- **명세 필드에 `spec_id`, `vault`, `chain_id: 84532`, `issued_at`을 추가한다.** 서명 대상은 저장된 파일 바이트 그대로의 문자열이고, 감사자는 이를 다시 직렬화하지 않는다. 같은 spec_id를 두 세션에 쓰면 FAIL이다. [R3-16, S3-9]
+- **명세 필드에 `spec_id`, `vault`, `chain_id: 84532`, `issued_at`을 추가한다.** 서명 대상은 저장된 파일 바이트 그대로의 문자열이고, 사후 검증에서는 이를 다시 직렬화하지 않는다. 같은 spec_id를 두 세션에 쓰면 FAIL이다. [R3-16, S3-9]
 - **세션 종료를 함수 하나(`windDown`)로 정의하고 [종료], [STOP], [기한]이 모두 이 함수를 쓴다.** 순서: vendor job마다 `delta_net = 장부 사용량(실행기 정지 시점까지) − 체인 Settled 합`, delta가 0보다 크면 settle하고 디코드 → close → INFERENCE settle(누적 추론비) → close → refund(budget − committed, rec=세션 종료 기록). 이미 closed인 job은 건너뛰므로 다시 실행해도 안전하다. "정지 시점"은 **실행기가 멈춘 시점**이다. F3는 vendor job이 close될 때마다 돌고, INFERENCE 정리는 세션 끝에 한 번만 한다. [R3-3, R3-4, R3-5, R3-14, S11-2, S8-6]
 - **창업자 버튼 가드:** 정산·close는 job이 STOPPED나 HOLD_EXHAUSTED이고 그 job의 pending tx가 0일 때만 활성화한다. 금액은 서버가 계산하고 클라이언트 값은 쓰지 않는다. close는 unsettled==0일 때만 보낸다. settle 없이 close된 사용량은 `UNPAID_USAGE`로 표시한다. [S4-6, S11-2]
 - **대시보드 액션:** `POST /action {type, jobId, stateVersion}`로 보낸다. 같은 액션이 pending이거나 stateVersion이 오래됐으면 409를 돌려준다. 버튼은 누르면 잠기고 이벤트를 디코드한 뒤 풀린다. approve는 정확한 금액만 한다. [S4-9]
@@ -657,18 +657,18 @@ Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 
 - **F3는 close가 디코드된 뒤 비동기로 돈다.** 실패하면 "설명 생성 실패(코드)"를 적고 정산은 계속한다. [S2-4, S6-8, S11-12]
 - **kiln.ts는 SDK 없이 `fetch` + AbortSignal로 만든다.** generation id는 `X-Neocloud-Generation-Id` 헤더에서 읽는다. 실패한 시도까지 전부 `{flow, attempt, http, latency_ms, gen_id, usage|null, cost_known, messages, llm_mode}`로 남긴다. JSONL에는 허용한 필드만 쓰고 헤더, 에러 객체, 절대경로는 넣지 않는다. 프로세스 전역 세마포어는 4다. usage.cost는 세션 끝에 합산한 뒤 ceil(sum·1e6)을 한 번만 한다. [S2-3, S3-1, S7-7, S2-11, S6-8]
 - **`LLM_MODE=kiln|stub`은 반드시 명시하게 한다**(기본값 없음, 자동 fallback 없음). stub의 gen_id는 `stub-`로 시작한다. `audit --submission`은 stub 호출이 1건이라도 있으면 FAIL이다. [S8-5, S1-7]
-- **Akash:** 세션 시작 때 한 번만 조회한다(타임아웃 5초). h100 존재, providersWithBestBid 3개 이상, price가 유한하고 0.5~20 범위인지 검증하고, 실패하면 커밋된 스냅샷을 쓴다. 가격과 가용 수량은 세션 동안 고정한다. A/B/C는 hostUri로 고정한다. 스냅샷 **내용**을 번들 `prices/`에 넣고, 기록에 `price_source=LIVE|SNAPSHOT:사유`를 남긴다. [S2-5, S7-5, R3-10]
+- **Akash:** 세션 시작 때 한 번만 조회한다(타임아웃 5초). h100 존재, providersWithBestBid 3개 이상, price가 유한하고 0.5\~20 범위인지 검증하고, 실패하면 커밋된 스냅샷을 쓴다. 가격과 가용 수량은 세션 동안 고정한다. A/B/C는 hostUri로 고정한다. 스냅샷 **내용**을 번들 `prices/`에 넣고, 기록에 `price_source=LIVE|SNAPSHOT:사유`를 남긴다. [S2-5, S7-5, R3-10]
 
-#### 감사자
+#### 사후 검증
 - **과거 상태는 이벤트 재생으로 복원하고, archive eth_call에 기대지 않는다.** getLogs는 금고 주소 필터만 걸고 **1,000블록 청크**로 나눠 읽는다(sepolia.base.org 실측 한도). 입력 번들은 `{vault, chainId, deployBlock, lastBlock}`이다. 종료 코드는 0 PASS / 1 FAIL / 2 CANNOT_VERIFY다. 번들의 모든 tx 해시에 대해 receipt를 다시 확인한다. (충돌 해소: 2,000블록이 아니라 실측값 1,000) [R3-10, S2-13, S7-4, S6-3, S11-13]
-- **감사자 분류 규칙:**
+- **사후 검증의 분류 규칙:**
   - 기록이 없는 Denied는 `UNRECORDED_ATTEMPT` WARN이다(PASS 유지, sender·code 출력).
   - 기록이 없는 HoldOpened/ToppedUp/Settled는 `UNGATED_SPEND` FAIL이다.
   - 마지막 기록의 해시가 마지막 온체인 rec와 다르면 `UNANCHORED_TAIL` FAIL이다.
   - 같은 recHash를 둘 이상의 이벤트가 참조하면 `DUPLICATE_REC_REF`로 표시한다.
   - 성공기준 1의 1:1 매칭은 백엔드·founder tx로 한정하고, 공격 tx는 별도 목록으로 낸다. [R3-7, S3-7, S2-8, S6-3]
 - **check 7 재정의:** agent가 보낸 tx 중 HoldOpened/ToppedUp/Settled를 낸 것에 대해, 그 블록에서 paused==false이고 blockTs < deadline이었는지 본다(재생 상태 기준). [R3-9]
-- **check 4:** `rules.check(rec.gateInput)`의 결과가 rec.gateResult와 같은지, 그리고 gateInput의 체인 필드가 재생한 상태와 같은지 본다. check 3은 `parseVerdict(extractJson(rec.raw))`를 다시 계산해 비교한다. 감사자는 rules/parse/records/chain(읽기 쪽)만 import하고, executor/kiln/akash/server는 import하지 않는다(grep 한 줄로 테스트). [R3-19, S5-1, S5-3]
+- **check 4:** `rules.check(rec.gateInput)`의 결과가 rec.gateResult와 같은지, 그리고 gateInput의 체인 필드가 재생한 상태와 같은지 본다. check 3은 `parseVerdict(extractJson(rec.raw))`를 다시 계산해 비교한다. 사후 검증 코드는 rules/parse/records/chain(읽기 쪽)만 import하고, executor/kiln/akash/server는 import하지 않는다(grep 한 줄로 테스트). [R3-19, S5-1, S5-3]
 - **LOSS_PLATEAU 정의:** 연속 3쌍 모두 (prev − cur)/prev < 0.005일 때만 plateau다. 체크포인트가 4개 미만이거나 prev ≤ 0이면 false다. NaN은 NAN_DETECTED가 먼저 잡는다. [S5-3, S6-7]
 - **추가하는 코드는 셋뿐이다:** `READ_FAILED`, `TOPUP_TIMEOUT`, `LLM_CALL_CAP`(D-session A를 택할 때). F1 파싱 실패는 새 코드 없이 QWEN_UNPARSEABLE로 처리한다. (충돌 해소: S4-5의 BAD_REQUEST/PRICE_UNAVAILABLE/TX_FAILED는 추가하지 않음. 스냅샷 fallback과 HALT로 충분) [S6-7, S2-15, S3-10]
 
@@ -736,7 +736,7 @@ Approval readiness: PASS — P1~P4, AP, DN, D1~D6 모두 위 "승인 원문"을 
            AgentBudgetVault (Base Sepolia 84532) --> vendor A/B/C, INFERENCE, feeTo
            MockUSDC (mint -> approve(exact) -> fund)
                 ^                                  ^
- Auditor CLI ---+ getLogs 1,000블록 청크, replay    | cast (탈취 agent 키, 백엔드 유휴 구간)
+ npm run audit -+ getLogs 1,000블록 청크, replay    | cast (탈취 agent 키, 백엔드 유휴 구간)
  (rules/parse/records import, exit 0/1/2)          +-> Denied(enforced=true) -> UNRECORDED_ATTEMPT
 ```
 
@@ -826,7 +826,7 @@ tick: remaining = held - gross(unsettled_net);  remaining*10 < holdSize*4 && lat
  0:00 문제+선언+흐름도 | 0:20 통제 설정 | 0:40 정상 충전 APPROVE->ToppedUp
  1:05 클라이맥스: GATE 10/10 PASS -> Qwen DENY(사유 vs purpose) -> Denied tx -> 소진 -> 영수증
  1:45 방어 층: 주입 -> 게이트 거절(F2 0) ; 탈취 키 -> contract Denied(이동 0)
- 2:05 STOP -> HALTED -> 정산·환불 | 2:25 감사자 PASS / 변조 FAIL | 2:50 토큰·에너지 표
+ 2:05 STOP -> HALTED -> 정산·환불 | 2:25 사후 검증 PASS / 변조 FAIL | 2:50 토큰·에너지 표
  영상 밖(README 표·로그): 기한(두 번째 금고), 이동, NaN, 정체 ; Qwen 대기 구간은 'x4' 배속 표시
 ```
 
@@ -861,7 +861,7 @@ make deploy
 | 예외 | 발생 지점 | 구조 | 사용자에게 보이는 것 | 근거 |
 |---|---|---|---|---|
 | KilnTimeout | llm() 10초 | 재시도 없음 → QWEN_UNAVAILABLE + recordDecision | 카드 "timeout 10s"(회색, 판단 아님) | S2-3, S7-2 |
-| KilnRateLimited(헤더 없음 / reset n) | llm() | 1~2초 jitter 후 1회. n>5초면 즉시 거절 | "429(동시성 / RPM n초)" | S2-3 |
+| KilnRateLimited(헤더 없음 / reset n) | llm() | 1\~2초 jitter 후 1회. n>5초면 즉시 거절 | "429(동시성 / RPM n초)" | S2-3 |
 | KilnServerError | llm() | 1회 재시도. Retry-After가 미래 시각이면 거절 | "Kiln 5xx" | S2-3 |
 | KilnEmptyContent / Truncated | length, response_format | 재시도 없음, QWEN_UNPARSEABLE, reasoning_tokens 기록 | "잘림(max_tokens)" | S2-1 |
 | LLMSchemaError / Refusal / 객체 2개 | parse.ts | exact approve만 통과, 나머지는 거절 | "판정 해석 불가 → 거절" | S2-1, S3-8 |
@@ -888,27 +888,27 @@ make deploy
 | BigIntSerialize / NaN→null | JSON.stringify | 예방: replacer | – | S6-2 |
 | ChainFork | 동시 append, 재시작 시 head=null | 예방: 큐, 시작 시 head 로드, 불일치면 기동 거부 | 기동 거부 메시지 | S2-6, S2-14 |
 | ExecutorCrash | 프로세스 | 세션 폐기 → windDown → 새 금고(D-session A) | 시작 로그, orphan 배지 | S2-14, S1-8 |
-| UnpaidUsage | settle 없이 close | 가드로 예방, 발생 시 ledger 기록 | 빨간 줄, 감사자 보고 | S4-6 |
+| UnpaidUsage | settle 없이 close | 가드로 예방, 발생 시 ledger 기록 | 빨간 줄, 사후 검증에서 보고 | S4-6 |
 | DoublePay(버튼) | 더블클릭, 총액 입력 | delta_net, 409, 멱등 windDown | 단계 표시 | S11-2, S4-9 |
-| UnanchoredTail | 마지막 앵커 뒤 기록 | 예방: close/refund rec. 감사 FAIL | "anchored up to #k / n" | S2-8, S3-4 |
+| UnanchoredTail | 마지막 앵커 뒤 기록 | 예방: close/refund rec. 사후 검증 FAIL | "anchored up to #k / n" | S2-8, S3-4 |
 | AuditRpcLimit | getLogs 1,000블록 초과 | 청크 조회, 429 재시도 → exit 2 | "CANNOT_VERIFY: RPC" | S2-13 |
 | CRLF 변환 | autocrlf clone | 예방: `-text`. 발생 시 힌트 출력 | "CRLF 변환 의심" | S2-12 |
 | UnrecordedAttempt | 공격 tx | WARN, PASS 유지 | 목록(sender, code) | R3-7, S3-7 |
-| UngatedSpend | 기록 없는 지출 | FAIL | 감사자 FAIL 사유 | S3-7 |
-| Reorged / AuditReceiptMissing | 번들 해시 | 1 confirmation으로 진행, 감사 시 재확인 → FAIL | 감사자 출력 | S2-16, S2-13 |
+| UngatedSpend | 기록 없는 지출 | FAIL | 사후 검증 FAIL 사유 | S3-7 |
+| Reorged / AuditReceiptMissing | 번들 해시 | 1 confirmation으로 진행, 사후 검증 때 재확인 → FAIL | 사후 검증 출력 | S2-16, S2-13 |
 
 #### 장애 모드 레지스트리
 | 모드 | 트리거 | 감지 | 구조 | 사용자에게 보이는 것 | 테스트 |
 |---|---|---|---|---|---|
 | verdict fail-open | `!== 'deny'` 구현 | parse 픽스처 | exact approve 허용목록 | 판정 해석 불가 | B4 |
 | 트리거 폭주 | 거절 뒤 조건이 계속 참 | F1 호출 수 | latch | 요청 카드 시도 수 | B7 |
-| 기록 체인 분기 | 동시 append | 감사 check1 | commit 큐 | 기동 거부 | I3, I8 |
+| 기록 체인 분기 | 동시 append | 사후 검증 check1 | commit 큐 | 기동 거부 | I3, I8 |
 | 이중 지급 | 새 nonce 재전송, 버튼 총액 입력 | ledger와 Settled 합 대조 | 재서명 금지, delta_net | 단계 표시 | I4, I10 |
 | 없는 hold로 재개 | status만 보고 판정 | classify | 로그 판정 | 체인 거절(CODE) | I2 |
 | 고아·유령 job | push가 검사보다 먼저 | jobs.length | push 전에 검사 | – | C2 |
-| 꼬리 변조 PASS | close/refund에 rec 없음 | UNANCHORED_TAIL | rec 인자 추가 | 감사 FAIL | G10 |
+| 꼬리 변조 PASS | close/refund에 rec 없음 | UNANCHORED_TAIL | rec 인자 추가 | 사후 검증 FAIL | G10 |
 | 정직 경로 OVER_HOLD | float, 수수료 floor | Denied(OVER_HOLD) 배지 | maxNet | "정지 기준 버그" 빨강 | B2, C4 |
-| 리허설 오염 | 금고 재사용 | check 3/8 FAIL | 금고 1 = 번들 1 | 감사 첫 줄 범위 | G1 + 음성 테스트 |
+| 리허설 오염 | 금고 재사용 | check 3/8 FAIL | 금고 1 = 번들 1 | 사후 검증 결과 첫 줄의 범위 | G1 + 음성 테스트 |
 | CRLF 전체 FAIL | Windows clone | 해시 불일치 + CR | `-text` | 힌트 | G16 |
 | getLogs 한도 | 1,000블록 초과 | -32614 | 청크 조회 | exit 2 | G9 |
 | stub 제출 | 환경변수 누락 | stub 호출 수 | 명시 필수 | STUB 배지 | G14 |
@@ -924,7 +924,7 @@ make deploy
 
 ### 테스트 계획
 
-**실행 환경 3단계:** T1 `forge test` + `npm test`(네트워크 0, 가짜 시계, 전역 fetch는 throw 스텁, 매 커밋) · T2 `npm run e2e:local`(anvil + stub LLM 캡처 재생 + CLOCK_MULT=600, evm_snapshot, 머지 전·녹화 전, 90초 이내) · T3 수동 실행(smoke:kiln, eval:f2, e2e:sepolia). 러너는 forge, node:test + tsx만 쓴다. 전체 약 10~12인시다.
+**실행 환경 3단계:** T1 `forge test` + `npm test`(네트워크 0, 가짜 시계, 전역 fetch는 throw 스텁, 매 커밋) · T2 `npm run e2e:local`(anvil + stub LLM 캡처 재생 + CLOCK_MULT=600, evm_snapshot, 머지 전·녹화 전, 90초 이내) · T3 수동 실행(smoke:kiln, eval:f2, e2e:sepolia). 러너는 forge, node:test + tsx만 쓴다. 전체 약 10\~12인시다.
 
 **Foundry (P3, 모든 Denied에 `assertNoDelta` 적용: 잔액 4곳, budget, committed, jobs.length, held/paid가 그대로이고 로그는 Denied 1개)**
 - C1 설정 함수와 권한, fund 2회 시 deadline 덮어쓰기(pin)
@@ -954,30 +954,30 @@ make deploy
 - B12 대시보드 카드 렌더 fixture 종결 5종, 서버 409(동시 POST 2개 → tx 1개, 오래된 stateVersion)
 
 **anvil 통합 (P1 중심)**
-- I1 2am 테스트 전체 대본: fund → … → refund, committed==0, balanceOf==0, 감사 PASS / 변조 FAIL, 매칭 표 1:1
+- I1 2am 테스트 전체 대본: fund → … → refund, committed==0, balanceOf==0, 사후 검증 PASS / 변조 FAIL, 매칭 표 1:1
 - I2 automine을 끄고 setPaused와 topUp을 같은 블록에 → CHAIN_DENIED, 재개 없음
 - I3 settle + topUp + recordDecision 동시 → 전부 mined, nonce 연속
 - I4 receipt 타임아웃 → 재서명 0회, 이중 Settled 0, HALT
 - I5 탈취 키 3종 → Denied, 잔액 델타 0
 - I6 주입 로그 → 게이트 거절, F2 spy 0
-- I7 kill -9 → 기동 가드와 windDown → 감사 PASS
+- I7 kill -9 → 기동 가드와 windDown → 사후 검증 PASS
 - I8 intent 20개 Promise.all → prevHash 선형
 - I9 RPC 차단 → STALE_CHAIN 진입과 복귀
 - I10 settle/close 경합 순서 B가 버튼 가드로 생기지 않음
 - I11 실행 중 공격 스크립트를 끼운 뒤 다음 백엔드 tx 성공
 - I12 기한 margin 켬/끔(evm_setNextBlockTimestamp)
 
-**감사자 골든 (I1 번들 고정, `audit()` 순수 함수)**
+**사후 검증 골든 (I1 번들 고정, `audit()` 순수 함수)**
 - G1 PASS · G2 기록 1바이트 → FAIL check1 · G3 명세 1바이트 → FAIL check2 · G4 중간 기록 삭제 · G5 UNRECORDED_ATTEMPT WARN + PASS · G6 DUPLICATE_REC_REF · G7 분할 settle은 건별 floor · G8 unpause 뒤 settle PASS · G9 head < lastBlock 또는 RPC 불가 → exit 2
-- G10 마지막 기록 변조·삭제 → UNANCHORED_TAIL · G11 기록 없는 HoldOpened → UNGATED_SPEND · G12 CHAIN_OVERRIDE 분류 · G13 다른 vault 명세 / spec_id 재사용 → FAIL · G14 stub 번들 `--submission` FAIL · G15 setVendor를 settle보다 먼저 보낸 이동 run → PASS · G16 `git -c core.autocrlf=true clone` 사본 → PASS · 감사자가 executor/kiln/akash/server를 import하지 않는지 grep
+- G10 마지막 기록 변조·삭제 → UNANCHORED_TAIL · G11 기록 없는 HoldOpened → UNGATED_SPEND · G12 CHAIN_OVERRIDE 분류 · G13 다른 vault 명세 / spec_id 재사용 → FAIL · G14 stub 번들 `--submission` FAIL · G15 setVendor를 settle보다 먼저 보낸 이동 run → PASS · G16 `git -c core.autocrlf=true clone` 사본 → PASS · 사후 검증 코드가 executor/kiln/akash/server를 import하지 않는지 grep
 
 **수동 실행 (머지 게이트 아님)**
 - L1 smoke:kiln: qwen3-32b, /no_think, usage, 헤더 gen id, 응답 캡처로 fixture 만들기, F1/F2 p95 측정(8초를 넘으면 max_tokens와 /no_think 재확인)
 - L2 eval:f2: 5케이스 × 5회, temperature 0, 1.1초 간격. 범위 확대는 10/10 deny, 정상은 9/10 이상 approve여야 하며 녹화 직전에도 돌린다
-- E1 e2e:sepolia 1회 = 녹화 run = 제출 번들 → 공개 RPC 감사 PASS
+- E1 e2e:sepolia 1회 = 녹화 run = 제출 번들 → 공개 RPC로 사후 검증 PASS
 - 리허설 장애 주입 3종: Kiln 키 오타, RPC URL 오타, 실행 중 백엔드 kill → 각각 events.jsonl 종류와 health 빨강 확인
 
-시간이 부족하면 C11 → I7 → G8 순서로 자른다. **S6-1~5에 해당하는 I1, B3, G1~G9, B7, C4는 자르지 않는다.**
+시간이 부족하면 C11 → I7 → G8 순서로 자른다. **S6-1\~5에 해당하는 I1, B3, G1\~G9, B7, C4는 자르지 않는다.**
 
 
 ### 운영 체크리스트
@@ -1003,8 +1003,8 @@ make deploy
 
 **타임라인 (KST)**
 - 9/29 01:00 A/B 결정 · 02:00 인터페이스 3파일 고정 · 12:00 walking skeleton(anvil + stub: deploy → run → wind-down → audit)과 `/state`
-- 9/29 오후 실제 Kiln E2E 1회 성공 후 번들 tag · 18:00 대시보드 HTML · 20:00 eval:f2, 러프 컷 3:00 · 22:00 1차 녹화(체크리스트 리허설 + 장애 3종 주입, 이 run으로 2회 연속 감사 PASS 확인)
-- 9/30 06:00 기능 동결 · 07:00 T-60 · 07:55 T-5 · 08:00 녹화 · 08:30 새 clone으로 감사 PASS 후 번들 커밋 · 09:30 편집 완료 · 10:30 제출(마감 11:00)
+- 9/29 오후 실제 Kiln E2E 1회 성공 후 번들 tag · 18:00 대시보드 HTML · 20:00 eval:f2, 러프 컷 3:00 · 22:00 1차 녹화(체크리스트 리허설 + 장애 3종 주입, 이 run으로 사후 검증 2회 연속 PASS 확인)
+- 9/30 06:00 기능 동결 · 07:00 T-60 · 07:55 T-5 · 08:00 녹화 · 08:30 새 clone으로 사후 검증 PASS 후 번들 커밋 · 09:30 편집 완료 · 10:30 제출(마감 11:00)
 
 **T-60**
 1. `forge test` → 새 금고와 새 agent 키로 `make deploy` → `preflight`
@@ -1014,14 +1014,14 @@ make deploy
 5. RPC 2개 응답, 블록 나이 10초 미만, `|now − block.ts| < 5s`
 6. `check-secrets.sh` PASS, `git check-ignore .env`
 7. 녹화 도구 준비, 알림 끄기, 대시보드 글꼴 크기
-8. `git -c core.autocrlf=true clone`한 사본에서 이전 번들 감사 PASS
+8. `git -c core.autocrlf=true clone`한 사본에서 이전 번들 사후 검증 PASS
 
 **T-5**
 1. `/health` 전부 초록
 2. agent의 pending nonce == latest nonce(대기 tx 없음)
 3. Kiln 예열 1회
 4. 새 run_id, 화면에 run_id와 금고 주소 오버레이
-5. 탭 3개 준비: 대시보드, Basescan 금고 페이지, 감사자 명령을 띄운 터미널
+5. 탭 3개 준비: 대시보드, Basescan 금고 페이지, 사후 검증 명령(`npm run audit`)을 띄운 터미널
 6. 판단 규칙: 빨강이 15분 안에 회복되지 않으면 1차 녹화본을 쓴다
 
 **런북 (모든 행의 탈출구는 `make wind-down`: 백엔드 없이 events.jsonl과 founder 키만으로 delta settle → 전부 close(INFERENCE 포함) → refund)**
@@ -1049,84 +1049,84 @@ make deploy
 ### What already exists
 - 금고 초안 `AgentBudgetVault.sol`(122줄, scratchpad, 감사 받지 않음). 재사용하되 Denied 모델, 검사 순서, D3 가드를 반영해 수정한다.
 - Akash Console API(`/v1/gpu-prices?debug=true`, `/v1/providers/{addr}`)와 인증 없는 가격 피드. 가져와서 스냅샷과 함께 쓴다.
-- Base Sepolia 공개 RPC(getLogs 1,000블록 제한 실측). 감사자는 청크 단위로 읽는다.
+- Base Sepolia 공개 RPC(getLogs 1,000블록 제한 실측). 사후 검증 명령은 청크 단위로 읽는다.
 - 레포에는 아직 코드가 없다. README, 설계 문서, 금고 설명, 다이어그램만 있다.
 
 ### Dream state delta
-- **이 계획 뒤:** 에스크로 금고, 충전식 심사 루프, 버전이 붙은 기록 형식, 감사자가 테스트넷에서 돌아간다. 벤더는 mock이고 가격은 실데이터다.
+- **이 계획 뒤:** 에스크로 금고, 충전식 심사 루프, 버전이 붙은 기록 형식, 사후 검증 명령이 테스트넷에서 돌아간다. 벤더는 mock이고 가격은 실데이터다.
 - **12개월 이상형과의 차이:**
   - 실제 벤더 연동(Akash, io.net x402 upto)
   - 서명된 위임장(AP2 스타일)과 키 분리(MetaMask 또는 HSM)
   - 감사받은 금고와 멀티 금고
   - FOCUS 장부의 FinOps 연동
-- 1년 뒤 남는 자산은 금고 코드가 아니라 **충전 심사 루프, 기록 형식(`schema_version`), 감사자**다(S10-4).
+- 1년 뒤 남는 자산은 금고 코드가 아니라 **충전 심사 루프, 기록 형식(`schema_version`), 사후 검증**이다(S10-4).
 
 ### Stale Diagram Audit
 - `diagrams/gpu-marketplace-cfo-agent.*`: 블록 방식이라 **stale**이다. README에 "이전 단계"로 표시되어 있다.
 - `diagrams/cfo-agent-architecture.*`: 초기 Multi-API 버전이라 **stale**이다. 마찬가지로 표시되어 있다.
-- `diagrams/cfo-agent-escrow-topup.*`와 README의 mermaid: 현재 흐름과 일치한다. 다만 `commit()` 큐, chain watcher, 상태 머신 같은 세부는 없다. 세부는 위 다이어그램 1~4가 기준이다.
+- `diagrams/cfo-agent-escrow-topup.*`와 README의 mermaid: 현재 흐름과 일치한다. 다만 `commit()` 큐, chain watcher, 상태 머신 같은 세부는 없다. 세부는 위 다이어그램 1\~4가 기준이다.
 - 본문 "흐름" 코드 블록: D3 가드(일시정지 후 agent close는 Denied)와 D2(INFERENCE open에 게이트 없음)가 반영되지 않았다. 이 절이 우선한다.
 
 ### Implementation Tasks
-이 리뷰의 발견 사항을 합쳐서 만든 작업 목록이다. 작업마다 위 발견 사항 하나 이상에서 나왔다. Claude Code나 Codex로 진행하고, 끝나면 체크한다. (노력 추정 가정: 스캐폴딩 ~100배, 테스트 ~50배, 기능 ~30배, 아키텍처 ~5배)
+이 리뷰의 발견 사항을 합쳐서 만든 작업 목록이다. 작업마다 위 발견 사항 하나 이상에서 나왔다. Claude Code나 Codex로 진행하고, 끝나면 체크한다. (노력 추정 가정: 스캐폴딩 \~100배, 테스트 \~50배, 기능 \~30배, 아키텍처 \~5배)
 
-- [x] **T1 (P1, human: ~1h / CC: ~10min)** — repo — 비밀 관리 위생(.gitignore, .gitattributes, .npmrc, check-secrets 훅)
+- [x] **T1 (P1, human: \~1h / CC: \~10min)** — repo — 비밀 관리 위생(.gitignore, .gitattributes, .npmrc, check-secrets 훅)
   - Surfaced by: Section 3/9 — S3-1, S9-2 (공개 레포에 .gitignore 없음)
   - Files: `.gitignore`, `.gitattributes`, `.npmrc`, `scripts/check-secrets.sh`
   - Verify: `git check-ignore .env` 성공, `scripts/check-secrets.sh` 통과
   - Done 2026-09-29: `.prettierignore`·락파일은 npm 도입(T2) 때 추가. 훅 설치: `ln -sf ../../scripts/check-secrets.sh .git/hooks/pre-commit`
-- [x] **T2 (P1, human: ~3h / CC: ~30min)** — backend — 인터페이스 3파일 고정(ABI와 codes.ts, record.ts, rules.ts)
+- [x] **T2 (P1, human: \~3h / CC: \~30min)** — backend — 인터페이스 3파일 고정(ABI와 codes.ts, record.ts, rules.ts)
   - Surfaced by: Section 5/9 — S5-1, S5-2, S9-4, R3-12, R3-19
   - Files: to be determined
   - Verify: rules.ts 표 기반 단위 테스트(경계값 포함) 통과
   - Done 2026-09-29: `src/codes.ts`, `src/rules.ts`(gross/maxNet/check/gateInputFromJson), `src/record.ts`(serialize/RecordChain/verifyChain), `src/abi.ts`(`npm run abi`로 생성). `npm test` 43개 + forge C12 교차 테스트. 런타임은 Node 26 기본 TS 실행, 의존성은 viem 하나
-- [x] **T3 (P1, human: ~6h / CC: ~45min)** — contracts — 금고 수정(Denied 모델, 검사 순서, bytes32 코드, recordDecision, maxHold, INFERENCE 면제, close/refund rec, D3 가드) + Foundry 테스트
+- [x] **T3 (P1, human: \~6h / CC: \~45min)** — contracts — 금고 수정(Denied 모델, 검사 순서, bytes32 코드, recordDecision, maxHold, INFERENCE 면제, close/refund rec, D3 가드) + Foundry 테스트
   - Surfaced by: Section 1/2/6/10 — S1-4, S1-5, S2-10, S6-5, S6-6, S10-2, D3
   - Files: `contracts/AgentBudgetVault.sol`, `contracts/MockUSDC.sol`, `test/*.t.sol`
   - Verify: `forge test` (본문 10종 + D3 2종 + 리뷰 추가 케이스)
   - Done 2026-09-29: `forge test` 25개 통과(퍼즈 불변식 포함). C12 교차 언어 JSON은 T2의 codes.ts와 함께 추가
   - 2026-09-29 검증 워크플로(리뷰 4 + 반박 검증 4) 반영: 거대한 maxHold에서 Panic 경로 제거(예산 검사 net 우선), Closed/Refunded/PausedSet의 rec를 indexed로, 생성자에서 agent 역할 겹침 거부. 테스트 37개 + 핸들러 불변식(128k 호출)으로 확대, 뮤턴트 28종 전부 검출
-- [x] **T4 (P1, human: ~2h / CC: ~15min)** — deploy — `make deploy` + preflight + deployments json
+- [x] **T4 (P1, human: \~2h / CC: \~15min)** — deploy — `make deploy` + preflight + deployments json
   - Surfaced by: Section 9 — S9-1, S9-3, S9-4
   - Files: `Makefile`, `deployments/`
   - Verify: Base Sepolia에서 preflight assert 통과, fund tx 해시 확보
   - Done 2026-09-29: `src/deploy.ts` deploy()+preflight(), anvil 검증. Base Sepolia는 founder 지갑(0x87e3…DB58) 충전 후 진행
-- [x] **T5 (P1, human: ~5h / CC: ~40min)** — backend — `commit()` 단일 쓰기 큐 + `classify()` + chain watcher snapshot
+- [x] **T5 (P1, human: \~5h / CC: \~40min)** — backend — `commit()` 단일 쓰기 큐 + `classify()` + chain watcher snapshot
   - Surfaced by: Section 1/2/7/8 — S1-1, S1-3, S2-6, S2-9, S7-1, S8-1, S8-2, R3-8
   - Files: to be determined
   - Verify: receipt fixture로 classify 단위 테스트, 기록 해시 read-back 실패 시 HALT 테스트
   - Done 2026-09-29: `src/chain.ts` Committer(기록→서명→전송→receipt, sticky HALT, REPLACED 감지, simulate 후 기록), `src/chainread.ts` 읽기 쪽
-- [x] **T6 (P1, human: ~5h / CC: ~40min)** — executor — 상태 머신 `next()` + 60배 시계 + 엣지 트리거 + tick마다 정지 확인 + AWAITING_TOPUP + `windDown`
+- [x] **T6 (P1, human: \~5h / CC: \~40min)** — executor — 상태 머신 `next()` + 60배 시계 + 엣지 트리거 + tick마다 정지 확인 + AWAITING_TOPUP + `windDown`
   - Surfaced by: Section 4 — S4-1, S4-2, S4-7, S4-8, R3-3, R3-4, R3-5, R3-14
   - Files: to be determined
   - Verify: 시계 테스트(40% 트리거 1회 발화, pause/deadline 즉시 정지, windDown 재실행 안전)
   - Done 2026-09-29: `src/executor.ts` next()/tick()/planWindDown(), 이중 지급 방지 pendingNet
-- [x] **T7 (P1, human: ~4h / CC: ~30min)** — llm — kiln.ts(fetch) + parse.ts + F1/F2/F3 프롬프트 + fail-closed + D4 재시도 + `LLM_MODE`
+- [x] **T7 (P1, human: \~4h / CC: \~30min)** — llm — kiln.ts(fetch) + parse.ts + F1/F2/F3 프롬프트 + fail-closed + D4 재시도 + `LLM_MODE`
   - Surfaced by: Section 2/3 — S2-1, S2-3, S2-4, S3-3, S3-8, S8-5, D4
   - Files: to be determined
   - Verify: 파서 테스트(빈 응답, 잘못된 JSON, 거절, `<think>`, finish_reason=length, 객체 2개), stub 호출 시 `audit --submission` FAIL
   - Done 2026-09-29: `src/kiln.ts`, `src/parse.ts`, `src/prompts.ts`. 실측 eval-f2 10/10·10/10·5/5, eval-f1 10/10·5/5
-- [x] **T8 (P1, human: ~1.5h / CC: ~15min)** — prices — Akash 조회·검증·스냅샷 fallback, 번들에 prices/ 포함
+- [x] **T8 (P1, human: \~1.5h / CC: \~15min)** — prices — Akash 조회·검증·스냅샷 fallback, 번들에 prices/ 포함
   - Surfaced by: Section 2/7 — S2-5, S7-5, R3-10
   - Files: to be determined
   - Verify: 오프라인(스냅샷) 모드 테스트, `price_source` 기록 확인
   - Done 2026-09-29: `src/akash.ts` + `prices/akash-snapshot.json` (A $2.04 / B $2.56 / C $3.16)
-- [x] **T9 (P1, human: ~5h / CC: ~40min)** — auditor (P1 담당) — 이벤트 재생(1,000블록 청크), 분류 규칙, 종료 코드 0/1/2
+- [x] **T9 (P1, human: \~5h / CC: \~40min)** — audit (P1 담당) — 이벤트 재생(1,000블록 청크), 분류 규칙, 종료 코드 0/1/2
   - Surfaced by: Section 5/6 — R3-7, R3-9, R3-10, S2-13, S6-3, D3
   - Files: to be determined
   - Verify: golden 번들 PASS, 기록 1바이트 변조 FAIL, 기록 없는 Denied는 WARN, import 경계 grep 테스트
-  - Done 2026-09-29: `src/audit.ts` 검사 1~8 + G1~G16, 리뷰에서 거짓 PASS 4건 수정
-- [x] **T10 (P1, human: ~4h / CC: ~30min)** — dashboard — HTML 1파일(GRANT/LIVE/EVIDENCE, 카드 종결 상태 5종, STOP 상태, 409 가드) + D1 founder 경로
-  - Surfaced by: Section 11/4 — S11-1~S11-5, S4-6, S4-9, D1, D6
+  - Done 2026-09-29: `src/audit.ts` 검사 1\~8 + G1\~G16, 리뷰에서 거짓 PASS 4건 수정
+- [x] **T10 (P1, human: \~4h / CC: \~30min)** — dashboard — HTML 1파일(GRANT/LIVE/EVIDENCE, 카드 종결 상태 5종, STOP 상태, 409 가드) + D1 founder 경로
+  - Surfaced by: Section 11/4 — S11-1\~S11-5, S4-6, S4-9, D1, D6
   - Files: to be determined
   - Verify: 수동 점검(STOP 더블클릭, 오래된 화면 409, 새로고침 중 pending 표시)
   - Done 2026-09-29: `src/server.ts` + `public/index.html` (기본 / `?video=1` 영상 모드)
-- [x] **T11 (P1, human: ~3h / CC: ~20min)** — scenarios — 정상, Qwen 범위 확대 거절, 로그 주입(D5), 탈취 키 cast → Denied, STOP, 기한(두 번째 금고), 벤더 이동
+- [x] **T11 (P1, human: \~3h / CC: \~20min)** — scenarios — 정상, Qwen 범위 확대 거절, 로그 주입(D5), 탈취 키 cast → Denied, STOP, 기한(두 번째 금고), 벤더 이동
   - Surfaced by: Section 4/8 — S4-10, S8-7, R3-17, R3-18, D5
   - Files: to be determined
-  - Verify: 시나리오마다 예상한 기록과 이벤트가 나오고 감사자 PASS
-  - Done 2026-09-29: `src/session.ts`, `src/scenarios.ts`(10개), `src/run.ts`, `scripts/stolen-key.ts`, `scripts/wind-down.ts`. anvil 10개 시나리오 감사 PASS
-- [x] **T12 (P1, human: ~2h / CC: ~15min)** — report — 흐름별 토큰·에너지 표 스크립트 + `/no_think` 오프라인 비교
+  - Verify: 시나리오마다 예상한 기록과 이벤트가 나오고 사후 검증 PASS
+  - Done 2026-09-29: `src/session.ts`, `src/scenarios.ts`(10개), `src/run.ts`, `scripts/stolen-key.ts`, `scripts/wind-down.ts`. anvil 10개 시나리오 사후 검증 PASS
+- [x] **T12 (P1, human: \~2h / CC: \~15min)** — report — 흐름별 토큰·에너지 표 스크립트 + `/no_think` 오프라인 비교
   - Surfaced by: Section 7 / 본문 성공기준 5
   - Files: to be determined
   - Verify: JSONL로 표 생성, 게이트 선거절 절감 건수 표시
@@ -1138,20 +1138,20 @@ make deploy
     4. 세션별 합계와 온체인 INFERENCE 정산 금액 대조
     5. 결과별 집계와 절감: 게이트 선거절로 F2를 건너뛴 건수와 절약 토큰, `/no_think` 켬/끔 비교
     6. 에너지 범위: RNGD 1.63 J/토큰 기준, GPU(RTX Pro 6000) 4.02 J 비교, 상한 11.9 J
-- [x] **T13 (P1, human: ~1.5h / CC: ~15min)** — docs — README 추가(데모용 지름길, 한계, 명령 5개, 권한×상태 표, D1 한계 문구)
+- [x] **T13 (P1, human: \~1.5h / CC: \~15min)** — docs — README 추가(데모용 지름길, 한계, 명령 5개, 권한×상태 표, D1 한계 문구)
   - Surfaced by: Section 10/3 — S10-1, S10-4, S3-15, S3-16, D1
   - Files: `README.md`
   - Verify: 명령 5개 복붙 실행 확인
   - Done 2026-09-29: README 재작성 + `docs/demo-script.md`. Base Sepolia tx 표(§8)는 녹화 후 채움
-- [ ] **T14 (P1, human: ~3h)** — demo — Base Sepolia 리허설(촬영 1회마다 새 금고), 9/30 01:00까지 백업 영상, 최종 영상
+- [ ] **T14 (P1, human: \~3h)** — demo — Base Sepolia 리허설(촬영 1회마다 새 금고), 9/30 01:00까지 백업 영상, 최종 영상
   - Surfaced by: Section 9/11 — S9-1, S9-8, S11-8, D6
   - Files: `runs/`, 영상
-  - Verify: 번들마다 감사자 PASS, 영상 3분 이하
-- [ ] **T15 (P2, human: ~6h / CC: ~1h)** — stretch — D6 목표 B(Vite+React, 몽타주, 라이브 시나리오). 기준선 완성 뒤, 9/30 03:00 이전에만
+  - Verify: 번들마다 사후 검증 PASS, 영상 3분 이하
+- [ ] **T15 (P2, human: \~6h / CC: \~1h)** — stretch — D6 목표 B(Vite+React, 몽타주, 라이브 시나리오). 기준선 완성 뒤, 9/30 03:00 이전에만
   - Surfaced by: D6 ("목표는 2")
   - Files: to be determined
   - Verify: 리허설 3회 연속 성공
-- [ ] **T16 (P2, human: ~30min)** — ops — 소스 검증 20분 타임박스, Kiln 키 문의, TG 운영진 질문 3건(모델 공지, Top 3 범위, flow 정의)
+- [ ] **T16 (P2, human: \~30min)** — ops — 소스 검증 20분 타임박스, Kiln 키 문의, TG 운영진 질문 3건(모델 공지, Top 3 범위, flow 정의)
   - Surfaced by: Section 9 — S9-9, 본문 Open Questions
   - Files: `docs/`
   - Verify: 답변 캡처를 docs/에 저장
@@ -1196,7 +1196,7 @@ make deploy
   | Unresolved decisions | 1 (Challenge A vs B, 팀 결정)               |
   +====================================================================+
 ```
-전체 발견 120건(CRITICAL GAP 34건). CRITICAL은 모두 위 "리뷰 수정 사항"과 D1~D6에 구조가 지정되어 있다. 구현과 검증은 아직이다.
+전체 발견 120건(CRITICAL GAP 34건). CRITICAL은 모두 위 "리뷰 수정 사항"과 D1\~D6에 구조가 지정되어 있다. 구현과 검증은 아직이다.
 
 ### Unresolved Decisions
 - **Challenge A vs B:** 팀 리드가 9/29 01:00 KST까지 결정한다. 이 리뷰의 질문에서 나온 게 아니라 본문 Open Questions에서 넘어온 팀 결정이다.

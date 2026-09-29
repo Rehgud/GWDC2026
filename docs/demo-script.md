@@ -7,7 +7,7 @@
 - 기준 run은 과금 수정(`d2c7bad`) 뒤의 공개 run `runs/0x6372558F859935DF9364F0c822e703310d160772/`이다(2026-09-29, 속도 3, Kiln 12회 $0.000834, `AUDIT PASS`). 첫 공개 run `0xA8CE…7415`는 과금 오류가 난 run이라 기준에서 뺐다(README §11). 아래 시각은 기준 run의 `events.jsonl`·`kiln.jsonl` 실측값이다. 새 녹화에서는 몇 초씩 달라지므로, 편집은 시각이 아니라 장면표의 "편집 기준 신호"(화면 변화)를 보고 자른다.
 - **t0** = 세션 첫 tx(INFERENCE hold `open`)의 intent 시각. 화면에서는 t0+4.2초에 첫 장부 줄 `open ✓ OK`가 뜬다. t0 전 약 50초는 배포 구간이다(준비 tx 11개, 첫 준비 tx 블록이 t0−46초). 편집에서 통째로 뺀다.
 - 속도 3: 실제 1초 = 시뮬레이션 3분이라 hold 1시간분이 20초에 준다. 세션은 t0부터 `refund`까지 약 190초다. 1x가 아닌 구간에는 모두 배지(`2x`, `4x`, `8x`, `16x`, `✂ n초`, `정지 화면`)를 단다.
-- **USER**: 예산과 규칙을 정하고, 작업 명세에 서명하고, STOP을 누르고, 정리·환불하고, 기록을 검증하는 사람(프로젝트 담당자(PO), 창업자, 감사인 등). 코드는 USER를 `founder`로 부른다(컨트랙트 `founder()`, `FOUNDER_PK`, `founderStop`, 서명자 값 `founder`). 그래서 영상에 보이는 founder도 USER다: 장면 4 카드와 장면 11 기록의 CFO Qwen 사유 "…not covered by the founder-signed spec…"(기준 run), 장면 12 감사 출력 `[PASS] check 2 (spec)`의 `vault.founder()`.
+- **USER**: 예산과 규칙을 정하고, 작업 명세에 서명하고, STOP을 누르고, 정리·환불하고, 기록을 검증하는 사람(프로젝트 담당자(PO), 창업자, 감사인 등). 코드는 USER를 `founder`로 부른다(컨트랙트 `founder()`, `FOUNDER_PK`, `founderStop`, 서명자 값 `founder`). 그래서 영상에 보이는 founder도 USER다: 장면 4 카드와 장면 11 기록의 CFO Qwen 사유 "…not covered by the founder-signed spec…"(기준 run), 장면 12 사후 검증 출력 `[PASS] check 2 (spec)`의 `vault.founder()`.
 - 대본 개입(범위 확대 rationale, 실행 로그 주입 한 줄, 탈취 키, USER STOP)은 README §10 표에 전부 공개되어 있다. 영상에서도 해당 장면의 라벨과 캡션에 `대본 개입 / scripted`를 붙인다.
 
 ## 1. Challenge B 요구와 장면
@@ -20,9 +20,9 @@
 | 범위 밖 #3: 탈취 키로 금고 직접 호출 | 7 `PUSH #3` | 장부 빨간 줄 `open 탈취 키 ✕ DENIED VENDOR_NOT_ALLOWED`, `topUp 탈취 키 ✕ DENIED OVER_MAX_HOLD` |
 | 범위 밖 #4: 수수료 포함 예산 초과 (두 번째 Base Sepolia 금고) | 14 `PUSH #4` | Blockscout `Denied`, code `OVER_BUDGET_WITH_FEE`, F2 0회 |
 | USER 정지 | 9 `STOP` | `SENDING → PAUSED_ON_CHAIN → HALTING → HALTED`, `setPaused`, 정지 뒤 agent `settle`이 있으면 빨간 줄 `✕ DENIED PAUSED`(기준 run: 작업 2), USER 정산·환불 |
-| 멈출 때마다 기록 | 10~13 `EVIDENCE` | Blockscout의 `rec` = 기록 파일 이름의 해시 → 감사 PASS → 1바이트 변조 FAIL |
+| 멈출 때마다 기록 | 10\~13 `EVIDENCE` | Blockscout의 `rec` = 기록 파일 이름의 해시 → 사후 검증 PASS → 1바이트 변조 FAIL |
 
-범위 밖 번호는 녹화에서 일어나는 순서다(범위 확대 sim 45분, 로그 주입 200분, 탈취 키 260분). README "조건이 바뀔 때" 표의 범위 밖 ①~④도 이 번호와 같다.
+범위 밖 번호는 녹화에서 일어나는 순서다(범위 확대 sim 45분, 로그 주입 200분, 탈취 키 260분). README "조건이 바뀔 때" 표의 범위 밖 ①\~④도 이 번호와 같다.
 
 영상 밖: 벤더 이동(`migrate`), NaN, loss 정체(`plateau`)는 README §10 표와 anvil 테스트(`test/session.test.ts`)로 보여 준다. 기한 경과(`PAST_DEADLINE`)는 공개 체인에서 돌리지 않았다(README §7 2c).
 
@@ -41,16 +41,16 @@
 | 9 | 1:25–1:39 | 14초 | `STOP` USER 정지 → 정산·환불 · `대본 개입` | t0+134 → t0+140 1x (6초), t0+140 → t0+188 `16x` (3초), t0+188 → t0+193 1x (5초) | 정지 단계 `● SENDING`(t0+134) → `● PAUSED_ON_CHAIN`, 장부 `setPaused ✓ OK`(t0+138) → (16x) `● HALTED`(정지 뒤 첫 체인 스냅샷에서. `HALTING`은 같은 순간에 지나가 `✓`로만 보일 수 있다), 빨간 줄 `settle ✕ DENIED PAUSED #2`(t0+147), USER `settle #2`, `close #2`, `close #3`, `settle #0`, `close #0` → `refund ✓ OK`(t0+190). 끝 1x 구간에서 빨간 줄은 장부 6줄의 맨 아래에 있다가 `refund`에 밀려난다 |
 | 10 | 1:39–1:51 | 12초 | `EVIDENCE` 체인: Blockscout | 촬영 B · 1x | `called recordDecision on AgentBudgetVault` → Logs의 `Denied(uint256 indexed jobId, bytes32 indexed code, bytes32 indexed rec, bool enforced)`, `enforced false` → Topics [2]를 `Hex`에서 `Text`로 = `QWEN_DENIED`, [3] = rec |
 | 11 | 1:51–1:59 | 8초 | `EVIDENCE` 기록 파일 | 촬영 C · 1x | 파일 이름 `0000xx-0x<rec>.json` = Topics [3]의 해시, rationale, `gate: []`, `f2_calls: 1`, `QWEN_DENIED`, `f1.rationale by scenario:demo` |
-| 12 | 1:59–2:09 | 10초 | `EVIDENCE` USER가 감사 → PASS | 촬영 D · 1x, 출력 전 대기 `✂ 약 19초` | `[PASS] check 1 … anchored up to #22 / 23`(기준 run), `[WARN] … UNRECORDED_ATTEMPT` 2줄, `AUDIT PASS (exit 0)` |
+| 12 | 1:59–2:09 | 10초 | `EVIDENCE` USER가 사후 검증 → PASS | 촬영 D · 1x, 출력 전 대기 `✂ 약 19초` | `[PASS] check 1 … anchored up to #22 / 23`(기준 run), `[WARN] … UNRECORDED_ATTEMPT` 2줄, `AUDIT PASS (exit 0)` |
 | 13 | 2:09–2:21 | 12초 | `EVIDENCE` 1바이트 변조 → FAIL | 촬영 E · 1x, 출력 전 대기 `✂ 약 18초` | `wc -l`이 `1` → `[FAIL] check 1 (records)` 3줄 → `AUDIT FAIL (exit 1)` |
 | 14 | 2:21–2:26 | 5초 | `PUSH #4` 두 번째 금고: 수수료 포함 예산 초과 → 게이트 거절 → 기록 | 촬영 F · 1x | Topics [2] `Text` = `OVER_BUDGET_WITH_FEE`, `enforced false` |
 | 15 | 2:26–2:38 | 12초 | `COST` 토큰·비용·에너지 | 촬영 G · 1x (스크롤) | §1b 흐름별 표 → §4 `reconciliation MATCH` → §5b 게이트 절감 → §5c `/no_think` 346 → 66 |
-| 16 | 2:38–2:44 | 6초 | `VERIFY` 직접 확인 | 촬영 H · 1x | README "온체인 증빙" 표: 금고 주소, 감사 명령 |
+| 16 | 2:38–2:44 | 6초 | `VERIFY` 직접 확인 | 촬영 H · 1x | README "온체인 증빙" 표: 금고 주소, 사후 검증 명령 |
 
-**합계 164초 = 2:44** (목표 2:50 이하, 3:00까지 16초 여유). 장면 2~9의 라이브 구간은 t0−1 → t0+193(194초)을 87초로 줄였다. 배포 구간과 `영상 모드`를 누르는 1초(t0+3 → t0+4) 말고는 자르지 않고 속도만 바꾼다(예외: 장면 2의 정지 화면 4초).
+**합계 164초 = 2:44** (목표 2:50 이하, 3:00까지 16초 여유). 장면 2\~9의 라이브 구간은 t0−1 → t0+193(194초)을 87초로 줄였다. 배포 구간과 `영상 모드`를 누르는 1초(t0+3 → t0+4) 말고는 자르지 않고 속도만 바꾼다(예외: 장면 2의 정지 화면 4초).
 
 녹화가 기준 run과 다르게 흘러갈 때:
-- **A (기대값).** 작업 1의 첫 충전 요청이 곧 범위 확대다. 공개 RPC(`https://sepolia.base.org`, `.env`에 `RPC_URL`이 없으면 이것)에서는 체인 읽기와 tx 확정이 느려서, 첫 충전의 F1이 작업 시작 뒤 약 25~28초(시뮬 약 76~82분)에 시작한다. 그 전에 sim 45분의 rationale 교체가 걸린다. 기준 run은 26.7초(시뮬 80분), 수정 전 demo run은 25.5초(시뮬 76분)였고, budget run(rationale 교체 없음)도 첫 충전 F1이 27.5초(시뮬 82분)에 시작했다.
+- **A (기대값).** 작업 1의 첫 충전 요청이 곧 범위 확대다. 공개 RPC(`https://sepolia.base.org`, `.env`에 `RPC_URL`이 없으면 이것)에서는 체인 읽기와 tx 확정이 느려서, 첫 충전의 F1이 작업 시작 뒤 약 25\~28초(시뮬 약 76\~82분)에 시작한다. 그 전에 sim 45분의 rationale 교체가 걸린다. 기준 run은 26.7초(시뮬 80분), 수정 전 demo run은 25.5초(시뮬 76분)였고, budget run(rationale 교체 없음)도 첫 충전 F1이 27.5초(시뮬 82분)에 시작했다.
 - **B (빠른 RPC나 anvil).** 첫 충전이 그대로 승인되고(`topUp ✓ APPROVED_ONCHAIN`), 범위 확대는 약 20초 뒤 다음 충전에 걸린다. 2026-09-29 anvil·stub 리허설이 이 순서였다. 그러면 승인된 충전 4초를 장면 3에 1x로 넣고(범위 안 두 번째 예), 장면 5·8을 `8x`로 줄여 합계를 맞춘다.
 - **작업 2의 open이 약 17초보다 오래 걸리면**(기준 run은 `openJob`부터 `open` 확정까지 9.3초) 탈취 키(sim 260분)가 작업 2의 첫 충전 요청보다 먼저 와서 PUSH #3이 PUSH #2보다 앞선다. 작업 2는 hold가 열린 뒤부터 사용량이 쌓여 sim 36분(12초)에 40% 선을 넘고, 주입이 걸리는 첫 충전 요청은 그 뒤 루프가 체인을 다시 읽고 나서 시작된다. 기준 run에서는 open 확정 약 18초 뒤(t0+100)였고, 탈취 키는 그 약 7초 뒤(t0+107)였다. 충전 요청이 먼저 시작되면 탈취 키 공격은 그 요청이 거절 기록까지 끝나기를 기다리므로 순서가 지켜진다. 순서가 뒤집히면 장면표·캡션과 맞지 않으니 새 금고로 다시 찍는다.
 - **STOP 때 정산 안 된 사용분이 남은 작업이 있으면** agent가 그 사용분을 `settle`하고, 멈춘 금고가 `✕ DENIED PAUSED`(빨간 줄)로 거절한다. 그 사용분은 USER 정산이 낸다. 기준 run에서는 hold를 다 쓴 작업 2의 남은 사용분(net $0.856832)이었다. 탈취 키 공격(t0+107 → t0+120)과 작업 3의 open(→ t0+130)이 루프를 붙잡아 이 정산이 STOP 확정(t0+138) 뒤에야 나갔고, `settle ✕ DENIED PAUSED #2`(t0+147)로 거절되었다. 같은 금액은 USER `settle ✓ OK #2`(t0+156)가 냈다. 작업 3은 STOP 4초 전에 열려 과금 0이었다. 새 take에서는 STOP 때 남은 사용분이 없으면 이 줄이 없고, 있으면 작업 번호가 다를 수 있다. 화면에 이 줄이 있을 때만 말한다: 장면 9의 "이후 정산은 USER 키로만 합니다"를 "에이전트 정산은 거절되고, USER 키로만 정산합니다"로 바꾼다.
@@ -72,11 +72,11 @@
 | 9 (14초) | "USER가 STOP을 보냅니다. 금고가 체인에서 멈추고, 이후 정산은 USER 키로만 합니다. 작업을 닫고 Kiln 비용을 정산하고 남은 예산을 환불합니다. 멈춤도 기록으로 남습니다." |
 | 10 (12초) | "이제 증거입니다. Blockscout에서 거절 tx를 열면 Denied 이벤트가 디코딩되어 있습니다. code를 텍스트로 바꾸면 QWEN_DENIED, rec는 기록 파일의 해시입니다." |
 | 11 (8초) | "그 해시가 기록 파일 이름입니다. 요청, 게이트, Qwen의 사유, 대본 개입까지 들어 있습니다." |
-| 12 (10초) | "USER는 이 기록 묶음과 공개 RPC만으로 다시 판정합니다. PASS. 기록 없는 탈취 키 시도는 따로 경고로 나옵니다." |
+| 12 (10초) | "USER는 이 기록 묶음과 공개 RPC만으로 사후 검증할 수 있습니다. PASS. 기록 없는 탈취 키 시도는 따로 경고로 나옵니다." |
 | 13 (12초) | "기록 한 파일에서 7B를 1B로, 1바이트만 바꿉니다. 해시 체인이 끊겨 FAIL입니다." |
 | 14 (5초) | "두 번째 금고: 수수료 포함 예산 초과, 게이트 거절, 기록." |
 | 15 (12초) | "모든 Kiln 호출이 흐름별 토큰, 비용, 에너지로 남습니다. Kiln 비용은 체인 정산액과 맞고, /no_think로 출력 토큰을 346에서 66으로 줄였습니다." |
-| 16 (6초) | "금고 주소와 tx, 감사 명령은 README에 있습니다. 직접 확인해 보세요." |
+| 16 (6초) | "금고 주소와 tx, 사후 검증 명령은 README에 있습니다. 직접 확인해 보세요." |
 
 - 장면 4의 7B 문장은 `src/scenarios.ts`의 `SCOPE_CREEP_RATIONALE`이다. 장면 6의 주입 줄은 `INJECTION_LINE`이다.
 - 장면 6의 "Qwen 0회"는 CFO Qwen(F2)만 센다. 속은 요청을 쓴 작업 에이전트(F1)도 Qwen3-32B라서 Kiln 호출은 1회 있다(기준 run `r5`: F1 1, F2 0). 그래서 "Qwen 0회"가 아니라 "CFO Qwen 0회"라고 말한다.
@@ -97,25 +97,25 @@
 - 영상 모드에서 숨는 것: 서명된 명세와 벤더 표(그래서 장면 2는 `기본 보기`로 찍는다), 영수증, latch·금액 열, rec 열, 이전 카드들. 1280×720 `기본 보기`에서는 GRANT 구역(purpose, 허용 GPU, job cap, 기한, maxHold, 예산, 벤더 A/B/C와 Akash 가격, `✓ 허용`)이 첫 화면에 다 들어간다.
 - 세션 시작 직후 몇 초 동안 벤더가 `✕ 차단`, 가격이 `$0`으로 보인다. 첫 체인 스냅샷과 가격을 읽기 전이라서다. 이 구간은 쓰지 않는다.
 - `recordDecision` 줄은 `✓ OK`에 code(`QWEN_DENIED`, `VENDOR_NOT_ALLOWED`)가 붙어 나온다. tx 자체는 성공했고, 그 안의 `Denied(enforced=false)` 이벤트가 거절 기록을 체인에 고정한다. 빨간 `✕ DENIED` 줄은 컨트랙트가 직접 거절한 tx다(탈취 키, 또는 정지 뒤 agent `settle`).
-- 거절 카드는 `4 CHAIN 결과`에서 5~19초 기다린다(기준 run: 범위 확대 19초, 로그 주입 5초). 모든 tx가 대기열 하나(Committer)를 차례로 지나고 각 tx가 영수증을 기다리기 때문이다(기준 run에서 tx 하나에 3~13초). 범위 확대의 대기는 4x로 줄이고, 로그 주입의 5초는 1x로 둔다. F1·F2 자체는 1~2초다(기준 run p50/p95).
+- 거절 카드는 `4 CHAIN 결과`에서 5\~19초 기다린다(기준 run: 범위 확대 19초, 로그 주입 5초). 모든 tx가 대기열 하나(Committer)를 차례로 지나고 각 tx가 영수증을 기다리기 때문이다(기준 run에서 tx 하나에 3\~13초). 범위 확대의 대기는 4x로 줄이고, 로그 주입의 5초는 1x로 둔다. F1·F2 자체는 1\~2초다(기준 run p50/p95).
 - 장부와 카드의 tx 링크는 Basescan으로 간다. 소스 검증은 Blockscout·Sourcify에 했고(두 금고 모두 Sourcify `exact_match`) Basescan은 이 금고의 로그를 디코딩해 보여 주지 않으므로, 디코딩된 이벤트는 Blockscout에서 연다(§8 명령 (1)이 링크를 만든다).
 
 ## 5. 편집 규칙
 
 - 캡션: [`demo-captions.srt`](demo-captions.srt) 32개 cue, 위 줄 영어, 아래 줄 한국어, 장면표 시각에 맞췄다. tx 해시나 비용처럼 run마다 달라지는 값은 넣지 않았다. 편집에서 장면 길이가 바뀌면 그 장면의 cue를 같이 옮긴다.
-- 화면 라벨(`RUN`, `PUSH #1 · 대본 개입`처럼 장면표 라벨 열의 앞부분만)과 속도 배지는 대시보드 장면(3~9)에서 EVIDENCE 제목 줄의 오른쪽 빈 곳에 둔다. 영상 모드에서 그 줄은 `EVIDENCE` 뒤가 늘 비어 있다. 작업 표 아래는 쓰지 않는다: 행이 3개인 동안(장면 5) 비지 않고, 맨 아래 2줄 캡션과 겹친다. 장면 2와 10~16은 캡션과 겹치지 않는 위쪽 빈 곳에 둔다. 머리줄(금고 주소, `LLM KILN` 배지)과 카드는 가리지 않는다. 캡션은 맨 아래 가운데에 두고, 오래된 장부 줄 한두 개는 가려도 된다.
+- 화면 라벨(`RUN`, `PUSH #1 · 대본 개입`처럼 장면표 라벨 열의 앞부분만)과 속도 배지는 대시보드 장면(3\~9)에서 EVIDENCE 제목 줄의 오른쪽 빈 곳에 둔다. 영상 모드에서 그 줄은 `EVIDENCE` 뒤가 늘 비어 있다. 작업 표 아래는 쓰지 않는다: 행이 3개인 동안(장면 5) 비지 않고, 맨 아래 2줄 캡션과 겹친다. 장면 2와 10\~16은 캡션과 겹치지 않는 위쪽 빈 곳에 둔다. 머리줄(금고 주소, `LLM KILN` 배지)과 카드는 가리지 않는다. 캡션은 맨 아래 가운데에 두고, 오래된 장부 줄 한두 개는 가려도 된다.
 - 1x가 아닌 구간에는 모두 배지를 단다. `2x`·`4x`·`8x`·`16x`는 속도 변경, `✂ 19초`는 화면 변화 없는 대기를 잘라낸 곳, `정지 화면`은 한 프레임을 멈춘 곳이다.
 - `대본 개입 / scripted`: 장면 4, 6, 7, 9의 라벨과 캡션에 붙인다.
-- 터미널 장면(11~13)은 `clear` 뒤에 실행해서 출력이 화면 위쪽에 오게 한다. 캡션이 맨 아래를 가린다.
+- 터미널 장면(11\~13)은 `clear` 뒤에 실행해서 출력이 화면 위쪽에 오게 한다. 캡션이 맨 아래를 가린다.
 
 ## 6. 촬영 목록
 
 | 촬영 | 무엇 | 언제 | 창 | 장면 |
 |---|---|---|---|---|
-| A. 본 녹화 | 대시보드를 이어서 한 번에: `기본 보기` GRANT → `영상 모드` → `refund ✓ OK` 뒤 5초 | 녹화 당일, 명령 실행부터 | 브라우저 뷰포트 1280×720 | 2~9 |
+| A. 본 녹화 | 대시보드를 이어서 한 번에: `기본 보기` GRANT → `영상 모드` → `refund ✓ OK` 뒤 5초 | 녹화 당일, 명령 실행부터 | 브라우저 뷰포트 1280×720 | 2\~9 |
 | B. Blockscout: 범위 밖 #1 tx | Logs 탭, 디코딩된 `Denied`, Topics [2] `Hex` → `Text` | A 직후 | 같은 브라우저 1280×720 | 10 |
 | C. 터미널: 기록 파일 | §8 명령 (2) | A 직후 | 터미널 1280×720, 글꼴 16pt 이상 | 11 |
-| D. 터미널: 감사 PASS | §8 명령 (3) | C 다음 | 같은 터미널 | 12 |
+| D. 터미널: 사후 검증 PASS | §8 명령 (3) | C 다음 | 같은 터미널 | 12 |
 | E. 터미널: 1바이트 변조 FAIL | §8 명령 (4) | D 다음 | 같은 터미널 | 13 |
 | F. Blockscout: budget run tx | `0x205f73a2…` Logs, Topics [2] `Text` | 언제든 (고정 URL) | 브라우저 1280×720 | 14 |
 | G. report.md | `runs/<vault>/report.md` Markdown 미리보기, §1b → §4 → §5b → §5c | A 뒤 | 편집기 1280×720 | 15 |
@@ -143,9 +143,9 @@
    node --env-file=.env -e 'for (const k of ["FOUNDER_PK", "KILN_API_KEY", "RPC_URL"]) console.log(k, process.env[k] ? "set" : "MISSING")'
    ```
    `FOUNDER_PK`, `KILN_API_KEY`는 `set`이어야 한다. `RPC_URL`이 `MISSING`이면 공개 RPC `https://sepolia.base.org`를 쓴다(기준 run 두 개도 이것). `.env`에 `LLM_MODE`가 없으므로 명령 앞에 `LLM_MODE=kiln`을 꼭 붙인다. 셸 값이 `--env-file`보다 우선한다.
-4. Kiln. `LLM_MODE=kiln npm run smoke:kiln`이 예열이다(Kiln 5회: F1, F2, 주입 F1 2회, F3. 모두 HTTP 200, 지연 10초 미만, 파싱 성공을 눈으로 본다). `.env`에 `LLM_MODE`가 없어서 앞에 붙이지 않으면 호출 없이 `LLM_MODE must be "kiln" or "stub"`으로 끝난다. 이 스크립트는 추적 중인 `test/fixtures/kiln/*.json`을 새 응답으로 덮어쓰고 `runs/eval/kiln.jsonl`에 줄을 더하므로, 끝나면 `git checkout -- test/fixtures/kiln runs/eval/kiln.jsonl`로 되돌린다. 공유 키(60 RPM)이므로 팀에 "HH:MM~HH:MM Kiln 사용 중지"를 공지한다. 본 녹화는 약 4분이고, 증거 촬영에는 Kiln을 쓰지 않는다. `LLM_MODE=kiln npm run eval:f2`(25회)는 프롬프트를 바꾼 경우에만 다시 돌린다(마지막 PASS는 README §9).
+4. Kiln. `LLM_MODE=kiln npm run smoke:kiln`이 예열이다(Kiln 5회: F1, F2, 주입 F1 2회, F3. 모두 HTTP 200, 지연 10초 미만, 파싱 성공을 눈으로 본다). `.env`에 `LLM_MODE`가 없어서 앞에 붙이지 않으면 호출 없이 `LLM_MODE must be "kiln" or "stub"`으로 끝난다. 이 스크립트는 추적 중인 `test/fixtures/kiln/*.json`을 새 응답으로 덮어쓰고 `runs/eval/kiln.jsonl`에 줄을 더하므로, 끝나면 `git checkout -- test/fixtures/kiln runs/eval/kiln.jsonl`로 되돌린다. 공유 키(60 RPM)이므로 팀에 "HH:MM\~HH:MM Kiln 사용 중지"를 공지한다. 본 녹화는 약 4분이고, 증거 촬영에는 Kiln을 쓰지 않는다. `LLM_MODE=kiln npm run eval:f2`(25회)는 프롬프트를 바꾼 경우에만 다시 돌린다(마지막 PASS는 README §9).
 5. `npm run check-secrets` PASS, `git check-ignore .env keys/`가 두 줄을 출력한다.
-6. 화면: 알림 끄기(집중 모드). `.env`, `keys/`, 셸 기록이 보이는 터미널은 닫는다. 감사용 터미널은 새 창으로 열고 글꼴을 16pt 이상으로 한다.
+6. 화면: 알림 끄기(집중 모드). `.env`, `keys/`, 셸 기록이 보이는 터미널은 닫는다. 사후 검증용 터미널은 새 창으로 열고 글꼴을 16pt 이상으로 한다.
 7. 가격: 녹화 때 배지가 `PRICE LIVE`인지 본다. `PRICE SNAPSHOT:<사유>`면 커밋된 `prices/akash-snapshot.json` 가격을 쓴 것이다. 녹화는 계속하고 README에 적는다. 오늘 LIVE 가격은 A $2.04, B $2.56, C $3.16이었다(녹화 시점에 다를 수 있다).
 8. (선택) 새 clone에서 기존 번들 재현: `git -c core.autocrlf=true clone` → `npm ci` → `npm run audit -- runs/0x6372558F859935DF9364F0c822e703310d160772 --submission`이 PASS.
 
@@ -154,7 +154,7 @@
 1. 포트 8787이 비어 있다: `lsof -nP -iTCP:8787 -sTCP:LISTEN`의 출력이 없다.
 2. USER에게 대기 중인 tx가 없다: `cast nonce 0x87e3866c97b7aE307b9d030581111D076AAaDB58 --block pending --rpc-url https://sepolia.base.org`와 `--block latest`가 같다.
 3. Kiln 예열(마지막 smoke가 10분이 넘었으면 `LLM_MODE=kiln npm run smoke:kiln` 한 번, 뒤에 fixture 되돌리기), 팀 Kiln 중지 확인.
-4. 감사용 터미널은 repo에서 `clear`. 브라우저에는 Blockscout 탭(`https://base-sepolia.blockscout.com`)을 준비한다.
+4. 사후 검증용 터미널은 repo에서 `clear`. 브라우저에는 Blockscout 탭(`https://base-sepolia.blockscout.com`)을 준비한다.
 5. 판단 규칙: 빨간 표시가 15분 안에 회복되지 않으면 그때까지 가장 좋은 take를 쓴다.
 
 ### 본 녹화 (촬영 A)
@@ -171,13 +171,13 @@
    창 크기에는 제목 줄이 들어가므로, DevTools 콘솔에서 `innerWidth + "x" + innerHeight`가 `1280x720`이 되게 높이를 맞춘다. 1920×1080 전체 화면도 된다. 영상 모드 CSS가 같은 배치를 1.5배로 키운다.
 3. 화면 녹화를 시작한다(뷰포트 1280×720 영역). 세션이 시작되기 전까지는 `서버에 연결하는 중…` 배너가 보인다.
 4. 머리줄에 run id가 뜨면 `기본 보기`를 누른다. 벤더 A/B/C가 `✓ 허용`으로 바뀌고 purpose가 보이면(첫 체인 스냅샷, t0 직전) 장면 2다. 4초 세고 `영상 모드`를 누른다. 예산 막대의 `열린 hold $0.05`는 다음 스냅샷(기준 run에서 t0+7초쯤)에야 뜨니 기다리지 않는다. 첫 카드의 F1 결과(t0+9초쯤)는 그 뒤에 온다. 늦게 눌러도 끝난 RUN 카드가 t0+33초까지 화면에 남는다.
-5. 배지를 확인한다: `LLM KILN`(초록). `LLM STUB`이면 바로 중단한다(제출 감사에서 FAIL).
+5. 배지를 확인한다: `LLM KILN`(초록). `LLM STUB`이면 바로 중단한다(`--submission` 사후 검증에서 FAIL).
 6. 그 뒤로는 아무것도 누르지 않는다. 모든 장면이 대본(sim 45·170·200·260·270·300분)으로 돈다. STOP을 일찍 누르면 작업 3이 취소되고, 탈취 키 tx가 이미 멈춘 금고를 두드려 `VENDOR_NOT_ALLOWED`·`OVER_MAX_HOLD` 대신 `PAUSED`로 거절된다(컨트랙트는 `PAUSED`를 먼저 검사한다).
 7. 끝: 정지 단계 `HALTED`, 장부 맨 위 `refund ✓ OK`, 터미널 `session finished; the dashboard stays up (Ctrl+C to exit)`. 5초 더 찍고 멈춘다. 명령 실행부터 약 4분 걸린다. `runs/<vault>/report.md`는 자동으로 생긴다.
 
-### 증거 촬영 (촬영 B~G, 본 녹화 직후)
+### 증거 촬영 (촬영 B\~G, 본 녹화 직후)
 
-1. 화면 밖에서 먼저 감사 PASS를 확인한다: `npm run audit -- runs/<vault> --submission`.
+1. 화면 밖에서 먼저 사후 검증 PASS를 확인한다: `npm run audit -- runs/<vault> --submission`.
 2. 새 금고가 Blockscout에서 소스 검증되었는지 본다.
    ```sh
    curl -s https://base-sepolia.blockscout.com/api/v2/smart-contracts/<vault> | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{let j={};try{j=JSON.parse(s)}catch{};console.log("verified:",j.is_verified===true,j.is_verified_via_eth_bytecode_db?"(bytecode DB 자동 매칭)":"")})'
@@ -218,12 +218,12 @@ npm run wind-down -- runs/<vault> --chain base-sepolia
 
 ### 녹화 뒤
 
-1. 감사 PASS를 확인한다(증거 촬영 1).
+1. 사후 검증 PASS를 확인한다(증거 촬영 1).
 2. README에 영상 속 금고를 넣는다: "온체인 증빙" 표, §8 표(아래 §9 생성 명령), §9 녹화 세션 수치(`report.md`의 흐름별·결정별·작업별 표). 지금의 기준 run(0x6372)을 함께 둘지는 정해야 한다.
-3. 새 clone(`git -c core.autocrlf=true clone`)에서 커밋한 새 번들 감사 PASS를 다시 확인한다.
+3. 새 clone(`git -c core.autocrlf=true clone`)에서 커밋한 새 번들의 사후 검증 PASS를 다시 확인한다.
 4. 새 번들(`runs/<vault>/`, `deployments/84532-<vault>.json`) 커밋은 사람이 정한다. `keys/`는 커밋하지 않는다(gitignore).
 
-## 8. 증거 장면 명령 (촬영 B~E)
+## 8. 증거 장면 명령 (촬영 B\~E)
 
 ```sh
 v=runs/<vault>        # 대시보드 머리줄과 터미널에 찍힌 새 금고 주소
@@ -244,7 +244,7 @@ node -e '
 const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")), b = r.body
 console.log(JSON.stringify({ seq: r.seq, type: r.type, req_id: b.req_id, rationale: b.request.rationale, gate: b.gate.codes, f2_calls: b.f2.length, verdict: b.verdict, reason: b.reason, override: b.overrides.map((o) => o.field + " by " + o.by) }, null, 2))' "$f"
 
-# (3) 감사 PASS (장면 12). 공개 RPC로 이벤트를 재생해서 약 19초 걸린다
+# (3) 사후 검증 PASS (장면 12). 공개 RPC로 이벤트를 재생해서 약 19초 걸린다
 npm run audit -- $v --submission
 
 # (4) 사본의 기록 1바이트 변조 → FAIL (장면 13, 약 18초)
@@ -295,7 +295,7 @@ let signer = "-"
 for (const e of fs.readFileSync(d + "/events.jsonl", "utf8").trim().split("\n").map(JSON.parse)) {
   if (e.src === "commit" && e.ev === "intent") signer = e.signer
   if (e.src === "commit" && e.ev === "mined") rows.push([e.fn, signer, tx(e.txHash), recs[e.recHash] ? "records/" + recs[e.recHash] : "(기록 없음: tx 해시로 매칭)", e.status + (e.code ? " " + e.code : "")])
-  if (e.src === "scenario" && e.ev === "stolen_key") rows.push([e.fn + " (공격)", "탈취된 agent 키", e.txHash ? tx(e.txHash) : "-", "(기록 없음: 감사자 UNRECORDED_ATTEMPT)", e.code ? "Denied " + e.code : e.error ?? "?"])
+  if (e.src === "scenario" && e.ev === "stolen_key") rows.push([e.fn + " (공격)", "탈취된 agent 키", e.txHash ? tx(e.txHash) : "-", "(기록 없음: 사후 검증에서 UNRECORDED_ATTEMPT)", e.code ? "Denied " + e.code : e.error ?? "?"])
 }
 console.log("| # | 함수 | 서명자 | tx | 기록 파일 | 결과 |\n|---|---|---|---|---|---|")
 rows.forEach((r, i) => console.log(`| ${i + 1} | ${r.join(" | ")} |`))

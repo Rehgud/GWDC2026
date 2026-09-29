@@ -120,8 +120,8 @@ Same hash = record file name. The script edit is in it.
 
 25
 00:01:59,000 --> 00:02:03,500
-Audit by the USER: records + public RPC only
-USER가 감사: 기록 묶음 + 공개 RPC만
+The USER can verify after the fact: records + public RPC only
+USER는 사후 검증 가능: 기록 묶음 + 공개 RPC만
 
 26
 00:02:03,500 --> 00:02:08,900
@@ -156,4 +156,4 @@ Kiln 비용 = 체인 정산액 · /no_think: 출력 346 → 66 토큰
 32
 00:02:38,000 --> 00:02:44,000
 Verify it yourself: vaults, txs, audit in the README
-직접 확인: README에 금고·tx·감사 명령
+직접 확인: README에 금고·tx·사후 검증 명령
