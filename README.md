@@ -6,6 +6,32 @@
 > 온체인 증빙: [§1 바로 아래](#온체인-증빙-verify-it-yourself) · 사전 작업·AI 도구·출처 선언: [§15](#15-사전-작업ai-도구출처-선언-pre-built-work-ai-tools-credits)
 > 용어: **USER**(CFO Agent를 쓰는 사람: 예산과 규칙을 정하고 STOP을 누르고 기록으로 검증한다. 예: PO, 창업자, 감사인. 코드에서는 `founder`) · 처음 보는 용어 풀이: [용어 설명 (Glossary)](#처음-보는-분을-위한-용어-설명-glossary)
 
+## 목차 (Contents)
+
+- [At a glance (English)](#at-a-glance-english)
+- [처음 보는 분을 위한 용어 설명 (Glossary)](#처음-보는-분을-위한-용어-설명-glossary)
+- [1. 기능 선언 (한 문장)](#1-기능-선언-한-문장) · Declaration
+  - [온체인 증빙 (Verify it yourself)](#온체인-증빙-verify-it-yourself)
+  - [조건이 바뀔 때 (Challenge B: 범위 안 1 + 범위 밖 2회 이상, 각각 기록)](#조건이-바뀔-때-challenge-b-범위-안-1--범위-밖-2회-이상-각각-기록) · When conditions change
+- [2. 사용자와 문제](#2-사용자와-문제) · Users and problem
+- [3. 작동 흐름](#3-작동-흐름) · How it works
+  - [AI · 코드 · 컨트랙트의 역할](#ai--코드--컨트랙트의-역할) · Who does what
+- [4. 빠른 시작](#4-빠른-시작) · Quick start
+- [5. 경계와 강제 위치](#5-경계와-강제-위치) · Where each rule is enforced
+- [6. 권한 × 상태 결과표](#6-권한--상태-결과표) · Permission × state outcomes
+  - [체인에서 읽고, 쓰고, 정산하는 것](#체인에서-읽고-쓰고-정산하는-것) · What goes on chain
+- [7. 성공 기준 지도](#7-성공-기준-지도) · Success criteria map
+- [8. tx와 기록 1:1 표 (Base Sepolia)](#8-tx와-기록-11-표-base-sepolia) · Every tx and its record
+- [9. 흐름별 토큰·에너지](#9-흐름별-토큰에너지) · Tokens, cost and energy per flow
+- [10. 대본 개입](#10-대본-개입) · Scripted interventions
+- [11. 한계](#11-한계) · Limits
+- [12. 데모용 지름길](#12-데모용-지름길) · Demo shortcuts and the product path
+- [13. 다른 접근과의 차이](#13-다른-접근과의-차이) · How this differs
+- [14. 모델 메모](#14-모델-메모) · Model notes
+- [15. 사전 작업·AI 도구·출처 선언 (Pre-built work, AI tools, credits)](#15-사전-작업ai-도구출처-선언-pre-built-work-ai-tools-credits)
+- [레포 구성](#레포-구성) · Repository layout
+- [비밀 정보](#비밀-정보) · Secrets
+
 ## At a glance (English)
 
 **One-sentence declaration:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that the USER (a project owner, a founder or an auditor, for example) can re-judge it from the records and the chain alone, without trusting our server.
