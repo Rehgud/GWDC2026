@@ -8,7 +8,7 @@
 
 ## At a glance (English)
 
-**One-sentence declaration:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so a third party can re-judge it from the records alone.
+**One-sentence declaration:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that anyone who doesn't trust our server, such as a judge, an auditor or an investor, can re-judge it from the records and the chain alone.
 
 - **For:** ML leads and founders of teams that rent GPUs (e.g. AI startups) and hand a GPU budget to research or eval agents.
 - **Problem:** agents already rent GPUs by API ([RunPod MCP](https://www.runpod.io/blog/manage-your-runpod-infrastructure-from-any-ai-assistant-introducing-the-runpod-mcp-server), [io.net Agent Cloud](https://io.net/docs/guides/clouds/agent-cloud) with x402/USDC), but nothing enforces "how much, which vendor, until when" per agent, and the payment rail records who paid whom, not who approved it on what terms.
@@ -38,8 +38,8 @@ Demo video: (link after upload) · Deck: (link after export)
 
 ## 1. 기능 선언 (한 문장)
 
-- **KO:** CFO Agent는 GPU를 빌리는 AI 에이전트의 지출을 작업 단위 에스크로로 충전하고 감독한다. 코드 규칙과 CFO(Qwen3-32B on Kiln)의 판단을 모두 통과한 지출만 테스트넷에서 정산하고, 모든 허락과 거절을 제3자가 기록만으로 다시 판정할 수 있게 남기는 통제·증빙 레이어다.
-- **EN:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so a third party can re-judge it from the records alone.
+- **KO:** CFO Agent는 GPU를 빌리는 AI 에이전트의 지출을 작업 단위 에스크로로 충전하고 감독한다. 코드 규칙과 CFO(Qwen3-32B on Kiln)의 판단을 모두 통과한 지출만 테스트넷에서 정산하고, 모든 허락과 거절을 기록으로 남겨 심사위원이나 감사인처럼 우리 서버를 믿지 않는 사람도 기록과 체인만으로 다시 판정할 수 있게 하는 통제·증빙 레이어다.
+- **EN:** CFO Agent is a control-and-evidence layer that funds and supervises a GPU-renting AI agent's spending through a per-job escrow with top-ups, settles on testnet only what passes both code rules and a CFO review by Qwen3-32B on Kiln, and records every approval and denial so that anyone who doesn't trust our server, such as a judge, an auditor or an investor, can re-judge it from the records and the chain alone.
 
 ### 온체인 증빙 (Verify it yourself)
 
@@ -84,7 +84,7 @@ npm run audit -- runs/0xA8CEef09a629Cc5c1BB30E82b007Ed1Df8Ee7415 --submission   
   - 하지만 에이전트 단위로 "얼마까지, 어느 벤더에, 언제까지"를 강제하고, 그 허락을 나중에 검증할 방법이 없다.
   - 결제 레일에는 누가 누구에게 냈는지만 남는다. 누가 어떤 조건으로 허락했는지는 남지 않는다.
 - **우리의 답:** 결제 한 건을 막는 데서 끝나지 않는다. **돈이 나가는 도중에** 충전할 가치가 있는지 심사한다. 규칙은 통과했지만 목적을 벗어난 충전은 CFO가 거절한다.
-- **결과물:** 통제된 GPU 지출, 작업별 영수증, 제3자가 검증할 수 있는 기록 묶음(`runs/<vault>/`).
+- **결과물:** 통제된 GPU 지출, 작업별 영수증, 심사위원이나 감사인이 우리 서버 없이 검증할 수 있는 기록 묶음(`runs/<vault>/`).
 
 ## 3. 빠른 시작
 
@@ -103,7 +103,7 @@ npm run anvil                               # anvil --block-time 1
 LLM_MODE=stub npm run demo                  # Kiln 없이 결정적 stub로 끝까지 (약 2분)
 LLM_MODE=kiln npm run demo                  # 실제 Qwen3-32B on Kiln (.env의 KILN_API_KEY)
 
-# 3) 제3자 재판정: 기록 묶음 + RPC만 사용
+# 3) 우리 서버 없이 다시 판정: 기록 묶음 + RPC만 사용
 npm run audit -- runs/<vault> [--rpc URL]   # exit 0 PASS / 1 FAIL / 2 CANNOT_VERIFY
 
 # 4) 창업자 대시보드: 새 금고를 배포하고 같은 시나리오를 화면으로 돌린다
