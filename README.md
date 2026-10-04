@@ -1,5 +1,14 @@
 # CFO Agent — GPU 지출을 충전식으로 감독하는 에스크로 금고
 
+<p align="center">
+  <b>🏆 GWDC 2026 Korea Hackathon — 1st Place (Champion)</b><br>
+  FuriosaAI × Bricksum <i>Agent Finance Bonus Track</i> · Challenge B (Controls &amp; records) · Team <b>404 Found</b>
+</p>
+
+> 🏆 **수상:** 이 프로젝트는 GWDC 2026 Korea 해커톤 FuriosaAI × Bricksum 트랙에서 **1등(Champion)** 을 했다.
+> 제출본은 커밋 [`8f1765a`](https://github.com/Rehgud/GWDC2026/commit/8f1765a)이며, 수상 뒤에는 이 배너만 추가했다. 아래 내용은 제출 때와 같다.
+> 🎥 [데모 영상 (2:54)](https://youtu.be/pQZpKw8XBHE) · 📄 [발표 덱 PDF](docs/CFO-Agent-deck.pdf)
+
 > **Team 404 Found** · GWDC 2026 Korea Hackathon · FuriosaAI × Bricksum *Agent Finance Bonus Track*
 > **선언 과제: Challenge B — Controls & records** ("Build the Controls and Records for an AI Agent That Spends"). 지출 통제와 그 증거를 함께 제출한다.
 > 설계 문서: [`docs/designs/cfo-agent-escrow-topup.md`](docs/designs/cfo-agent-escrow-topup.md) (끝의 CEO Review 절이 본문보다 우선) · 금고 설명: [`docs/escrow-vault.md`](docs/escrow-vault.md) · 3분 데모 대본: [`docs/demo-script.md`](docs/demo-script.md) · **데모 영상 (2:54): [https://youtu.be/pQZpKw8XBHE](https://youtu.be/pQZpKw8XBHE)** (영상 run `0x4E8E…507C`) · **발표 덱 PDF: [`docs/CFO-Agent-deck.pdf`](docs/CFO-Agent-deck.pdf)** (10쪽)
