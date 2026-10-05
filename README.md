@@ -6,8 +6,8 @@
 </p>
 
 > 🏆 **수상:** 이 프로젝트는 GWDC 2026 Korea 해커톤 FuriosaAI × Bricksum 트랙에서 **1등(Champion)** 을 했다.
-> 제출본은 커밋 [`8f1765a`](https://github.com/Rehgud/GWDC2026/commit/8f1765a)이며, 수상 뒤에는 이 배너만 추가했다. 아래 내용은 제출 때와 같다.
-> 🎥 [데모 영상 (2:54)](https://youtu.be/pQZpKw8XBHE) · 📄 [발표 덱 PDF](docs/CFO-Agent-deck.pdf)
+> 제출본은 커밋 [`8f1765a`](https://github.com/Rehgud/GWDC2026/commit/8f1765a)이며, 수상 뒤에는 이 배너와 보도 링크만 추가했다. 아래 내용은 제출 때와 같다.
+> 🎥 [데모 영상 (2:54)](https://youtu.be/pQZpKw8XBHE) · 📄 [발표 덱 PDF](docs/CFO-Agent-deck.pdf) · 📰 [토큰포스트 보도](https://tokenpost.kr/news/insights/416396)
 
 > **Team 404 Found** · GWDC 2026 Korea Hackathon · FuriosaAI × Bricksum *Agent Finance Bonus Track*
 > **선언 과제: Challenge B — Controls & records** ("Build the Controls and Records for an AI Agent That Spends"). 지출 통제와 그 증거를 함께 제출한다.
